@@ -123,8 +123,7 @@ class Drawable {
   moveTo(x, y) {
     this.x = x;
     this.y = y;
-    this.el.style.left = x + 'px';
-    this.el.style.top = y + 'px';
+    this.el.style.transform = 'translate(' + x + 'px, ' + y + 'px)';
   }
 
   layout() {
@@ -173,10 +172,7 @@ class Label extends Drawable {
     this.text = text;
   }
 
-  get text() {
-    return this._text;
-  }
-
+  get text() { return this._text; }
   set text(value) {
     this._text = value;
     this.el.textContent = value;
@@ -205,7 +201,14 @@ class Operator extends Drawable {
     this.info = info;
     this.parts = parts;
     parts.forEach(w => this.el.appendChild(w.el));
-    this._color = '#00f';
+
+    this.color = '#00f';
+  }
+
+  get color() { return this._color }
+  set color(value) {
+    this._color = value;
+    this.redraw();
   }
 
   layoutChildren() {
@@ -462,9 +465,9 @@ class World {
 
   tick() {
     this.camera.update();
-    this.el.style.left = -this.camera.left * this.camera.zoom + 'px';
-    this.el.style.top = this.camera.top * this.camera.zoom + 'px';
-    this.el.style.transform = 'scale(' + this.camera.zoom + ')';
+    var transform = 'scale(' + this.camera.zoom + ') ';
+    transform += 'translate(' + -this.camera.left + 'px, ' + this.camera.top + 'px) ';
+    this.el.style.transform = transform;
 
     if (this.inertia) {
       this.wheel({

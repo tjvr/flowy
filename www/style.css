@@ -8,7 +8,7 @@ html, body {
   overflow: hidden;
   background: #e8e8e8;
 
-  font-family: Noto Sans, sans-serif;
+  font: 9px/14px Lucida Grande, Verdana, Arial, DejaVu Sans, sans-serif;
 }
 
 .metrics-container {
@@ -38,5 +38,39 @@ html, body {
   top: 0;
   left: 0;
   -webkit-transform-origin: 0 0;
+}
+
+.operator {
+  background: #7a48c3;
+}
+
+.label {
+  font: bold 10px/14px Lucida Grande, Verdana, Arial, DejaVu Sans, sans-serif;
+  /*color: #fff;*/
+}
+
+.field {
+  color: #505050;
+  font: 9px/14px Lucida Grande, Verdana, Arial, DejaVu Sans, sans-serif;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: 0;
+  outline: 0;
+  box-shadow: none;
+}
+.field:focus {
+  pointer-events: auto;
+}
+
+.text-field,
+.enum-field {
+  padding: 0 0 0 4px;
+  -moz-box-sizing: border-box;
+  box-sizing: border-box;
+}
+
+.enum-field {
+  color: #fff;
 }
 
