@@ -390,8 +390,6 @@ class Operator extends Drawable {
 
 /*****************************************************************************/
 
-var factor = 1;
-
 class Camera {
   constructor(width, height) {
     this.pos = new Vec();
@@ -429,6 +427,7 @@ class Camera {
 class World {
   constructor() {
     this.camera = new Camera();
+    this.factor = 1;
     this.el = el('world');
 
     window.addEventListener('resize', this.resize.bind(this));
@@ -488,9 +487,10 @@ class World {
     // TODO trackpad should scroll vertically; mouse scroll wheel should zoom!
     if (e.preventDefault) e.preventDefault();
     if (e.ctrlKey) {
-      factor -= e.deltaY;
+      this.factor -= e.deltaY;
+      this.factor = Math.min(139, this.factor); // zoom <= 4.0
       var oldCursor = this.camera.fromScreen(e.clientX, e.clientY);
-      this.camera.zoom = Math.pow(1.01, factor);
+      this.camera.zoom = Math.pow(1.01, this.factor);
       this.camera.update();
       var newCursor = this.camera.fromScreen(e.clientX, e.clientY);
       var delta = oldCursor.sub(newCursor);
