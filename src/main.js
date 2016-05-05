@@ -1,4 +1,8 @@
 
+function assert(x) {
+  if (!x) throw "Assertion failed!";
+}
+
 function extendr(o, properties) {
   for (var k in properties) if (hasOwnProperty.call(properties, k)) {
     var v = properties[k];
@@ -28,6 +32,181 @@ class Vec {
     return new Vec(this.x - delta.x, this.y - delta.y);
   };
 }
+
+function el(tagName, className) {
+  var d = document.createElement(className ? tagName : 'div');
+  d.className = className || tagName || '';
+  return d;
+}
+
+/*****************************************************************************/
+
+class Drawable {
+  constructor() {
+    this.x = 0;
+    this.y = 0;
+    this.width = null;
+    this.height = null;
+    this.el = null;
+
+    this.parent = null;
+    this.dirty = false;
+    this.graphicsDirty = false;
+  };
+
+  layout() {
+    if (!this.parent) return;
+
+    this.layoutSelf();
+    this.parent.layout();
+  };
+
+  layoutChildren() { // no children
+    if (this.dirty) {
+      this.dirty = false;
+      this.layoutSelf();
+    }
+  };
+
+  drawChildren() { // no children
+    if (this.graphicsDirty) {
+      this.graphicsDirty = false;
+      this.draw();
+    }
+  };
+
+  redraw() {
+    if (this.workspace) {
+      this.graphicsDirty = false;
+      this.draw();
+    } else {
+      this.graphicsDirty = true;
+    }
+  };
+}
+
+class Label extends Drawable {
+  constructor(text) {
+    assert(typeof text === 'string');
+    super();
+    this.text = text;
+    this.el = el('absolute label');
+    this.el.textContent = text + '\u200c';
+    Label.metrics.appendChild(this.el);
+  };
+
+  layout() {
+    this.width = this.el.offsetWidth;
+    this.height = this.el.offsetHeight * 1.2 | 0;
+  };
+}
+Label.prototype.isLabel = true;
+Label.metrics = el('metrics');
+window.addEventListener('load', function(e) {
+  var c = el('metrics-container');
+  c.appendChild(Label.metrics);
+  document.body.appendChild(c);
+});
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 /*****************************************************************************/
 
@@ -90,6 +269,13 @@ class World {
 
     this.resize();
     this.tick();
+
+    window.l = new Label("bob");
+    setTimeout(() => {
+      l.layoutChildren();
+      l.drawChildren();
+      this.el.appendChild(l.el);
+    });
   }
 
   tick() {
@@ -162,7 +348,6 @@ class World {
 
   // TODO Safari 9.1 gestureDown/Change/Up to zoom
   // TODO click and drag background to party
-
 }
 
 document.body.appendChild(new World().el);

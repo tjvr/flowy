@@ -9,3 +9,20 @@ html, body {
   background: #e8e8e8;
 }
 
+.metrics-container {
+  position: absolute;
+  top: -1px;
+  left: -1px;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  visibility: hidden;
+  pointer-events: none;
+}
+
+.metrics {
+  position: absolute;
+  white-space: pre;
+  padding: 0;
+}
+
