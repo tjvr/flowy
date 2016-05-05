@@ -41,11 +41,53 @@ function el(tagName, className) {
 
 /*****************************************************************************/
 
+function bezel(context, path, thisArg, inset, scale) {
+  if (scale == null) scale = 1;
+  var s = inset ? -1 : 1;
+  var w = context.canvas.width;
+  var h = context.canvas.height;
+
+  context.beginPath();
+  path.call(thisArg, context);
+  context.fill();
+  // context.clip();
+
+  context.save();
+  context.translate(-10000, -10000);
+  context.beginPath();
+  context.moveTo(-3, -3);
+  context.lineTo(-3, h+3);
+  context.lineTo(w+3, h+3);
+  context.lineTo(w+3, -3);
+  context.closePath();
+  path.call(thisArg, context);
+
+  context.globalCompositeOperation = 'source-atop';
+
+  context.shadowOffsetX = (10000 + s * -1) * scale;
+  context.shadowOffsetY = (10000 + s * -1) * scale;
+  context.shadowBlur = 1.5 * scale;
+  context.shadowColor = 'rgba(0, 0, 0, .4)';
+  context.fill();
+
+  context.shadowOffsetX = (10000 + s * 1) * scale;
+  context.shadowOffsetY = (10000 + s * 1) * scale;
+  context.shadowBlur = 1.5 * scale;
+  context.shadowColor = 'rgba(255, 255, 255, .3)';
+  context.fill();
+
+  context.restore();
+}
+
+/*****************************************************************************/
+
+var scale = 1;
+
 var metricsContainer = el('metrics-container');
 document.body.appendChild(metricsContainer);
 
 function createMetrics(className) {
-  var field = el('Visual-metrics ' + className);
+  var field = el('metrics ' + className);
   var node = document.createTextNode('');
   field.appendChild(node);
   metricsContainer.appendChild(field);
@@ -75,6 +117,14 @@ class Drawable {
     this.parent = null;
     this.dirty = true;
     this.graphicsDirty = true;
+    this.workspace = true; // TODO
+  }
+
+  moveTo(x, y) {
+    this.x = x;
+    this.y = y;
+    this.el.style.left = x + 'px';
+    this.el.style.top = y + 'px';
   }
 
   layout() {
@@ -115,7 +165,6 @@ class Drawable {
 }
 
 
-
 class Label extends Drawable {
   constructor(text) {
     assert(typeof text === 'string');
@@ -144,7 +193,104 @@ class Label extends Drawable {
 Label.measure = createMetrics('label');
 
 
+class Operator extends Drawable {
+  constructor(info, parts) {
+    super();
 
+    this.el = el('absolute');
+    this.canvas = el('canvas', 'absolute');
+    this.el.appendChild(this.canvas);
+    this.context = this.canvas.getContext('2d');
+
+    this.info = info;
+    this.parts = parts;
+    parts.forEach(w => this.el.appendChild(w.el));
+    this._color = '#00f';
+  }
+
+  layoutChildren() {
+    this.parts.forEach(c => c.layoutChildren());
+    if (this.dirty) {
+      this.dirty = false;
+      this.layoutSelf();
+    }
+  }
+
+  drawChildren() {
+    this.parts.forEach(c => c.drawChildren());
+    if (this.graphicsDirty) {
+      this.graphicsDirty = false;
+      this.draw();
+    }
+  }
+
+  layoutSelf() {
+    // TODO
+
+    var width = 0;
+    var height = 12;
+    var xs = [];
+
+    var parts = this.parts;
+    var length = parts.length;
+    for (var i=0; i<length; i++) {
+      var part = parts[i];
+
+      height = Math.max(height, part.height);
+      xs.push(width);
+      width += part.width;
+    }
+    width = Math.max(40, width);
+
+    for (var i=0; i<length; i++) {
+      var part = parts[i];
+      var x = xs[i];
+      var y = (height - part.height) / 2;
+      part.moveTo(x, y);
+    }
+
+    this.ownWidth = width;
+    this.ownHeight = height;
+    this.width = width;
+    this.height = height;
+
+    this.redraw();
+  }
+
+  pathFn(context) {
+    var w = this.ownWidth;
+    var h = this.ownHeight;
+    var r = Math.min(w, (this.hasScript ? 15 : h)) / 2;
+
+    context.moveTo(0, r);
+    context.arc(r, r, r, PI, PI32, false);
+    context.arc(w - r, r, r, PI32, 0, false);
+    context.arc(w - r, h - r, r, 0, PI12, false);
+    context.arc(r, h - r, r, PI12, PI, false);
+  }
+
+  pathBlock(context) {
+    context.closePath();
+    var w = this.ownWidth;
+    var r = this.radius;
+    var ri = r - 1;
+    var p = this.puzzle;
+    var pi = this.puzzleInset;
+    var pw = this.puzzleWidth;
+  }
+
+  draw() {
+    this.canvas.width = this.ownWidth * scale;
+    this.canvas.height = this.ownHeight * scale;
+    this.context.scale(scale, scale);
+    this.drawOn(this.context);
+  }
+  
+  drawOn(context) {
+    context.fillStyle = this._color;
+    bezel(context, this.pathBlock, this, false, this._scale);
+  }
+}
 
 
 
@@ -302,11 +448,15 @@ class World {
     this.resize();
     this.tick();
 
-    window.l = new Label("bob");
+    window.x = new Operator({}, [
+      new Label("bob"),
+      new Label("fred"),
+    ]);
     setTimeout(() => {
-      l.layoutChildren();
-      l.drawChildren();
-      this.el.appendChild(l.el);
+      x.layoutChildren();
+      //l.layoutChildren();
+      //l.drawChildren();
+      this.el.appendChild(x.el);
     });
   }
 
