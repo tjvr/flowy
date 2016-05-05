@@ -41,6 +41,29 @@ function el(tagName, className) {
 
 /*****************************************************************************/
 
+var metricsContainer = el('metrics-container');
+document.body.appendChild(metricsContainer);
+
+function createMetrics(className) {
+  var field = el('Visual-metrics ' + className);
+  var node = document.createTextNode('');
+  field.appendChild(node);
+  metricsContainer.appendChild(field);
+
+  var stringCache = Object.create(null);
+
+  return function measure(text) {
+    if (hasOwnProperty.call(stringCache, text)) {
+      return stringCache[text];
+    }
+    node.data = text + '\u200B';
+    return stringCache[text] = {
+      width: field.offsetWidth,
+      height: field.offsetHeight
+    };
+  };
+}
+
 class Drawable {
   constructor() {
     this.x = 0;
@@ -52,28 +75,28 @@ class Drawable {
     this.parent = null;
     this.dirty = false;
     this.graphicsDirty = false;
-  };
+  }
 
   layout() {
     if (!this.parent) return;
 
     this.layoutSelf();
     this.parent.layout();
-  };
+  }
 
   layoutChildren() { // no children
     if (this.dirty) {
       this.dirty = false;
       this.layoutSelf();
     }
-  };
+  }
 
   drawChildren() { // no children
     if (this.graphicsDirty) {
       this.graphicsDirty = false;
       this.draw();
     }
-  };
+  }
 
   redraw() {
     if (this.workspace) {
@@ -82,31 +105,25 @@ class Drawable {
     } else {
       this.graphicsDirty = true;
     }
-  };
+  }
 }
 
 class Label extends Drawable {
   constructor(text) {
     assert(typeof text === 'string');
     super();
-    this.text = text;
     this.el = el('absolute label');
-    this.el.textContent = text + '\u200c';
-    Label.metrics.appendChild(this.el);
-  };
+    this.text = text;
+    this.el.textContent = text;
+    var metrics = Label.measure(text);
+    this.width = metrics.width;
+    this.height = metrics.height * 1.2 | 0;
+  }
 
-  layout() {
-    this.width = this.el.offsetWidth;
-    this.height = this.el.offsetHeight * 1.2 | 0;
-  };
+  layoutSelf() {}
+  drawSelf() {}
 }
-Label.prototype.isLabel = true;
-Label.metrics = el('metrics');
-window.addEventListener('load', function(e) {
-  var c = el('metrics-container');
-  c.appendChild(Label.metrics);
-  document.body.appendChild(c);
-});
+Label.measure = createMetrics('label');
 
 
 
