@@ -73,8 +73,8 @@ class Drawable {
     this.el = null;
 
     this.parent = null;
-    this.dirty = false;
-    this.graphicsDirty = false;
+    this.dirty = true;
+    this.graphicsDirty = true;
   }
 
   layout() {
@@ -84,14 +84,17 @@ class Drawable {
     this.parent.layout();
   }
 
-  layoutChildren() { // no children
+  layoutChildren() { // assume no children
     if (this.dirty) {
       this.dirty = false;
       this.layoutSelf();
     }
   }
 
-  drawChildren() { // no children
+  /*
+   * just draw children. Called when Drawable::workspace changes I think?
+   */
+  drawChildren() { // assume no children
     if (this.graphicsDirty) {
       this.graphicsDirty = false;
       this.draw();
@@ -106,7 +109,12 @@ class Drawable {
       this.graphicsDirty = true;
     }
   }
+
+  // layoutSelf() {}
+  // draw() {}
 }
+
+
 
 class Label extends Drawable {
   constructor(text) {
@@ -114,14 +122,24 @@ class Label extends Drawable {
     super();
     this.el = el('absolute label');
     this.text = text;
-    this.el.textContent = text;
-    var metrics = Label.measure(text);
+  }
+
+  get text() {
+    return this._text;
+  }
+
+  set text(value) {
+    this._text = value;
+    this.el.textContent = value;
+    var metrics = Label.measure(value);
     this.width = metrics.width;
     this.height = metrics.height * 1.2 | 0;
+    this.layout();
   }
 
   layoutSelf() {}
-  drawSelf() {}
+  drawChildren() {}
+  draw() {}
 }
 Label.measure = createMetrics('label');
 
@@ -266,10 +284,7 @@ class Camera {
 class World {
   constructor() {
     this.camera = new Camera();
-    this.el = document.createElement('div');
-    this.el.style.border = '1px solid red';
-    this.el.style.position = 'absolute';
-    this.el.style.transformOrigin = 'top left';
+    this.el = el('world');
 
     window.addEventListener('resize', this.resize.bind(this));
     window.addEventListener('wheel', this.wheel.bind(this));
