@@ -27,9 +27,35 @@ Vec.prototype.sub = function(dx, dy) {
 
 /*****************************************************************************/
 
-var canvas = document.createElement('canvas');
-document.body.appendChild(canvas)
-var ctx = canvas.getContext("2d");
+function elt(tag, attrs, ...args) {
+  let result = document.createElement(tag)
+  if (attrs) for (let name in attrs) {
+    if (name == "style")
+      result.style.cssText = attrs[name]
+    else if (attrs[name] != null)
+      result.setAttribute(name, attrs[name])
+  }
+  for (let i = 0; i < args.length; i++) add(args[i], result)
+  return result
+}
+
+function add(value, target) {
+  if (typeof value == "string")
+    value = document.createTextNode(value)
+
+  if (Array.isArray(value)) {
+    for (let i = 0; i < value.length; i++) add(value[i], target)
+  } else {
+    target.appendChild(value)
+  }
+}
+
+
+var container = elt('div', {}, [ elt('h1', {}, "Hi!") ]);
+container.style.border = '1px solid red';
+container.style.position = 'absolute';
+container.style.transformOrigin = 'top left';
+document.body.appendChild(container)
 
 var factor = 1;
 
@@ -64,8 +90,6 @@ Camera.prototype.fromScreen = function(x, y) {
 var camera = new Camera();
 
 function resize(e) {
-  ctx.canvas.width = window.innerWidth;
-  ctx.canvas.height = window.innerHeight;
   camera.width = window.innerWidth;
   camera.height = window.innerHeight;
   camera.update();
@@ -78,7 +102,6 @@ function wheel(e) {
   if (e.preventDefault) e.preventDefault();
   if (e.ctrlKey) {
     factor -= e.deltaY;
-    console.log(e);
     var oldCursor = camera.fromScreen(e.clientX, e.clientY);
     camera.zoom = Math.pow(1.01, factor);
     camera.update();
@@ -135,31 +158,12 @@ var foo = new Vec(0, -75);
 var pic = renderChar("💩");
 
 function paint() {
-  var width = camera.width = ctx.canvas.width;
-  var height = camera.height = ctx.canvas.height;
+  // var width = camera.width = ctx.canvas.width;
+  // var height = camera.height = ctx.canvas.height;
   camera.update();
-
-  // bg sky
-  ctx.fillStyle = "#eee";
-  ctx.fillRect(0, 0, width, height);
-
-  // ground
-  ctx.fillStyle = "#ddd";
-  ctx.fillRect(0, camera.toScreen(ground).y, width, height - camera.toScreen(ground).y);
-
-  // box
-  ctx.fillStyle = "#404040";
-  var screenFoo = camera.toScreen(foo);
-  ctx.fillRect(screenFoo.x, screenFoo.y, 50 * camera.zoom, 50 * camera.zoom);
-
-  // text
-  var scale = 0.25;
-  ctx.save();
-  ctx.translate(screenFoo.x, screenFoo.y - 200 * scale * camera.zoom);
-  ctx.scale(scale * camera.zoom, scale * camera.zoom);
-  //ctx.putImageData(pic, screenFoo.x, screenFoo.y - 200);
-  ctx.drawImage(pic, 0, 0);
-  ctx.restore();
+  container.style.left = -camera.left * camera.zoom + 'px';
+  container.style.top = camera.top * camera.zoom + 'px';
+  container.style.transform = 'scale(' + camera.zoom + ')';
 
   if (inertia) {
     wheel({
