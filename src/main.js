@@ -67,13 +67,13 @@ function bezel(context, path, thisArg, inset, scale) {
   context.shadowOffsetX = (10000 + s * -1) * scale;
   context.shadowOffsetY = (10000 + s * -1) * scale;
   context.shadowBlur = 1.5 * scale;
-  context.shadowColor = 'rgba(0, 0, 0, .4)';
+  context.shadowColor = 'rgba(0, 0, 0, .7)';
   context.fill();
 
   context.shadowOffsetX = (10000 + s * 1) * scale;
   context.shadowOffsetY = (10000 + s * 1) * scale;
   context.shadowBlur = 1.5 * scale;
-  context.shadowColor = 'rgba(255, 255, 255, .3)';
+  context.shadowColor = 'rgba(255, 255, 255, .4)';
   context.fill();
 
   context.restore();
@@ -202,7 +202,7 @@ class Operator extends Drawable {
     this.parts = parts;
     parts.forEach(w => this.el.appendChild(w.el));
 
-    this.color = '#00f';
+    this.color = '#7a48c3';
   }
 
   get color() { return this._color }
@@ -230,7 +230,7 @@ class Operator extends Drawable {
   layoutSelf() {
     // TODO
 
-    var width = 0;
+    var width = 4;
     var height = 12;
     var xs = [];
 
@@ -239,11 +239,12 @@ class Operator extends Drawable {
     for (var i=0; i<length; i++) {
       var part = parts[i];
 
-      height = Math.max(height, part.height);
+      height = Math.max(height, part.height + 4);
       xs.push(width);
       width += part.width;
+      width += 4;
     }
-    width = Math.max(40, width);
+    //width = Math.max(40, width);
 
     for (var i=0; i<length; i++) {
       var part = parts[i];
@@ -448,6 +449,9 @@ class World {
 
     window.x = new Operator({}, [
       new Label("bob"),
+      new Operator({}, [
+        new Label("cow"),
+      ]),
       new Label("fred"),
     ]);
     setTimeout(() => {
