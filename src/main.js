@@ -81,7 +81,7 @@ function bezel(context, path, thisArg, inset, scale) {
 
 /*****************************************************************************/
 
-var scale = 1;
+var density = 2;
 
 var metricsContainer = el('metrics-container');
 document.body.appendChild(metricsContainer);
@@ -123,7 +123,7 @@ class Drawable {
   moveTo(x, y) {
     this.x = x;
     this.y = y;
-    this.el.style.transform = 'translate(' + x + 'px, ' + y + 'px)';
+    this.el.style.transform = `translate(${x}px, ${y}px)`;
   }
 
   layout() {
@@ -260,38 +260,34 @@ class Operator extends Drawable {
     this.redraw();
   }
 
-  pathFn(context) {
-    var w = this.ownWidth;
-    var h = this.ownHeight;
-    var r = Math.min(w, (this.hasScript ? 15 : h)) / 2;
-
-    context.moveTo(0, r);
-    context.arc(r, r, r, PI, PI32, false);
-    context.arc(w - r, r, r, PI32, 0, false);
-    context.arc(w - r, h - r, r, 0, PI12, false);
-    context.arc(r, h - r, r, PI12, PI, false);
-  }
-
   pathBlock(context) {
-    context.closePath();
-    var w = this.ownWidth;
-    var r = this.radius;
-    var ri = r - 1;
-    var p = this.puzzle;
-    var pi = this.puzzleInset;
-    var pw = this.puzzleWidth;
-  }
+    var w = this.width;
+    var h = this.height;
+    var r = 6; //Math.min(w, h) / 2;
+
+    var PI12 = Math.PI * 1/2;
+    var PI = Math.PI;
+    var PI32 = Math.PI * 3/2;
+
+    context.moveTo(0, r + .5);
+    context.arc(r, r + .5, r, PI, PI32, false);
+    context.arc(w - r, r + .5, r, PI32, 0, false);
+    context.arc(w - r, h - r - .5, r, 0, PI12, false);
+    context.arc(r, h - r - .5, r, PI12, PI, false);
+  };
 
   draw() {
-    this.canvas.width = this.ownWidth * scale;
-    this.canvas.height = this.ownHeight * scale;
-    this.context.scale(scale, scale);
+    this.canvas.width = this.ownWidth * density;
+    this.canvas.height = this.ownHeight * density;
+    this.canvas.style.width = this.ownWidth + 'px';
+    this.canvas.style.height = this.ownHeight + 'px';
+    this.context.scale(density, density);
     this.drawOn(this.context);
   }
-  
+
   drawOn(context) {
     context.fillStyle = this._color;
-    bezel(context, this.pathBlock, this, false, this._scale);
+    bezel(context, this.pathBlock, this, false, density);
   }
 }
 
@@ -465,9 +461,8 @@ class World {
 
   tick() {
     this.camera.update();
-    var transform = 'scale(' + this.camera.zoom + ') ';
-    transform += 'translate(' + -this.camera.left + 'px, ' + this.camera.top + 'px) ';
-    this.el.style.transform = transform;
+    this.el.style.transform = `scale(${this.camera.zoom})
+                               translate(${-this.camera.left}px, ${this.camera.top}px)`;
 
     if (this.inertia) {
       this.wheel({

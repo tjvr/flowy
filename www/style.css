@@ -46,7 +46,7 @@ html, body {
 
 .label {
   font: bold 10px/14px Lucida Grande, Verdana, Arial, DejaVu Sans, sans-serif;
-  /*color: #fff;*/
+  color: #fff;
 }
 
 .field {
