@@ -436,7 +436,7 @@ class Operator extends Drawable {
     var i = this.args.indexOf(arg);
     this.replace(arg, new Input("123"));
   };
-  
+
   detach() {
     if (this.workspace.isPalette) {
       return this.copy();
@@ -563,9 +563,13 @@ class Result extends Drawable {
   objectFromPoint(x, y) {
     return opaqueAt(this.context, x * density, y * density) ? this : null;
   }
-  
+
   get dragObject() {
     return this;
+  }
+
+  detach() {
+    return this; // TODO
   }
 
   layoutSelf() {
@@ -614,6 +618,10 @@ class Result extends Drawable {
   }
 
 }
+Result.prototype.isResult = true;
+
+Result.prototype.isDraggable = true;
+
 Result.tipSize = 8;
 Result.padding = 6;
 
@@ -828,7 +836,6 @@ class World {
     }
     return this;
   }
-  
 
   touchDown(e) {
     e.preventDefault();
