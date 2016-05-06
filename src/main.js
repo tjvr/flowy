@@ -207,6 +207,7 @@ class Drawable {
       y += o.y;
       o = o.parent;
     }
+    /*
     if (o) {
       x *= 1; // o._scale;
       y *= 1; // o._scale;
@@ -218,6 +219,7 @@ class Drawable {
         // y -= o.scrollY;
       }
     }
+    */
     return {x: x, y: y};
   }
 
@@ -673,8 +675,7 @@ class World {
     }
 
     g.dragScript = script;
-    var pos = this.camera.fromScreen(g.dragX + g.mouseX, g.dragY + g.mouseY);
-    g.dragScript.moveTo(pos.x | 0, -pos.y | 0);
+    g.dragScript.moveTo(g.dragX + g.mouseX, g.dragY + g.mouseY);
     g.dragScript.parent = this;
     this.elContents.appendChild(g.dragScript.el);
     g.dragScript.layoutChildren();
@@ -744,11 +745,8 @@ class World {
     }
   }
 
-  objectFromScreen(x, y) {
-    var pos = this.camera.fromScreen(x, y);
+  objectFromPoint(x, y) {
     var scripts = this.scripts;
-    var x = pos.x | 0;
-    var y = -pos.y | 0;
     for (var i=scripts.length; i--;) {
       var script = scripts[i];
       var o = script.objectFromPoint(x - script.x, y - script.y);
@@ -783,18 +781,23 @@ class World {
     this.lastDelta = undefined;
   }
 
+  makeEvent(e) {
+    var pos = this.camera.fromScreen(e.clientX, e.clientY);
+    return {clientX: pos.x | 0, clientY: -pos.y | 0, identifier: this};
+  }
+
   mouseDown(e) {
-    var p = {clientX: e.clientX, clientY: e.clientY, identifier: this};
+    var p = this.makeEvent(e);
     if (!this.startFinger(p, e)) return;
     this.fingerDown(p, e);
   }
   mouseMove(e) {
-    var p = {clientX: e.clientX, clientY: e.clientY, identifier: this};
+    var p = this.makeEvent(e);
     // this.updateMouse(p, e);
     this.fingerMove(p, e);
   }
   mouseUp(e) {
-    var p = {clientX: e.clientX, clientY: e.clientY, identifier: this};
+    var p = this.makeEvent(e);
     // this.updateMouse(p, e);
     this.fingerUp(p, e);
   }
@@ -854,7 +857,7 @@ class World {
     var g = this.createFinger(p.identifier);
     g.pressX = g.mouseX = p.clientX;
     g.pressY = g.mouseY = p.clientY;
-    g.pressObject = this.objectFromScreen(g.pressX, g.pressY);
+    g.pressObject = this.objectFromPoint(g.pressX, g.pressY);
     g.shouldDrag = false;
     // g.shouldResize = false;
     
@@ -884,8 +887,7 @@ class World {
     g.mouseX = p.clientX;
     g.mouseY = p.clientY;
     if (g.dragging) {
-      var pos = this.camera.fromScreen(g.dragX + g.mouseX, g.dragY + g.mouseY);
-      g.dragScript.moveTo(pos.x | 0, -pos.y | 0);
+      g.dragScript.moveTo(g.dragX + g.mouseX, g.dragY + g.mouseY);
       // this.showFeedback(g); // TODO
       e.preventDefault();
 
