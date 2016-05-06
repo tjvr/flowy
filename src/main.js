@@ -333,7 +333,7 @@ class Input extends Drawable {
   pathFn(context) {
     var w = this.width;
     var h = this.height;
-    var r = 6; // Math.min(w, h) / 2;
+    var r = 4;
 
     context.moveTo(0, r + .5);
     context.arc(r, r + .5, r, PI, PI32, false);
@@ -519,7 +519,7 @@ class Operator extends Drawable {
   pathBlock(context) {
     var w = this.width;
     var h = this.height;
-    var r = 6; //Math.min(w, h) / 2;
+    var r = 6;
 
     context.moveTo(0, r + .5);
     context.arc(r, r + .5, r, PI, PI32, false);
@@ -887,7 +887,7 @@ class World {
     g.mouseY = p.clientY;
     if (g.dragging) {
       g.dragScript.moveTo(g.dragX + g.mouseX, g.dragY + g.mouseY);
-      // this.showFeedback(g); // TODO
+      // this.showFeedback(g);
       e.preventDefault();
 
     } else if (g.pressed && g.shouldDrag) {
@@ -921,6 +921,162 @@ class World {
     }
     this.destroyFinger(p.identifier);
   }
+
+  showFeedback(g) {
+    this.resetFeedback(g);
+    this.updateReporterFeedback(g);
+    if (g.feedbackInfo) {
+      this.renderFeedback(g);
+      g.feedback.canvas.style.display = 'block';
+    } else {
+      if (g.dropWorkspace && g.dropWorkspace.isTarget) {
+        g.dropWorkspace.showFeedback(g.dragScript);
+      }
+      g.feedback.canvas.style.display = 'none';
+    }
+  }
+  
+  resetFeedback(g) {
+    g.feedbackDistance = Infinity;
+    g.feedbackInfo = null;
+    if (g.dropWorkspace && g.dropWorkspace.isTarget) {
+      g.dropWorkspace.hideFeedback();
+    }
+    g.dropWorkspace = null;
+  }
+
+  updateReporterFeedback(g) {
+    this.updateFeedback(g, this.addScriptReporterFeedback);
+  };
+
+  updateFeedback(g, p) {
+    var workspaces = this.workspaces;
+    for (var i = workspaces.length; i--;) {
+      var ws = workspaces[i];
+      var pos = ws.worldPosition;
+      if (ws.el !== document.body) {
+        var x = pos.x + ws.scrollX;
+        var y = pos.y + ws.scrollY;
+        var w = ws.width;
+        var h = ws.height;
+      }
+      if (ws.el === document.body || g.mouseX >= x && g.mouseX < x + w && g.mouseY >= y && g.mouseY < y + h) {
+        if (ws.isTarget && !ws.acceptsDropOf(g.dragScript)) continue;
+        g.dropWorkspace = ws;
+        if (ws.isPalette || ws.isTarget) return;
+
+        var scripts = ws.scripts;
+        var l = scripts.length;
+        for (var j = 0; j < l; j++) {
+          p.call(this, g, pos.x, pos.y, scripts[j]);
+        }
+        return;
+      }
+    }
+  };
+
+  addScriptReporterFeedback(g, x, y, script) {
+    if (!script.isScript) return;
+    x += script.x * density;
+    y += script.y * density;
+    var blocks = script.blocks;
+    var length = blocks.length;
+    for (var i = 0; i < length; i++) {
+      this.addBlockReporterFeedback(g, x, y, blocks[i]);
+    }
+  };
+
+  addBlockReporterFeedback(g, x, y, block) {
+    x += block.x * density;
+    y += block.y * density;
+    var args = block.args;
+    var length = args.length;
+    for (var i = 0; i < length; i++) {
+      var a = args[i];
+      var ax = x + a.x * this._blockScale;
+      var ay = y + a.y * this._blockScale;
+      if (a._type === 't') {
+        this.addScriptReporterFeedback(g, ax, ay, a.script);
+      } else {
+        if (a.isBlock) {
+          this.addBlockReporterFeedback(g, x, y, a);
+        }
+      }
+      if (a.acceptsDropOf(g.dragScript.blocks[0])) {
+        this.addFeedback(g, {
+          x: ax,
+          y: ay,
+          rangeX: this.feedbackRange,
+          rangeY: this.feedbackRange,
+          type: 'replace',
+          block: block,
+          arg: a
+        });
+      }
+    }
+  };
+
+  addFeedback(g, obj) {
+    var dx = obj.x - g.dragScript.x * this._blockScale;
+    var dy = obj.y - g.dragScript.y * this._blockScale;
+    var d2 = dx * dx + dy * dy;
+    if (Math.abs(dx) > obj.rangeX * this._blockScale || Math.abs(dy) > obj.rangeY * this._blockScale || d2 > g.feedbackDistance) return;
+    g.feedbackDistance = d2;
+    g.feedbackInfo = obj;
+  };
+
+  renderFeedback(g) {
+    var info = g.feedbackInfo
+    var context = g.feedback;
+    var canvas = g.feedback.canvas;
+    var b = g.dragScript.blocks[0];
+    var s = this._blockScale;
+    var l = this.feedbackLineWidth;
+    var r = l/2;
+
+    var pi = b.puzzleInset * s;
+    var pw = b.puzzleWidth * s;
+    var p = b.puzzle * s;
+
+    var x, y;
+    switch (info.type) {
+      case 'replace':
+        x = info.x - l;
+        y = info.y - l;
+        var w = info.arg.width * s;
+        var h = info.arg.height * s;
+        canvas.width = w + l * 2;
+        canvas.height = h + l * 2;
+
+        context.translate(l, l);
+        context.scale(s, s);
+
+        info.arg.pathShadowOn(context);
+
+        context.lineWidth = l / this._blockScale;
+        context.lineCap = 'round';
+        context.lineJoin = 'round';
+        context.strokeStyle = this.feedbackColor;
+        context.stroke();
+
+        context.globalCompositeOperation = 'destination-out';
+        context.beginPath();
+        info.arg.pathShadowOn(context);
+        context.fill();
+        context.globalCompositeOperation = 'source-over';
+        context.globalAlpha = .6;
+        context.fillStyle = this.feedbackColor;
+        context.fill();
+        break;
+    }
+    if (x != null) {
+      setTransform(canvas, 'translate('+x+'px,'+y+'px)');
+    }
+  };
+
+
+
+  
 
   // TODO Safari 9.1 has *actual* gesture events: gestureDown/Change/Up to zoom
 }
