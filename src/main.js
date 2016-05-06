@@ -138,6 +138,8 @@ class Drawable {
     this.el.style.transform = `translate(${x}px, ${y}px)`;
   }
 
+  moved() {}
+
   layout() {
     if (!this.parent) return;
 
@@ -379,9 +381,12 @@ class Operator extends Drawable {
 
     this.color = '#7a48c3';
 
-    this.output = new Result("3.14");
+    this.output = new Result(this);
     this.output.parent = this;
     this.el.appendChild(this.output.el);
+
+    this.curve = new Curve(this, this.output);
+    this.el.appendChild(this.curve.el);
   }
 
   get color() { return this._color }
@@ -456,7 +461,22 @@ class Operator extends Drawable {
     // }
   }
 
+  moveTo(x, y) {
+    super.moveTo(x, y);
+    this.moved();
+  }
+
+  moved() {
+    this.parts.forEach(p => p.moved());
+    this.curve.layoutSelf();
+  }
+
   objectFromPoint(x, y) {
+    if (this.output && this.output.el.style.visibility !== 'hidden') {
+      var o = this.output.objectFromPoint(x - this.output.x, y - this.output.y)
+      console.log(o);
+      if (o) return o;
+    }
     var args = this.args;
     for (var i = args.length; i--;) {
       var arg = args[i];
@@ -521,6 +541,8 @@ class Operator extends Drawable {
     this.width = width;
     this.height = height;
 
+    this.curve.moveTo(this.width / 2, this.ownHeight);
+    this.curve.layoutSelf();
     this.redraw();
   }
 
@@ -560,15 +582,16 @@ Operator.prototype.isDraggable = true;
 
 
 class Result extends Drawable {
-  constructor(value) {
+  constructor(target) {
     super();
 
     this.el = el('absolute');
     this.el.appendChild(this.canvas = el('canvas', 'absolute'));
     this.context = this.canvas.getContext('2d');
 
-    this.value = value;
-    this.label = new Label(value, 'result-label');
+    this.target = target;
+    this.value = "3.14";
+    this.label = new Label(this.value, 'result-label');
     this.el.appendChild(this.label.el);
   }
 
@@ -581,15 +604,27 @@ class Result extends Drawable {
   }
 
   detach() {
+    this.parent = null;
     return this; // TODO
   }
 
+  moveTo(x, y) {
+    super.moveTo(x, y);
+    this.moved();
+  }
+
+  moved() {
+    this.target.curve.layoutSelf();
+  }
+
   layoutSelf() {
-    var p2 = Result.padding * 2;
-    this.width = Math.max(64, this.label.width + p2);
-    this.height = this.label.height + Result.tipSize + p2;
+    var t = Result.tipSize;
+    var px = Result.paddingX
+    var py = Result.paddingY;
+    this.width = Math.max(Result.minWidth, this.label.width + 2 * px);
+    this.height = this.label.height + t + 2 * py;
     var x = (this.width - this.label.width) / 2;
-    var y = Result.tipSize + Result.padding;
+    var y = t + py;
     this.label.moveTo(x, y);
     this.redraw();
   }
@@ -626,7 +661,8 @@ class Result extends Drawable {
     context.fillStyle = '#fff';
     context.fill();
     context.strokeStyle = '#555';
-    context.lineWidth = `$(density * 2)px`;
+    context.lineWidth = density;
+    console.log(context.lineWidth);
     context.stroke();
   }
 
@@ -635,8 +671,51 @@ Result.prototype.isResult = true;
 
 Result.prototype.isDraggable = true;
 
-Result.tipSize = 8;
-Result.padding = 6;
+Result.tipSize = 6;
+Result.paddingX = 6;
+Result.paddingY = 2;
+Result.minWidth = 32;
+
+
+
+class Curve extends Drawable {
+  constructor(target, result) {
+    assert(target);
+    assert(result);
+    super();
+    this.el = el('absolute');
+    this.el.appendChild(this.canvas = el('canvas', 'absolute'));
+    this.context = this.canvas.getContext('2d');
+
+    this.target = target;
+    this.result = result;
+  }
+
+  layoutSelf() {
+    var start = this.target.worldPosition;
+    var end = this.result.worldPosition;
+    var dx = end.x + this.result.width / 2 - start.x - this.x;
+    var dy = end.y - start.y - this.y;
+    this.width = dx;
+    this.height = dy;
+    this.draw();
+  }
+
+  draw() {
+    var w = this.width;
+    var h = this.height;
+    this.canvas.width = w * density;
+    this.canvas.height = h * density;
+    this.canvas.style.width = w + 'px';
+    this.canvas.style.height = h + 'px';
+    this.context.scale(density, density);
+    this.drawOn(this.context);
+  }
+
+  drawOn(context) {
+    context.fillRect(0, 0, this.width, this.height);
+  }
+}
 
 
 /*****************************************************************************/
@@ -733,9 +812,6 @@ class World {
       ]),
     ]));
     o.moveTo(100, 20);
-
-    this.add(o = new Result("pizza!"));
-    o.moveTo(-100, 100);
   }
 
   layout() {}
