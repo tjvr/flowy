@@ -457,7 +457,6 @@ class Operator extends Drawable {
     for (var i = args.length; i--;) {
       var arg = args[i];
       var o = arg.objectFromPoint(x - arg.x, y - arg.y);
-      console.log(arg, o);
       if (o) return o;
     }
     return opaqueAt(this.context, x * density, y * density) ? this : null;
@@ -543,8 +542,9 @@ class Operator extends Drawable {
     bezel(context, this.pathBlock, this, false, density);
   }
 }
-Operator.prototype.isOperator = true; // TODO
+Operator.prototype.isOperator = true;
 
+Operator.prototype.isDraggable = true;
 
 
 /*****************************************************************************/
@@ -750,10 +750,9 @@ class World {
     for (var i=scripts.length; i--;) {
       var script = scripts[i];
       var o = script.objectFromPoint(x - script.x, y - script.y);
-      if (o) console.log(o);
       if (o) return o;
     }
-    //return this;
+    return this;
   }
   
 
@@ -852,8 +851,6 @@ class World {
   }
 
   fingerDown(p, e) {
-    // TODO click and drag background to scroll
-
     var g = this.createFinger(p.identifier);
     g.pressX = g.mouseX = p.clientX;
     g.pressY = g.mouseY = p.clientY;
@@ -870,7 +867,9 @@ class World {
         //   var pos = g.pressObject.worldPosition;
         //   g.shouldResize = g.pressObject.resizableAt(g.pressX - pos.x, g.pressY - pos.y);
         // }
-        g.shouldDrag = true; //!g.shouldResize && g.pressObject.isDraggable && !((g.pressObject.isTextArg) && e.target === g.pressObject.field); // TODO
+        g.shouldDrag = g.pressObject.isDraggable; //!g.shouldResize && g.pressObject.isDraggable && !((g.pressObject.isTextArg) && e.target === g.pressObject.field); // TODO
+
+        // TODO click and drag background to scroll
       }
     }
     if (g.shouldDrag) {
