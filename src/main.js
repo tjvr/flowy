@@ -378,6 +378,10 @@ class Operator extends Drawable {
     }
 
     this.color = '#7a48c3';
+
+    this.output = new Result("3.14");
+    this.output.parent = this;
+    this.el.appendChild(this.output.el);
   }
 
   get color() { return this._color }
@@ -397,7 +401,7 @@ class Operator extends Drawable {
     var array = part.isOperator || part.isInput ? this.args : this.labels;
     array.push(part);
   }
-  
+
   replace(oldPart, newPart) {
     if (oldPart.parent !== this) return;
     if (newPart.parent) newPart.parent.remove(newPart);
@@ -445,6 +449,7 @@ class Operator extends Drawable {
       this.parent.reset(this);
       // return this; //new Script().setScale(this._scale).add(this);
     }
+    this.redraw();
     return this;
     // if (this.parent.isScript) {
     //   return this.parent.splitAt(this);
@@ -467,6 +472,7 @@ class Operator extends Drawable {
 
   layoutChildren() {
     this.parts.forEach(c => c.layoutChildren());
+    if (this.output) this.output.layoutChildren();
     if (this.dirty) {
       this.dirty = false;
       this.layoutSelf();
@@ -475,6 +481,7 @@ class Operator extends Drawable {
 
   drawChildren() {
     this.parts.forEach(c => c.drawChildren());
+    if (this.output) this.output.drawChildren();
     if (this.graphicsDirty) {
       this.graphicsDirty = false;
       this.draw();
@@ -482,8 +489,6 @@ class Operator extends Drawable {
   }
 
   layoutSelf() {
-    // TODO
-
     var width = 4;
     var height = 12;
     var xs = [];
@@ -499,6 +504,8 @@ class Operator extends Drawable {
       width += 4;
     }
     //width = Math.max(40, width);
+    this.ownWidth = width;
+    this.ownHeight = height;
 
     for (var i=0; i<length; i++) {
       var part = parts[i];
@@ -507,8 +514,10 @@ class Operator extends Drawable {
       part.moveTo(x, y);
     }
 
-    this.ownWidth = width;
-    this.ownHeight = height;
+    if (this.output) {
+      var x = (width - this.output.width) / 2;
+      this.output.moveTo(x, height - 1);
+    }
     this.width = width;
     this.height = height;
 
@@ -516,8 +525,8 @@ class Operator extends Drawable {
   }
 
   pathBlock(context) {
-    var w = this.width;
-    var h = this.height;
+    var w = this.ownWidth;
+    var h = this.ownHeight;
     var r = 6;
 
     context.moveTo(0, r + .5);
@@ -534,6 +543,9 @@ class Operator extends Drawable {
     this.canvas.style.height = this.ownHeight + 'px';
     this.context.scale(density, density);
     this.drawOn(this.context);
+    if (this.output) {
+      this.output.el.style.visibility = this.parent && this.parent.isOperator ? 'hidden' : 'visible';
+    }
   }
 
   drawOn(context) {
@@ -579,6 +591,7 @@ class Result extends Drawable {
     var x = (this.width - this.label.width) / 2;
     var y = Result.tipSize + Result.padding;
     this.label.moveTo(x, y);
+    this.redraw();
   }
 
   pathBubble(context) {
