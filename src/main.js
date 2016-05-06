@@ -41,6 +41,8 @@ function el(tagName, className) {
 
 /*****************************************************************************/
 
+
+
 var PI12 = Math.PI * 1/2;
 var PI = Math.PI;
 var PI32 = Math.PI * 3/2;
@@ -742,6 +744,28 @@ class Curve extends Drawable {
   }
 }
 
+/*****************************************************************************/
+
+import {primitives} from "./runtime";
+
+var paletteContents = primitives.map(function(prim) {
+  if (typeof prim === 'string') return;
+  let [spec, type, js] = prim;
+  var words = spec.split(/ |(_[a-z]*:\([^)]+\))/g).filter(x => x);
+  var parts = words.map(word => {
+    if (/:|^_/.test(word)) {
+      var value = /Float/.test(word) ? "0.0" :
+                  /Int/.test(word) ? "10" :
+                  /Str/.test(word) ? "hello" : "";
+      return new Input(value)
+    } else {
+      return new Label(word);
+    }
+  });
+  return new Operator({}, parts);
+}).filter(x => !!x);
+
+
 
 /*****************************************************************************/
 
@@ -837,6 +861,13 @@ class World {
       ]),
     ]));
     o.moveTo(100, 20);
+
+    var x = 0;
+    paletteContents.forEach(o => {
+      o.moveTo(x, 100);
+      this.add(o);
+      x += o.width + 8;
+    });
   }
 
   layout() {}
