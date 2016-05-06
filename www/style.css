@@ -11,6 +11,21 @@ html, body {
   font: 9px/14px Lucida Grande, Verdana, Arial, DejaVu Sans, sans-serif;
 }
 
+.absolute {
+  position: absolute;
+  top: 0;
+  left: 0;
+  -webkit-transform-origin: 0 0;
+}
+
+.no-select {
+  -webkit-user-select: none;
+  -moz-user-select: none;
+  -ms-user-select: none;
+  -o-user-select: none;
+  user-select: none;
+}
+
 .metrics-container {
   position: absolute;
   top: -1px;
@@ -30,14 +45,8 @@ html, body {
 
 .world {
   position: absolute;
+  cursor: default;
   transform-origin: top left;
-}
-
-.absolute {
-  position: absolute;
-  top: 0;
-  left: 0;
-  -webkit-transform-origin: 0 0;
 }
 
 .operator {
