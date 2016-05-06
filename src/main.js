@@ -627,6 +627,19 @@ class World {
       new Input("party"),
     ]));
     o.moveTo(0, 50);
+
+    this.add(o = new Operator({}, [
+      new Label("quxx"),
+      new Operator({}, [
+        new Label("wilfred"),
+        new Input("man"),
+        new Label("has"),
+        new Operator({}, [
+          new Label("burb"),
+        ]),
+      ]),
+    ]));
+    o.moveTo(100, 20);
   }
 
   layout() {}
@@ -676,6 +689,7 @@ class World {
     if (!g.dragging) return;
 
     // TODO
+    this.add(g.dragScript);
 
     g.dragging = false;
     g.dragPos = null;
