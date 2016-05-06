@@ -472,7 +472,7 @@ class Operator extends Drawable {
   }
 
   objectFromPoint(x, y) {
-    if (this.output && this.output.el.style.visibility !== 'hidden') {
+    if (this.output && this.output.parent === this) {
       var o = this.output.objectFromPoint(x - this.output.x, y - this.output.y)
       console.log(o);
       if (o) return o;
@@ -566,6 +566,7 @@ class Operator extends Drawable {
     this.drawOn(this.context);
     if (this.output) {
       this.output.el.style.visibility = this.parent && this.parent.isOperator ? 'hidden' : 'visible';
+      this.curve.el.style.visibility = this.parent && this.parent.isOperator ? 'hidden' : 'visible';
     }
   }
 
@@ -693,20 +694,20 @@ class Curve extends Drawable {
   layoutSelf() {
     var target = this.target;
     var start = target.worldPosition;
-    var x = target.width / 2;
+    var x = target.width / 2 - 1;
     var y = target.ownHeight - 2;
     start.x += x;
     start.y += y;
 
     var result = this.result;
     var end = result.worldPosition;
-    end.x += result.width / 2;
+    end.x += result.width / 2 - 1;
 
-    var dx = end.x - start.x;
-    var dy = end.y - start.y;
+    var dx = (end.x - start.x + 0.5) | 0;
+    var dy = (end.y - start.y + 0.5) | 0;
     if (dx < 0) x += dx;
     if (dy < 0) y += dy;
-    this.moveTo(x, y);
+    this.moveTo(x | 0, y | 0);
     this.width = Math.abs(dx) + 2;
     this.height = Math.abs(dy) + 2;
     this.dx = dx;
@@ -733,7 +734,7 @@ class Curve extends Drawable {
     context.scale(this.dx < 0 ? -1 : +1, this.dy < 0 ? -1 : +1);
     context.beginPath();
     context.moveTo(1, 1);
-    context.lineTo(w - 1, h - 1);
+    context.bezierCurveTo(1, h / 2, w - 1, h / 2, w - 1, h - 1);
     context.lineWidth = density;
     context.strokeStyle = '#555';
     context.stroke();
