@@ -325,8 +325,7 @@ class Input extends Drawable {
 
   drawOn(context) {
     context.fillStyle = '#fff';
-    context.fillRect(0, 0, this.width, this.height);
-    bezel(context, this.pathFn, this, true, this._scale);
+    bezel(context, this.pathFn, this, true, density);
   }
   
   pathFn(context) {
