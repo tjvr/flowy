@@ -237,10 +237,10 @@ class Drawable {
 
 
 class Label extends Drawable {
-  constructor(text) {
+  constructor(text, cls) {
     assert(typeof text === 'string');
     super();
-    this.el = el('absolute label');
+    this.el = el('absolute label ' + (cls || ''));
     this.text = text;
   }
 
@@ -357,7 +357,6 @@ Input.measure = createMetrics('field');
 
 Input.prototype.minWidth = 6;
 Input.prototype.fieldPadding = 4;
-
 
 
 
@@ -547,6 +546,78 @@ Operator.prototype.isOperator = true;
 Operator.prototype.isDraggable = true;
 
 
+
+class Result extends Drawable {
+  constructor(value) {
+    super();
+
+    this.el = el('absolute');
+    this.el.appendChild(this.canvas = el('canvas', 'absolute'));
+    this.context = this.canvas.getContext('2d');
+
+    this.value = value;
+    this.label = new Label(value, 'result-label');
+    this.el.appendChild(this.label.el);
+  }
+
+  objectFromPoint(x, y) {
+    return opaqueAt(this.context, x * density, y * density) ? this : null;
+  }
+  
+  get dragObject() {
+    return this;
+  }
+
+  layoutSelf() {
+    var p2 = Result.padding * 2;
+    this.width = Math.max(64, this.label.width + p2);
+    this.height = this.label.height + Result.tipSize + p2;
+    var x = (this.width - this.label.width) / 2;
+    var y = Result.tipSize + Result.padding;
+    this.label.moveTo(x, y);
+  }
+
+  pathBubble(context) {
+    var w = this.width;
+    var h = this.height;
+    var r = 6;
+    var t = Result.tipSize;
+    var w12 = this.width / 2;
+
+    context.moveTo(1, t + r + .5);
+    context.arc(r + 1, t + r + .5, r, PI, PI32, false);
+    context.lineTo(w12 - t, t + .5);
+    context.lineTo(w12, 1);
+    context.lineTo(w12 + t, t + .5);
+    context.arc(w - r - 1, t + r + .5, r, PI32, 0, false);
+    context.arc(w - r - 1, h - r - .5, r, 0, PI12, false);
+    context.arc(r + 1, h - r - .5, r, PI12, PI, false);
+  }
+
+  draw() {
+    this.canvas.width = this.width * density;
+    this.canvas.height = this.height * density;
+    this.canvas.style.width = this.width + 'px';
+    this.canvas.style.height = this.height + 'px';
+    this.context.scale(density, density);
+    this.drawOn(this.context);
+  }
+
+  drawOn(context) {
+    this.pathBubble(context);
+    context.closePath();
+    context.fillStyle = '#fff';
+    context.fill();
+    context.strokeStyle = '#555';
+    context.lineWidth = `$(density * 2)px`;
+    context.stroke();
+  }
+
+}
+Result.tipSize = 8;
+Result.padding = 6;
+
+
 /*****************************************************************************/
 
 class Camera {
@@ -641,6 +712,9 @@ class World {
       ]),
     ]));
     o.moveTo(100, 20);
+
+    this.add(o = new Result("pizza!"));
+    o.moveTo(-100, 100);
   }
 
   layout() {}
