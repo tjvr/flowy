@@ -534,7 +534,7 @@ class Operator extends Drawable {
       part.moveTo(x, y);
     }
 
-    if (this.output) {
+    if (this.output && this.output.parent === this) {
       var x = (width - this.output.width) / 2;
       this.output.moveTo(x, height - 1);
     }
@@ -694,7 +694,7 @@ class Curve extends Drawable {
     var target = this.target;
     var start = target.worldPosition;
     var x = target.width / 2;
-    var y = target.ownHeight - 1;
+    var y = target.ownHeight - 2;
     start.x += x;
     start.y += y;
 
@@ -708,7 +708,7 @@ class Curve extends Drawable {
     if (dy < 0) y += dy;
     this.moveTo(x, y);
     this.width = Math.abs(dx) + 2;
-    this.height = Math.abs(dy);
+    this.height = Math.abs(dy) + 2;
     this.dx = dx;
     this.dy = dy;
     this.draw();
@@ -732,8 +732,8 @@ class Curve extends Drawable {
     context.translate(this.dx < 0 ? w : 0, this.dy < 0 ? h : 0);
     context.scale(this.dx < 0 ? -1 : +1, this.dy < 0 ? -1 : +1);
     context.beginPath();
-    context.moveTo(1, 0);
-    context.lineTo(w - 1, h);
+    context.moveTo(1, 1);
+    context.lineTo(w - 1, h - 1);
     context.lineWidth = density;
     context.strokeStyle = '#555';
     context.stroke();
