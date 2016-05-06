@@ -541,7 +541,6 @@ class Operator extends Drawable {
     this.width = width;
     this.height = height;
 
-    this.curve.moveTo(this.width / 2, this.ownHeight);
     this.curve.layoutSelf();
     this.redraw();
   }
@@ -683,7 +682,7 @@ class Curve extends Drawable {
     assert(target);
     assert(result);
     super();
-    this.el = el('absolute');
+    this.el = el('absolute curve');
     this.el.appendChild(this.canvas = el('canvas', 'absolute'));
     this.context = this.canvas.getContext('2d');
 
@@ -692,18 +691,32 @@ class Curve extends Drawable {
   }
 
   layoutSelf() {
-    var start = this.target.worldPosition;
-    var end = this.result.worldPosition;
-    var dx = end.x + this.result.width / 2 - start.x - this.x;
-    var dy = end.y - start.y - this.y;
-    this.width = dx;
-    this.height = dy;
+    var target = this.target;
+    var start = target.worldPosition;
+    var x = target.width / 2;
+    var y = target.ownHeight - 1;
+    start.x += x;
+    start.y += y;
+
+    var result = this.result;
+    var end = result.worldPosition;
+    end.x += result.width / 2;
+
+    var dx = end.x - start.x;
+    var dy = end.y - start.y;
+    if (dx < 0) x += dx;
+    if (dy < 0) y += dy;
+    this.moveTo(x, y);
+    this.width = Math.abs(dx) + 2;
+    this.height = Math.abs(dy);
+    this.dx = dx;
+    this.dy = dy;
     this.draw();
   }
 
   draw() {
-    var w = this.width;
-    var h = this.height;
+    var w = Math.abs(this.width);
+    var h = Math.abs(this.height);
     this.canvas.width = w * density;
     this.canvas.height = h * density;
     this.canvas.style.width = w + 'px';
@@ -713,7 +726,18 @@ class Curve extends Drawable {
   }
 
   drawOn(context) {
-    context.fillRect(0, 0, this.width, this.height);
+    var w = this.width;
+    var h = this.height;
+    context.save();
+    context.translate(this.dx < 0 ? w : 0, this.dy < 0 ? h : 0);
+    context.scale(this.dx < 0 ? -1 : +1, this.dy < 0 ? -1 : +1);
+    context.beginPath();
+    context.moveTo(1, 0);
+    context.lineTo(w - 1, h);
+    context.lineWidth = density;
+    context.strokeStyle = '#555';
+    context.stroke();
+    context.restore();
   }
 }
 
