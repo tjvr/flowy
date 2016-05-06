@@ -41,6 +41,10 @@ function el(tagName, className) {
 
 /*****************************************************************************/
 
+var PI12 = Math.PI * 1/2;
+var PI = Math.PI;
+var PI32 = Math.PI * 3/2;
+
 function containsPoint(extent, x, y) {
   return x >= 0 && y >= 0 && x < extent.width && y < extent.height;
 }
@@ -162,6 +166,10 @@ class Drawable {
     if (this.workspace) {
       this.graphicsDirty = false;
       this.draw();
+
+      // for debugging
+      this.el.style.width = this.width;
+      this.el.style.height = this.height;
     } else {
       this.graphicsDirty = true;
     }
@@ -249,10 +257,107 @@ class Label extends Drawable {
   draw() {}
 
   get dragObject() {
-    return this.parent;
+    return this.parent.dragObject;
   }
 }
+Label.prototype.isLabel = true;
 Label.measure = createMetrics('label');
+
+
+class Input extends Drawable {
+  constructor(value) {
+    super();
+
+    this.el = el('absolute');
+    this.el.appendChild(this.canvas = el('canvas', 'absolute'));
+    this.context = this.canvas.getContext('2d');
+
+    this.el.appendChild(this.field = el('input', 'absolute field text-field'));
+
+    this.field.addEventListener('input', this.change.bind(this));
+    this.field.addEventListener('keydown', this.keyDown.bind(this));
+
+    this.value = value;
+  }
+
+  get value() { return this._value; }
+  set value(value) {
+    this._value = value;
+    this.field.value = value;
+    this.layout();
+  }
+
+  change(e) {
+    this._value = this.field.value;
+    this.layout();
+  }
+  keyDown(e) {
+    // TODO up-down to change value
+  }
+
+  get dragObject() {
+    return this.parent.dragObject;
+  }
+
+  click() {
+    this.field.select();
+    this.field.setSelectionRange(0, this.field.value.length);
+  }
+
+  acceptsDropOf(b) {
+    // TODO
+    return this.type !== 't';
+  };
+
+  
+  objectFromPoint(x, y) {
+    return opaqueAt(this.context, x * density, y * density) ? this : null;
+  };
+  
+  draw() {
+    this.canvas.width = this.width * density;
+    this.canvas.height = this.height * density;
+    this.canvas.style.width = this.width + 'px';
+    this.canvas.style.height = this.height + 'px';
+    this.context.scale(density, density);
+    this.drawOn(this.context);
+  }
+
+  drawOn(context) {
+    context.fillStyle = '#fff';
+    context.fillRect(0, 0, this.width, this.height);
+    bezel(context, this.pathFn, this, true, this._scale);
+  }
+  
+  pathFn(context) {
+    var w = this.width;
+    var h = this.height;
+    var r = 6; // Math.min(w, h) / 2;
+
+    context.moveTo(0, r + .5);
+    context.arc(r, r + .5, r, PI, PI32, false);
+    context.arc(w - r, r + .5, r, PI32, 0, false);
+    context.arc(w - r, h - r - .5, r, 0, PI12, false);
+    context.arc(r, h - r - .5, r, PI12, PI, false);
+  }
+
+  layoutSelf() {
+    var metrics = Input.measure(this.field.value);
+    this.width = Math.max(this.minWidth, metrics.width) + this.fieldPadding * 2;
+    this.height = metrics.height + 1;
+    this.field.style.width = this.width + 'px';
+    this.field.style.height = this.height + 'px';
+    this.redraw();
+  }
+
+}
+Input.prototype.isInput = true;
+Input.measure = createMetrics('field');
+
+Input.prototype.minWidth = 6;
+Input.prototype.fieldPadding = 4;
+
+
 
 
 class Operator extends Drawable {
@@ -260,8 +365,7 @@ class Operator extends Drawable {
     super();
 
     this.el = el('absolute');
-    this.canvas = el('canvas', 'absolute');
-    this.el.appendChild(this.canvas);
+    this.el.appendChild(this.canvas = el('canvas', 'absolute'));
     this.context = this.canvas.getContext('2d');
 
     this.parts = [];
@@ -290,7 +394,7 @@ class Operator extends Drawable {
     this.layout();
     this.el.appendChild(part.el);
 
-    var array = part.isOperator ? this.args : this.labels;
+    var array = part.isOperator || part.isInput ? this.args : this.labels;
     array.push(part);
   }
   
@@ -303,7 +407,7 @@ class Operator extends Drawable {
     var index = this.parts.indexOf(oldPart);
     this.parts.splice(index, 1, newPart);
 
-    var array = oldPart.isArg || oldPart.isOperator ? this.args : this.labels;
+    var array = oldPart.isOperator || part.isInput  ? this.args : this.labels;
     var index = array.indexOf(oldPart);
     array.splice(index, 1, newPart);
 
@@ -327,15 +431,15 @@ class Operator extends Drawable {
   }
 
   reset(arg) {
-    if (arg.parent !== this || !arg.isOperator) return this;
+    if (arg.parent !== this || !arg.isOperator && !arg.isInput) return this;
 
     var i = this.args.indexOf(arg);
-    this.replace(arg, new Label("[]"));
+    this.replace(arg, new Input("123"));
   };
   
   detach() {
     if (this.workspace.isPalette) {
-      return this.scriptCopy();
+      return this.copy();
     }
     if (this.parent.isOperator) {
       this.parent.reset(this);
@@ -352,6 +456,7 @@ class Operator extends Drawable {
     for (var i = args.length; i--;) {
       var arg = args[i];
       var o = arg.objectFromPoint(x - arg.x, y - arg.y);
+      console.log(arg, o);
       if (o) return o;
     }
     return opaqueAt(this.context, x * density, y * density) ? this : null;
@@ -415,10 +520,6 @@ class Operator extends Drawable {
     var w = this.width;
     var h = this.height;
     var r = 6; //Math.min(w, h) / 2;
-
-    var PI12 = Math.PI * 1/2;
-    var PI = Math.PI;
-    var PI32 = Math.PI * 3/2;
 
     context.moveTo(0, r + .5);
     context.arc(r, r + .5, r, PI, PI32, false);
@@ -517,7 +618,18 @@ class World {
       ]),
       new Label("fred"),
     ]));
+
+    var o;
+    this.add(o = new Operator({}, [
+      new Label("go"),
+      new Input("123"),
+      new Label("house"),
+      new Input("party"),
+    ]));
+    o.moveTo(0, 50);
   }
+
+  layout() {}
 
   add(script) {
     if (script.parent) script.parent.remove(script);
