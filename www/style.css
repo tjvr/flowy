@@ -43,11 +43,52 @@ html, body {
   padding: 0;
 }
 
+/* * */
+
+.workspace {
+  position: relative;
+  cursor: default;
+  overflow: auto;
+}
+
 .world {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 50px;
+}
+
+.world-contents {
   position: absolute;
   cursor: default;
   transform-origin: top left;
+  overflow: visible;
 }
+
+.palette {
+  position: fixed;
+  bottom: 0;
+  height: 48px;
+  z-index: 101;
+  border-top: 2px solid #ccc;
+  left: 0;
+  right: 0;
+  background: #fff;
+}
+
+.feedback {
+  position: fixed;
+  z-index: 10000;
+  pointer-events: none;
+}
+
+.dragging {
+  position: fixed;
+  z-index: 10001;
+}
+
+/* * */
 
 .operator {
   background: #7a48c3;
@@ -56,6 +97,7 @@ html, body {
 .label {
   font: bold 10px/14px Lucida Grande, Verdana, Arial, DejaVu Sans, sans-serif;
   color: #fff;
+  z-index: 1;
 }
 
 .field {
