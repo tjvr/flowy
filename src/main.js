@@ -213,12 +213,12 @@ class Drawable {
     var o = this;
     var x = 0;
     var y = 0;
-    while (o && !o.isWorkspace) {
+    while (o && !o.isWorkspace && !o.isApp) {
       x += o.x;
       y += o.y;
       o = o.parent;
     }
-    if (o) {
+    if (o && !o.isApp) {
       return o.screenPositionOf(x, y);
     }
     return {x: x, y: y};
@@ -380,17 +380,15 @@ class Operator extends Drawable {
 
     this.color = '#7a48c3';
 
-    this.output = new Result(this);
-    this.output.parent = this;
-    this.el.appendChild(this.output.el);
-
-    this.curve = new Curve(this, this.output);
-    this.el.appendChild(this.curve.el);
+    this.outputs = [];
+    this.curves = [];
+    this.addOutput(new Result(this));
+    this.outputs[0].curve = null;
   }
 
   get isOperator() { return true; }
   get isDraggable() { return true; }
-  
+
   get color() { return this._color }
   set color(value) {
     this._color = value;
@@ -431,6 +429,7 @@ class Operator extends Drawable {
 
   remove(part) {
     if (part.parent !== this) return;
+    if (part.isOutput) return this.removeOutput(part);
     part.parent = null;
     var index = this.parts.indexOf(part);
     this.parts.splice(index, 1);
@@ -439,6 +438,26 @@ class Operator extends Drawable {
     var array = part.isOperator ? this.args : this.labels;
     var index = array.indexOf(part);
     array.splice(index, 1);
+  }
+
+  addOutput(output) {
+    assert(!output.parent);
+    this.outputs.push(output);
+    output.parent = this;
+    this.el.appendChild(output.el);
+
+    var curve = new Curve(this, output);
+    this.curves.push(curve);
+    this.el.appendChild(curve.el);
+    output.curve = curve;
+
+    this.el.appendChild(this.outputs[0].el);
+  }
+
+  removeOutput(output) {
+    var index = this.outputs.indexOf(output);
+    this.outputs.splice(index, 1);
+    output.parent = null;
   }
 
   reset(arg) {
@@ -456,7 +475,6 @@ class Operator extends Drawable {
       this.parent.reset(this);
       // return this; //new Script().setScale(this._scale).add(this);
     }
-    this.redraw();
     return this;
     // if (this.parent.isScript) {
     //   return this.parent.splitAt(this);
@@ -470,14 +488,14 @@ class Operator extends Drawable {
 
   moved() {
     this.parts.forEach(p => p.moved());
-    this.curve.layoutSelf();
+    this.curves.forEach(c => c.layoutSelf());
   }
 
   objectFromPoint(x, y) {
-    if (this.output && this.output.parent === this) {
-      var o = this.output.objectFromPoint(x - this.output.x, y - this.output.y)
-      if (o) return o;
-    }
+    var output = this.outputs[0];
+    assert(output.parent === this); // TODO optimise every parent= check since will be first
+    var o = output.objectFromPoint(x - output.x, y - output.y)
+    if (o) return o;
     var args = this.args;
     for (var i = args.length; i--;) {
       var arg = args[i];
@@ -493,7 +511,7 @@ class Operator extends Drawable {
 
   layoutChildren() {
     this.parts.forEach(c => c.layoutChildren());
-    if (this.output) this.output.layoutChildren();
+    this.outputs.forEach(o => o.layoutChildren());
     if (this.dirty) {
       this.dirty = false;
       this.layoutSelf();
@@ -502,7 +520,7 @@ class Operator extends Drawable {
 
   drawChildren() {
     this.parts.forEach(c => c.drawChildren());
-    if (this.output) this.output.drawChildren();
+    this.outputs.forEach(o => o.drawChildren());
     if (this.graphicsDirty) {
       this.graphicsDirty = false;
       this.draw();
@@ -535,14 +553,16 @@ class Operator extends Drawable {
       part.moveTo(x, y);
     }
 
-    if (this.output && this.output.parent === this) {
-      var x = (width - this.output.width) / 2;
-      this.output.moveTo(x, height - 1);
-    }
+    this.outputs.forEach(output => {
+      if (output.parent === this) {
+        var x = (width - output.width) / 2;
+        output.moveTo(x, height - 1);
+      }
+    });
     this.width = width;
     this.height = height;
 
-    this.curve.layoutSelf();
+    this.curves.forEach(c => c.layoutSelf());
     this.redraw();
   }
 
@@ -565,10 +585,10 @@ class Operator extends Drawable {
     this.canvas.style.height = this.ownHeight + 'px';
     this.context.scale(density, density);
     this.drawOn(this.context);
-    if (this.output) {
-      var hideOutput = (this.parent && this.parent.isOperator) || !this.workspace || this.workspace.isPalette;
-      this.output.el.style.visibility = this.curve.el.style.visibility = hideOutput ? 'hidden' : 'visible';
-    }
+    var hideOutput = (this.parent && this.parent.isOperator) || !this.workspace || this.workspace.isPalette || this.parent.isApp;
+    //console.log(this.parts[0].text, hideOutput, this.parent);
+    this.outputs[0].el.style.visibility = hideOutput ? 'hidden' : 'visible';
+    this.curves[0].el.style.visibility = 'hidden';
   }
 
   drawOn(context) {
@@ -588,6 +608,7 @@ class Result extends Drawable {
     this.context = this.canvas.getContext('2d');
 
     this.target = target;
+    this.curve = null;
     this.value = "3.14";
     this.label = new Label(this.value, 'result-label');
     this.el.appendChild(this.label.el);
@@ -605,8 +626,18 @@ class Result extends Drawable {
   }
 
   detach() {
-    this.parent = null;
-    return this; // TODO
+    return this.curve ? this : this.copy();
+  }
+
+  copy() {
+    var r = new Result(this.target);
+    this.target.addOutput(r);
+    this.target.layoutChildren();
+    return r;
+  }
+
+  click() {
+    console.log('click result');
   }
 
   moveTo(x, y) {
@@ -615,7 +646,7 @@ class Result extends Drawable {
   }
 
   moved() {
-    this.target.curve.layoutSelf();
+    this.target.curves[this.target.outputs.indexOf(this)].layoutSelf();
   }
 
   layoutSelf() {
@@ -663,7 +694,6 @@ class Result extends Drawable {
     context.fill();
     context.strokeStyle = '#555';
     context.lineWidth = density;
-    console.log(context.lineWidth);
     context.stroke();
   }
 
@@ -688,8 +718,10 @@ class Curve extends Drawable {
     this.target = target;
     this.result = result;
   }
-  
+
   layoutSelf() {
+    if (!this.result.curve) return;
+
     var target = this.target;
     var x = target.width / 2 - 1;
     var y = target.ownHeight - 2;
@@ -697,7 +729,14 @@ class Curve extends Drawable {
     var startY = target.y + y;
 
     var result = this.result;
-    var end = result.workspacePosition;
+    if (result.workspace) {
+      var end = result.workspacePosition;
+    } else {
+      var pos = result.screenPosition;
+      var end = this.target.workspace.worldPositionOf(pos.x, pos.y);
+    }
+    //assert(''+end.x !== 'NaN');
+    console.log(startX, startY, end.x, end.y, result.workspace);
     end.x += result.width / 2 - 1;
 
     var dx = (end.x - startX + 0.5) | 0;
@@ -771,7 +810,7 @@ class Workspace {
     // TODO do something
   }
 
- 
+
   objectFromPoint(x, y) {
     var scripts = this.scripts;
     for (var i=scripts.length; i--;) {
@@ -782,7 +821,7 @@ class Workspace {
     return this;
   }
 
- 
+
   // TODO
 
   layout() {}
@@ -808,6 +847,7 @@ class Workspace {
     if (script.parent) script.parent.remove(script);
     script.parent = this;
     this.scripts.push(script)
+    script.layoutSelf();
     script.layoutChildren();
     script.drawChildren();
     this.elContents.appendChild(script.el);
@@ -1007,11 +1047,11 @@ class World extends Workspace {
   }
 
   worldPositionOf(x, y) {
-    return this.camera.fromScreen(x, y);
+    return this.fromScreen(x, y);
   }
 
   screenPositionOf(x, y) {
-    return this.camera.toScreen(x, y);
+    return this.toScreen(x, y);
   }
 
 }
@@ -1059,7 +1099,6 @@ class App {
     // TODO trackpad should scroll vertically; mouse scroll wheel should zoom!
     // TODO Safari 9.1 has *actual* gesture events: gestureDown/Change/Up to zoom
     var w = this.workspaceFromPoint(e.clientX, e.clientY);
-    console.log('wheel', w);
     if (w) {
       if (e.ctrlKey) {
         if (w.isScrollable) {
@@ -1138,7 +1177,7 @@ class App {
   destroyFinger(id) {
     var g = id === this ? this : this.fingers[id];
     if (g) {
-      if (g.dragging) this.drop(g);
+      if (g.dragging) this.drop(g); // TODO remove
 
       // TODO set things
       g.pressed = false;
@@ -1208,20 +1247,40 @@ class App {
     g.mouseX = p.clientX;
     g.mouseY = p.clientY;
 
-    if (g.dragging) {
-    } else if (g.scrolling) {
-      e.preventDefault();
-    } else if (g.pressed && g.shouldDrag) {
-    } else if (g.pressed && g.shouldScroll) {
+    if (g.pressed && g.shouldScroll && !g.scrolling) {
       g.scrolling = true;
       g.scrollX = g.pressX;
       g.scrollY = g.pressY;
+
+    } else if (g.pressed && g.shouldDrag && !g.dragging) {
+      this.drop(g);
+      var obj = g.pressObject.dragObject;
+      var pos = obj.screenPosition;
+      g.dragging = true;
+      g.dragWorkspace = obj.workspace;
+      g.dragX = pos.x - g.pressX;
+      g.dragY = pos.y - g.pressY;
+      assert(''+g.dragX !== 'NaN');
+      g.dragScript = obj.detach();
+      if (g.dragScript.parent) {
+        g.dragScript.parent.remove(g.dragScript);
+      }
+      g.dragScript.parent = this;
+      this.elScripts.appendChild(g.dragScript.el);
+      g.dragScript.layoutSelf();
+      g.dragScript.layoutChildren();
+      g.dragScript.drawChildren();
+      // g.dragScript.addShadow(this.dragShadowX, this.dragShadowY, this.dragShadowBlur, this.dragShadowColor);
     }
 
     if (g.scrolling) {
       g.pressObject.fingerScroll(g.mouseX - g.scrollX, g.mouseY - g.scrollY)
       g.scrollX = g.mouseX;
       g.scrollY = g.mouseY;
+      e.preventDefault();
+    } else if (g.dragging) {
+      g.dragScript.moveTo((g.dragX + g.mouseX), (g.dragY + g.mouseY));
+      // TODO drop feedback
       e.preventDefault();
     }
   }
@@ -1231,11 +1290,39 @@ class App {
 
     if (g.scrolling) {
       g.pressObject.fingerScrollEnd();
+    } else if (g.dragging) {
+      this.drop(g);
+    } else if (g.shouldDrag || g.shouldResize) {
+      g.pressObject.click(g.pressX, g.pressY);
     }
 
     // TODO
 
     this.destroyFinger(p.identifier);
+  }
+
+  drop(g) {
+    if (!g) g = this.getGesture(this);
+    if (!g.dragging) return;
+
+    // TODO
+    g.dropWorkspace = this.world; // TODO
+    var pos = g.dropWorkspace.worldPositionOf(g.dragX + g.mouseX, g.dragY + g.mouseY);
+    g.dragScript.moveTo(pos.x, pos.y);
+    g.dropWorkspace.add(g.dragScript);
+
+    g.dragging = false;
+    g.dragPos = null;
+    g.dragState = null;
+    g.dragWorkspace = null;
+    g.dragScript = null;
+    g.dropWorkspace = null;
+    g.feedbackInfo = null;
+    g.commandScript = null;
+  }
+
+  remove(o) {
+    // TODO
   }
 
 
