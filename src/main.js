@@ -169,13 +169,13 @@ class Drawable {
     if (this.workspace) {
       this.graphicsDirty = false;
       this.draw();
-
-      // for debugging
-      this.el.style.width = this.width;
-      this.el.style.height = this.height;
     } else {
       this.graphicsDirty = true;
     }
+
+    // for debugging
+    this.el.style.width = this.width;
+    this.el.style.height = this.height;
   }
 
   // layoutSelf() {}
@@ -388,6 +388,9 @@ class Operator extends Drawable {
     this.el.appendChild(this.curve.el);
   }
 
+  get isOperator() { return true; }
+  get isDraggable() { return true; }
+  
   get color() { return this._color }
   set color(value) {
     this._color = value;
@@ -473,7 +476,6 @@ class Operator extends Drawable {
   objectFromPoint(x, y) {
     if (this.output && this.output.parent === this) {
       var o = this.output.objectFromPoint(x - this.output.x, y - this.output.y)
-      console.log(o);
       if (o) return o;
     }
     var args = this.args;
@@ -574,9 +576,6 @@ class Operator extends Drawable {
     bezel(context, this.pathBlock, this, false, density);
   }
 }
-Operator.prototype.isOperator = true;
-
-Operator.prototype.isDraggable = true;
 
 
 
@@ -593,6 +592,9 @@ class Result extends Drawable {
     this.label = new Label(this.value, 'result-label');
     this.el.appendChild(this.label.el);
   }
+
+  get isResult() { return true; }
+  get isDraggable() { return true; }
 
   objectFromPoint(x, y) {
     return opaqueAt(this.context, x * density, y * density) ? this : null;
@@ -666,9 +668,6 @@ class Result extends Drawable {
   }
 
 }
-Result.prototype.isResult = true;
-
-Result.prototype.isDraggable = true;
 
 Result.tipSize = 6;
 Result.paddingX = 6;
@@ -689,21 +688,20 @@ class Curve extends Drawable {
     this.target = target;
     this.result = result;
   }
-
+  
   layoutSelf() {
     var target = this.target;
-    var start = target.worldPosition;
     var x = target.width / 2 - 1;
     var y = target.ownHeight - 2;
-    start.x += x;
-    start.y += y;
+    var startX = target.x + x;
+    var startY = target.y + y;
 
     var result = this.result;
-    var end = result.worldPosition;
+    var end = result.workspacePosition;
     end.x += result.width / 2 - 1;
 
-    var dx = (end.x - start.x + 0.5) | 0;
-    var dy = (end.y - start.y + 0.5) | 0;
+    var dx = (end.x - startX + 0.5) | 0;
+    var dy = (end.y - startY + 0.5) | 0;
     if (dx < 0) x += dx;
     if (dy < 0) y += dy;
     this.moveTo(x | 0, y | 0);
@@ -745,7 +743,6 @@ class Curve extends Drawable {
 
 class Workspace {
   constructor() {
-  constructor(host) {
     this.elContents = el('absolute');
     this.el = el('workspace no-select');
     this.el.appendChild(this.elContents);
@@ -766,16 +763,29 @@ class Workspace {
     this.scrollY = this.el.scrollTop;
   }
 
-  resize(width, height) {
-    this.screenWidth = this.el.offsetWidth;
-    this.screenHeight = this.el.offsetHeight;
+  resize() {
+    this.width = this.el.offsetWidth;
+    this.height = this.el.offsetHeight;
     // this.el.style.width = width + 'px';
     // this.el.style.height = height + 'px';
     // TODO do something
   }
 
-  
+ 
+  objectFromPoint(x, y) {
+    var scripts = this.scripts;
+    for (var i=scripts.length; i--;) {
+      var script = scripts[i];
+      var o = script.objectFromPoint(x - script.x, y - script.y);
+      if (o) return o;
+    }
+    return this;
+  }
+
+ 
   // TODO
+
+  layout() {}
 
   get workspacePosition() { return {x: 0, y: 0}; }
   get screenPosition() {
@@ -804,21 +814,12 @@ class Workspace {
   }
 
   remove() {}
-
-  objectFromPoint(x, y) {
-    var scripts = this.scripts;
-    for (var i=scripts.length; i--;) {
-      var script = scripts[i];
-      var o = script.objectFromPoint(x - script.x, y - script.y);
-      if (o) return o;
-    }
-    return this;
-  }
 }
 
 /*****************************************************************************/
 
-import {primitives} from "./runtime";
+//import {primitives} from "./runtime";
+var primitives = [];
 
 var paletteContents = primitives.map(function(prim) {
   if (typeof prim === 'string') return;
@@ -909,25 +910,30 @@ class World extends Workspace {
 
   }
 
+  get isWorld() { return true; }
+  get isScrollable() { return true; }
+
   toScreen(x, y) {
     return {
-      x: (point.x - this.bounds.left) * this.zoom,
-      y: (this.bounds.top - point.y) * this.zoom,
+      x: (x - this.scrollX) * this.zoom,
+      y: (y - this.scrollY) * this.zoom,
     };
   };
 
   fromScreen(x, y) {
     return {
-      x: (x / this.zoom) + this.bounds.left,
-      y: -((y / this.zoom) - this.bounds.top),
+      x: (x / this.zoom) + this.scrollX,
+      y: (y / this.zoom) + this.scrollY,
     };
   };
 
-  get isWorld() { return true; }
-  get isScrollable() { return true; }
+  objectFromPoint(x, y) {
+    var pos = this.fromScreen(x, y);
+    return super.objectFromPoint(pos.x | 0, pos.y | 0);
+  }
 
-  resize(width, height) {
-    super.resize(width, height);
+  resize() {
+    super.resize();
     // TODO re-center
     this.makeBounds();
     this.transform();
@@ -956,9 +962,13 @@ class World extends Workspace {
       this.lastX = this.scrollX;
       this.lastY = this.scrollY;
     } else {
-      this.scrollBy(this.inertiaX, this.inertiaY);
-      this.inertiaX *= 0.95;
-      this.inertiaY *= 0.95;
+      if (this.inertiaX !== 0 || this.inertiaY !== 0) {
+        this.scrollBy(this.inertiaX, this.inertiaY);
+        this.inertiaX *= 0.95;
+        this.inertiaY *= 0.95;
+        if (Math.abs(this.inertiaX) < 0.01) this.inertiaX = 0;
+        if (Math.abs(this.inertiaY) < 0.01) this.inertiaY = 0;
+      }
     }
   }
 
@@ -979,25 +989,18 @@ class World extends Workspace {
 
   makeBounds() {
     this.bounds = {
-      left: this.scrollX - (this.screenWidth / 2) / this.zoom | 0,
-      right: this.scrollX + (this.screenWidth / 2) / this.zoom | 0,
-      bottom: this.scrollY - (this.screenHeight / 2) / this.zoom | 0,
-      top: this.scrollY + (this.screenHeight / 2) / this.zoom | 0,
+      left: this.scrollX - (this.width / 2) / this.zoom | 0,
+      right: this.scrollX + (this.width / 2) / this.zoom | 0,
+      bottom: this.scrollY - (this.height / 2) / this.zoom | 0,
+      top: this.scrollY + (this.height / 2) / this.zoom | 0,
     };
   }
 
   transform() {
-    this.elContents.style.transform = `scale(${this.zoom}) translate(${-this.bounds.left}px, ${-this.bounds.top}px)`;
+    this.elContents.style.transform = `scale(${this.zoom}) translate(${-this.scrollX}px, ${-this.scrollY}px)`;
   }
-
-
 
   // TODO
-
-  objectFromPoint(x, y) {
-    var pos = this.camera.fromScreen(x, y);
-    return super.objectFromPoint(pos.x | 0, -pos.y | 0);
-  }
 
   get screenPosition() {
     return {x: 0, y: 0};
@@ -1026,10 +1029,10 @@ class App {
     this.el.appendChild(this.world.el);
     this.el.appendChild(this.palette.el);
 
-    this.resize();
-
     document.body.appendChild(this.el);
     document.body.appendChild(this.elScripts = el('absolute dragging'));
+
+    this.resize();
 
     this.fingers = [];
     document.addEventListener('touchstart', this.touchStart.bind(this));
@@ -1055,7 +1058,8 @@ class App {
   wheel(e) {
     // TODO trackpad should scroll vertically; mouse scroll wheel should zoom!
     // TODO Safari 9.1 has *actual* gesture events: gestureDown/Change/Up to zoom
-    var w = this.workspaceFromElement(e.target);
+    var w = this.workspaceFromPoint(e.clientX, e.clientY);
+    console.log('wheel', w);
     if (w) {
       if (e.ctrlKey) {
         if (w.isScrollable) {
@@ -1153,21 +1157,19 @@ class App {
     return true;
   }
 
-  objectFromElement(t) {
-    while (t) {
-      var o = this.nodes.get(t);
-      if (o) return o;
-      t = t.parentNode;
-    }
-    return null;
+  objectFromPoint(x, y) {
+    var w = this.workspaceFromPoint(x, y)
+    if (!w) return null;
+    var pos = w.screenPosition;
+    return w.objectFromPoint(x - pos.x, y - pos.y);
   }
 
-  workspaceFromElement(t) {
-    var workspaceEls = this.workspaces.map(w => w.el);
-    while (t) {
-      var index = workspaceEls.indexOf(t);
-      if (index !== -1) return this.workspaces[index];
-      t = t.parentNode;
+  workspaceFromPoint(x, y) {
+    var workspaces = this.workspaces;
+    for (var i = workspaces.length; i--;) {
+      var w = workspaces[i];
+      var pos = w.screenPosition;
+      if (containsPoint(w, x - pos.x, y - pos.y)) return w;
     }
     return null;
   }
@@ -1176,8 +1178,8 @@ class App {
     var g = this.createFinger(p.identifier);
     g.pressX = g.mouseX = p.clientX;
     g.pressY = g.mouseY = p.clientY;
-    g.pressObject = this.objectFromElement(e.target);
-    console.log(g.pressObject);
+    g.pressObject = this.objectFromPoint(g.pressX, g.pressY);
+    console.log('pressed', g.pressObject);
     g.shouldDrag = false;
     g.shouldScroll = false;
 
@@ -1240,6 +1242,4 @@ class App {
 }
 
 var app = new App();
-
-document.body.appendChild(new World().el);
 
