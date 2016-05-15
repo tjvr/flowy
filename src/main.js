@@ -94,6 +94,25 @@ function newSVG(width, height) {
   });
 }
 
+function embedHTML(x, y, dom) {
+  var body = document.createElementNS("http://www.w3.org/1999/xhtml", 'body');
+  if (!isArray(dom)) dom = [dom];
+  dom.forEach(el => {
+    body.appendChild(el);
+  });
+  body.style.position = 'absolute';
+  body.style.left = `${x}px`;
+  body.style.top = `${y}px`;
+  var foreign = el('foreignObject', {
+    x: 0,
+    y: 0,
+    width: '100px',
+    height: '16px',
+  });
+  foreign.appendChild(body);
+  return foreign; //move(x, y, foreign);
+}
+
 function polygon(props) {
   return el('polygon', extend(props, {
     points: props.points.join(" "),
@@ -1290,42 +1309,66 @@ function div(tagName, className) {
 }
 
 
-// add our CSS to the page 
+// add our CSS to the page
 document.head.appendChild(makeStyle());
 
 class Workspace {
   constructor() {
-    this.elContents = newSVG(100, 100);
+    this.elContents = newSVG(1000, 1000);
     this.elContents.appendChild(withChildren(el('defs'), [
         bevelFilter('bevelFilter', false),
         bevelFilter('inputBevelFilter', true),
         darkFilter('inputDarkFilter'),
     ]));
 
-    this.el = div('absolute workspace world');
+    this.el = div('workspace no-select');
     this.el.appendChild(this.elContents);
 
     var b = new Block({shape: 'stack', category: 'motion'}, [new Label('four')]);
     b.measure();
     Label.endMeasuring(() => {
-      this.elContents.appendChild(b.draw());
+      var el = b.draw();
+      this.elContents.appendChild(el);
+      app.nodes.set(el, b);
     });
+
+    var b2 = new Block({shape: 'stack', category: 'looks'}, [new Label('party party')]);
+    b2.measure();
+    Label.endMeasuring(() => {
+      var el = b2.draw();
+      move(100, 0, el);
+      this.elContents.appendChild(el);
+      app.nodes.set(el, b2);
+    });
+
+    var input = div('input', 'asdf');
+    input.value = 'asdf';
+    this.elContents.appendChild(embedHTML(50, 100, input));
+
+    this.el.addEventListener('scroll', this.scrolled.bind(this));
+  }
+
+  scrolled(e) {
+    this.scrollX = this.el.scrollLeft;
+    this.scrollY = this.el.scrollTop;
   }
 
   resize(width, height) {
-    this.width = width;
-    this.height = height;
-    this.el.style.width = width + 'px';
-    this.el.style.height = height + 'px';
+    this.screenWidth = width;
+    this.screenHeight = height;
+    // this.el.style.width = width + 'px';
+    // this.el.style.height = height + 'px';
   }
 }
 
 class World extends Workspace {
   constructor() {
     super();
+    this.el.className += ' world';
 
     this.scrollX = 0;
     this.scrollY = 0;
+    this.factor = 1;
     this.zoom = 1;
     this.lastX = 0;
     this.lastY = 0;
@@ -1335,43 +1378,44 @@ class World extends Workspace {
     setInterval(this.tick.bind(this), 1 / 60);
   }
 
-  get bounds() {
+  toScreen(x, y) {
     return {
-      left: this.scrollX - (this.width / 2) / this.zoom,
-      right: this.scrollX + (this.width / 2) / this.zoom,
-      bottom: this.scrollY - (this.height / 2) / this.zoom,
-      top: this.scrollY + (this.height / 2) / this.zoom,
+      x: (point.x - this.bounds.left) * this.zoom,
+      y: (this.bounds.top - point.y) * this.zoom,
     };
   };
 
-  toScreen(x, y) {
-    var point = new Vec(x, y);
-    return new Vec(
-      (point.x - this.left) * this.zoom,
-      (this.top - point.y) * this.zoom
-    );
-  };
-
   fromScreen(x, y) {
-    var screen = new Vec(x, y);
-    return new Vec(
-      (screen.x / this.zoom) + this.left,
-      -((screen.y / this.zoom) - this.top)
-    );
+    return {
+      x: (x / this.zoom) + this.bounds.left,
+      y: -((y / this.zoom) - this.bounds.top),
+    };
   };
 
   get isScrollable() {
     return true;
   }
 
-  scrollBy(dx, dy) {
-    this.scrollX += dx;
-    this.scrollY += dy;
+  resize(width, height) {
+    super.resize(width, height);
+    // TODO re-center
+    this.makeBounds();
     this.transform();
+  }
+
+  scrollBy(dx, dy) {
+    this.scrollX += dx / this.zoom;
+    this.scrollY += dy / this.zoom;
+    this.makeBounds();
+    this.transform();
+  }
+
+  fingerScroll(dx, dy) {
+    this.scrollBy(-dx, -dy);
     this.scrolling = true;
   }
 
-  scrollEnd() {
+  fingerScrollEnd() {
     this.scrolling = false;
   }
 
@@ -1382,21 +1426,53 @@ class World extends Workspace {
       this.lastX = this.scrollX;
       this.lastY = this.scrollY;
     } else {
-      this.scrollX += this.inertiaX;
-      this.scrollY += this.inertiaY;
-      this.transform();
-      this.inertiaX *= 0.9;
-      this.inertiaY *= 0.9;
+      this.scrollBy(this.inertiaX, this.inertiaY);
+      this.inertiaX *= 0.95;
+      this.inertiaY *= 0.95;
     }
   }
 
-  zoomBy() {
+  zoomBy(delta, x, y) {
+    this.factor -= delta;
+    this.factor = Math.min(139, this.factor); // zoom <= 4.0
+    var oldCursor = this.fromScreen(x, y);
+    this.zoom = Math.pow(1.01, this.factor);
+    this.makeBounds();
+    var newCursor = this.fromScreen(x, y);
+    this.scrollX += oldCursor.x - newCursor.x;
+    this.scrollY += oldCursor.y - newCursor.y;
+    this.makeBounds();
+    this.transform();
+  }
+
+  // TODO pinch zoom
+
+  makeBounds() {
+    this.bounds = {
+      left: this.scrollX - (this.screenWidth / 2) / this.zoom | 0,
+      right: this.scrollX + (this.screenWidth / 2) / this.zoom | 0,
+      bottom: this.scrollY - (this.screenHeight / 2) / this.zoom | 0,
+      top: this.scrollY + (this.screenHeight / 2) / this.zoom | 0,
+    };
   }
 
   transform() {
-    this.elContents.style.transform = `scale(${this.zoom}) translate(${this.scrollX}px, ${this.scrollY}px)`;
+    this.elContents.style.transform = `scale(${this.zoom}) translate(${-this.bounds.left}px, ${-this.bounds.top}px)`;
   }
 }
+
+class Palette extends Workspace {
+  constructor() {
+    super();
+    this.el.className += ' palette';
+
+    setProps(this.elContents, {
+      width: 2000,
+    });
+
+  }
+}
+
 
 /*****************************************************************************/
 
@@ -1406,22 +1482,24 @@ class App {
     this.workspaces = [];
 
     this.world = new World(this.elWorld = div(''));
-    // this.palette = new Palette(this.elPalette = div(''));
+    this.palette = new Palette(this.elPalette = div(''));
     this.workspaces = [this.world]; //, this.palette];
     this.el.appendChild(this.world.el);
-    // this.el.appendChild(this.palette.el);
+    this.el.appendChild(this.palette.el);
 
     this.nodes = new Map();
     this.nodes.set(this.world.el, this.world);
 
+    this.resize();
+
+    document.body.appendChild(this.el);
     document.body.appendChild(this.elScripts = div('absolute dragging'));
 
+    this.fingers = [];
     document.addEventListener('touchstart', this.touchStart.bind(this));
     document.addEventListener('touchmove', this.touchMove.bind(this));
     document.addEventListener('touchend', this.touchEnd.bind(this));
     document.addEventListener('touchcancel', this.touchEnd.bind(this));
-
-    this.fingers = [];
     document.addEventListener('mousedown', this.mouseDown.bind(this));
     document.addEventListener('mousemove', this.mouseMove.bind(this));
     document.addEventListener('mouseup', this.mouseUp.bind(this));
@@ -1429,8 +1507,6 @@ class App {
     window.addEventListener('resize', this.resize.bind(this));
     document.addEventListener('wheel', this.wheel.bind(this));
     document.addEventListener('mousewheel', this.wheel.bind(this));
-
-    this.factor = 1;
   }
 
   resize(e) {
@@ -1441,31 +1517,20 @@ class App {
 
   wheel(e) {
     // TODO trackpad should scroll vertically; mouse scroll wheel should zoom!
-    if (e.preventDefault) e.preventDefault();
-    /*
-    if (e.ctrlKey) {
-      this.zoom(e);
-    } else {
-      this.camera.pos = this.camera.pos.add(e.deltaX / this.camera.zoom, -e.deltaY / this.camera.zoom);
-      this.camera.update();
-    }
-    */
-  }
-
-  zoom(e) {
     var w = this.workspaceFromElement(e.target);
-
-    this.factor -= e.deltaY;
-    this.factor = Math.min(139, this.factor); // zoom <= 4.0
-    var oldCursor = this.camera.fromScreen(e.clientX, e.clientY);
-    this.camera.zoom = Math.pow(1.01, this.factor);
-    this.camera.update();
-    var newCursor = this.camera.fromScreen(e.clientX, e.clientY);
-    var delta = oldCursor.sub(newCursor);
-    this.camera.pos = this.camera.pos.add(delta);
-    this.camera.update();
+    if (w) {
+      if (e.ctrlKey) {
+        if (w.isScrollable) {
+          e.preventDefault();
+          w.zoomBy(e.deltaY, e.clientX, e.clientY);
+        }
+      } else if (w.isScrollable) {
+        e.preventDefault();
+        w.scrollBy(e.deltaX, e.deltaY);
+      }
+    }
   }
- 
+
   mouseDown(e) {
     var p = {clientX: e.clientX, clientY: e.clientY, identifier: this};
     if (!this.startFinger(p, e)) return;
@@ -1479,7 +1544,7 @@ class App {
     var p = {clientX: e.clientX, clientY: e.clientY, identifier: this};
     this.fingerUp(p, e);
   }
-  
+
   touchStart(e) {
     var touch = e.changedTouches[0];
     var p = {clientX: touch.clientX, clientY: touch.clientY, identifier: touch.identifier};
@@ -1510,7 +1575,7 @@ class App {
       this.fingerUp({clientX: touch.clientX, clientY: touch.clientY, identifier: touch.identifier}, e);
     }
   }
- 
+
   createFinger(id) {
     if (id === this) {
       var g = this;
@@ -1574,6 +1639,7 @@ class App {
     g.pressX = g.mouseX = p.clientX;
     g.pressY = g.mouseY = p.clientY;
     g.pressObject = this.objectFromElement(e.target);
+    console.log(g.pressObject);
     g.shouldDrag = false;
     g.shouldScroll = false;
 
@@ -1613,7 +1679,7 @@ class App {
     }
 
     if (g.scrolling) {
-      g.pressObject.scrollBy(g.mouseX - g.scrollX, g.mouseY - g.scrollY)
+      g.pressObject.fingerScroll(g.mouseX - g.scrollX, g.mouseY - g.scrollY)
       g.scrollX = g.mouseX;
       g.scrollY = g.mouseY;
       e.preventDefault();
@@ -1624,16 +1690,16 @@ class App {
     var g = this.getFinger(p.identifier);
 
     if (g.scrolling) {
-      g.pressObject.scrollEnd();
+      g.pressObject.fingerScrollEnd();
     }
 
     // TODO
-    
+
     this.destroyFinger(p.identifier);
   }
 
 
 }
 
-document.body.appendChild(new App().el);
+var app = new App();
 
