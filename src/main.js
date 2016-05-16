@@ -1466,7 +1466,7 @@ class App {
   }
 
   get feedbackRange() {
-    return 20;
+    return 20 * this.world.zoom;
   }
 
 }
