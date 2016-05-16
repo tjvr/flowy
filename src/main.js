@@ -294,6 +294,8 @@ class Input extends Drawable {
     this.value = value;
   }
 
+  get isInput() { return true; }
+
   get value() { return this._value; }
   set value(value) {
     this._value = value;
@@ -363,8 +365,12 @@ class Input extends Drawable {
     this.redraw();
   }
 
+  pathShadowOn(context) {
+    this.pathFn(context);
+    context.closePath();
+  }
+
 }
-Input.prototype.isInput = true;
 Input.measure = createMetrics('field');
 
 Input.prototype.minWidth = 6;
@@ -410,6 +416,7 @@ class Operator extends Drawable {
   add(part) {
     if (part.parent) part.parent.remove(part);
     part.parent = this;
+    part.zoom = 1;
     this.parts.push(part);
     if (this.parent) part.layoutChildren(); // TODO
     this.layout();
@@ -424,6 +431,7 @@ class Operator extends Drawable {
     if (newPart.parent) newPart.parent.remove(newPart);
     oldPart.parent = null;
     newPart.parent = this;
+    newPart.zoom = 1;
 
     var index = this.parts.indexOf(oldPart);
     this.parts.splice(index, 1, newPart);
@@ -502,7 +510,8 @@ class Operator extends Drawable {
 
   objectFromPoint(x, y) {
     var output = this.outputs[0];
-    assert(output.parent === this); // TODO optimise every parent= check since will be first
+    assert(output.parent === this);
+    // TODO don't grab invisible bubbles
     var o = output.objectFromPoint(x - output.x, y - output.y)
     if (o) return o;
     var args = this.args;
@@ -520,16 +529,16 @@ class Operator extends Drawable {
 
   layoutChildren() {
     this.parts.forEach(c => c.layoutChildren());
-    this.outputs.forEach(o => o.layoutChildren());
+    this.outputs.forEach(o => o.layoutChildren()); // TODO ew
     if (this.dirty) {
       this.dirty = false;
     }
-      this.layoutSelf();
+      this.layoutSelf(); // TODO mark dirty when hiding/showing result bubble
   }
 
   drawChildren() {
     this.parts.forEach(c => c.drawChildren());
-    this.outputs.forEach(o => o.drawChildren());
+    this.outputs.forEach(o => o.drawChildren()); // TODO ew
     if (this.graphicsDirty) {
       this.graphicsDirty = false;
       this.draw();
@@ -562,12 +571,10 @@ class Operator extends Drawable {
       part.moveTo(x, y);
     }
 
-    this.outputs.forEach(output => {
-      if (output.parent === this) {
-        var x = (width - output.width) / 2;
-        output.moveTo(x, height - 1 + Result.tipSize);
-      }
-    });
+    var output = this.outputs[0];
+    assert(output.parent === this);
+    var x = (width - output.width) / 2;
+    output.moveTo(x, height - 1 + Result.tipSize);
     this.width = width;
     this.height = height;
 
@@ -621,7 +628,7 @@ class Result extends Drawable {
     this.value = "3.14";
     this.label = new Label(this.value, 'result-label');
     this.el.appendChild(this.label.el);
-    
+
     if (target.workspace) target.workspace.add(this);
   }
 
@@ -1104,6 +1111,9 @@ class App {
     this.resize();
 
     this.fingers = [];
+    this.feedbackPool = [];
+    this.feedback = this.createFeedback();
+
     document.addEventListener('touchstart', this.touchStart.bind(this));
     document.addEventListener('touchmove', this.touchMove.bind(this));
     document.addEventListener('touchend', this.touchEnd.bind(this));
@@ -1200,13 +1210,14 @@ class App {
     if (id === this) return this;
     var g = this.fingers[id];
     if (g) return g;
-    return this.fingers[id] = {}; // new finger
+      return this.fingers[id] = {feedback: this.createFeedback()};
   }
 
   destroyFinger(id) {
     var g = id === this ? this : this.fingers[id];
     if (g) {
       if (g.dragging) this.drop(g); // TODO remove
+      this.destroyFeedback(g.feedback);
 
       // TODO set things
       g.pressed = false;
@@ -1333,12 +1344,14 @@ class App {
   drop(g) {
     if (!g) g = this.getGesture(this);
     if (!g.dragging) return;
+    g.feedback.canvas.style.display = 'none';
 
     // TODO
     g.dropWorkspace = this.world; // TODO
     var pos = g.dropWorkspace.worldPositionOf(g.dragX + g.mouseX, g.dragY + g.mouseY);
-    if (g.feedbackTarget) {
-      g.feedbackTarget.parent.replace(g.feedbackTarget, g.dragScript);
+    if (g.feedbackInfo) {
+      var info = g.feedbackInfo;
+      info.node.parent.replace(info.node, g.dragScript);
     } else {
       g.dropWorkspace.add(g.dragScript);
       g.dragScript.moveTo(pos.x, pos.y);
@@ -1358,22 +1371,46 @@ class App {
     // TODO
   }
 
+
+  createFeedback() {
+    if (this.feedbackPool.length) {
+      return this.feedbackPool.pop();
+    }
+    var feedback = el('canvas', 'absolute feedback');
+    var feedbackContext = feedback.getContext('2d');
+    feedback.style.display = 'none';
+    document.body.appendChild(feedback);
+    return feedbackContext;
+  };
+
+  destroyFeedback(feedback) {
+    if (feedback) {
+      this.feedbackPool.push(feedback);
+    }
+  };
+
   showFeedback(g) {
     g.feedbackDistance = Infinity;
-    g.feedbackTarget = null;
+    g.feedbackInfo = null;
+    //g.dropWorkspace = null;
 
     var w = this.workspaceFromPoint(g.mouseX, g.mouseY);
     if (w === this.world) {
-      var pos = w.worldPositionOf(0, 0);
-      w.scripts.forEach(script => this.addNodeFeedback(g, -pos.x, -pos.y, script));
+      var pos = w.toScreen(0, 0);
+      w.scripts.forEach(script => this.addNodeFeedback(g, pos.x, pos.y, script));
     }
 
-    if (g.feedbackTarget) console.log(g.feedbackTarget);
+    if (g.feedbackInfo) {
+      this.renderFeedback(g);
+      g.feedback.canvas.style.display = 'block';
+    } else {
+      g.feedback.canvas.style.display = 'none';
+    }
   }
 
   addNodeFeedback(g, x, y, node) {
-    x += node.x;
-    y += node.y;
+    x += node.x * this.world.zoom;
+    y += node.y * this.world.zoom;
     if (node.isOperator) {
       node.parts.forEach(child => this.addNodeFeedback(g, x, y, child));
     }
@@ -1384,8 +1421,48 @@ class App {
       var d2 = dx * dx + dy * dy;
       if (Math.abs(dx) > this.feedbackRange || Math.abs(dy) > this.feedbackRange || d2 > g.feedbackDistance) return;
       g.feedbackDistance = d2;
-      g.feedbackTarget = node;
+      g.feedbackInfo = {x, y, node};
     }
+  }
+
+  renderFeedback(g) {
+    var feedbackColor = '#fff';
+    var info = g.feedbackInfo;
+    var context = g.feedback;
+    var canvas = g.feedback.canvas;
+    var l = this.feedbackLineWidth;
+    var r = l/2;
+
+    var l = 2;
+    var x = info.x - l;
+    var y = info.y - l;
+    var w = info.node.width * this.world.zoom;
+    var h = info.node.height * this.world.zoom;
+    canvas.width = w + l * 2;
+    canvas.height = h + l * 2;
+
+    context.translate(l, l);
+    var s = this.world.zoom;
+    context.scale(s, s);
+
+    info.node.pathShadowOn(context);
+
+    context.lineWidth = l / 1;
+    context.lineCap = 'round';
+    context.lineJoin = 'round';
+    context.strokeStyle = feedbackColor;
+    context.stroke();
+
+    context.globalCompositeOperation = 'destination-out';
+    context.beginPath();
+    info.node.pathShadowOn(context);
+    context.fill();
+    context.globalCompositeOperation = 'source-over';
+    context.globalAlpha = .6;
+    context.fillStyle = feedbackColor;
+    context.fill();
+
+    canvas.style.transform = 'translate('+x+'px,'+y+'px)';
   }
 
   get feedbackRange() {
