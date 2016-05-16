@@ -971,7 +971,7 @@ class World extends Workspace {
 
 
     // TODO
-
+    /*
     this.add(new Operator({}, [
       new Label("bob"),
       new Operator({}, [
@@ -1001,6 +1001,7 @@ class World extends Workspace {
       ]),
     ]));
     o.moveTo(100, 20);
+    */
 
   }
 

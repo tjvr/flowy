@@ -92,6 +92,10 @@ export const primitives = [
     ["for each _:Var of _:List _:Block",      "Line", "_2.forEach(_3.bind(null, _1));"],
     "",
 
+    ["input",      "Int", "123"],
+    ["return _:Int",      "Int", "123"],
+    ["fib of _:Int",      "Int", "123"],
+
 ];
 
 
