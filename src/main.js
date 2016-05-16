@@ -266,6 +266,10 @@ class Label extends Drawable {
     this.layout();
   }
 
+  copy() {
+    return new Label(this.text);
+  }
+
   layoutSelf() {}
   drawChildren() {}
   draw() {}
@@ -301,6 +305,10 @@ class Input extends Drawable {
     this._value = value;
     this.field.value = value;
     this.layout();
+  }
+
+  copy() {
+    return new Input(this.value);
   }
 
   change(e) {
@@ -414,6 +422,7 @@ class Operator extends Drawable {
   }
 
   add(part) {
+    assert(part !== this);
     if (part.parent) part.parent.remove(part);
     part.parent = this;
     part.zoom = 1;
@@ -427,6 +436,7 @@ class Operator extends Drawable {
   }
 
   replace(oldPart, newPart) {
+    assert(newPart !== this);
     if (oldPart.parent !== this) return;
     if (newPart.parent) newPart.parent.remove(newPart);
     oldPart.parent = null;
@@ -496,6 +506,10 @@ class Operator extends Drawable {
     // if (this.parent.isScript) {
     //   return this.parent.splitAt(this);
     // }
+  }
+
+  copy() {
+    return new Operator(this.info, this.parts.map(c => c.copy()));
   }
 
   moveTo(x, y) {
@@ -837,6 +851,8 @@ class Workspace {
 
 
   objectFromPoint(x, y) {
+    x += this.scrollX;
+    y += this.scrollY;
     var scripts = this.scripts;
     for (var i=scripts.length; i--;) {
       var script = scripts[i];
@@ -889,13 +905,15 @@ class Workspace {
     }
   }
 
-  remove() {}
+  remove(script) {
+    var index = this.scripts.indexOf(script);
+    this.scripts.splice(index, 1);
+  }
 }
 
 /*****************************************************************************/
 
-//import {primitives} from "./runtime";
-var primitives = [];
+import {primitives} from "./runtime";
 
 var paletteContents = primitives.map(function(prim) {
   if (typeof prim === 'string') return;
@@ -1005,7 +1023,13 @@ class World extends Workspace {
 
   objectFromPoint(x, y) {
     var pos = this.fromScreen(x, y);
-    return super.objectFromPoint(pos.x | 0, pos.y | 0);
+    var scripts = this.scripts;
+    for (var i=scripts.length; i--;) {
+      var script = scripts[i];
+      var o = script.objectFromPoint(pos.x - script.x, pos.y - script.y);
+      if (o) return o;
+    }
+    return this;
   }
 
   resize() {
@@ -1101,7 +1125,7 @@ class App {
 
     this.world = new World(this.elWorld = el(''));
     this.palette = new Palette(this.elPalette = el(''));
-    this.workspaces = [this.world]; //, this.palette];
+    this.workspaces = [this.world, this.palette];
     this.el.appendChild(this.world.el);
     this.el.appendChild(this.palette.el);
 
