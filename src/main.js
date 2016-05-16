@@ -1319,8 +1319,8 @@ class App {
     // TODO
     g.dropWorkspace = this.world; // TODO
     var pos = g.dropWorkspace.worldPositionOf(g.dragX + g.mouseX, g.dragY + g.mouseY);
-    g.dragScript.moveTo(pos.x, pos.y);
     g.dropWorkspace.add(g.dragScript);
+    g.dragScript.moveTo(pos.x, pos.y);
 
     g.dragging = false;
     g.dragPos = null;
