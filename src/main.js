@@ -206,7 +206,7 @@ class Drawable {
       y += o.y;
       o = o.parent;
     }
-    return {x: x, y: y};
+    return {x, y};
   }
 
   get screenPosition() {
@@ -221,7 +221,7 @@ class Drawable {
     if (o && !o.isApp) {
       return o.screenPositionOf(x, y);
     }
-    return {x: x, y: y};
+    return {x, y};
   }
 
   get topScript() {
@@ -384,6 +384,7 @@ class Operator extends Drawable {
     this.curves = [];
     this.addOutput(new Result(this));
     this.outputs[0].curve = null;
+    this.outputs[0].parent = this;
   }
 
   get isOperator() { return true; }
@@ -429,7 +430,7 @@ class Operator extends Drawable {
 
   remove(part) {
     if (part.parent !== this) return;
-    if (part.isOutput) return this.removeOutput(part);
+    if (part.isResult) return this.removeOutput(part);
     part.parent = null;
     var index = this.parts.indexOf(part);
     this.parts.splice(index, 1);
@@ -441,15 +442,12 @@ class Operator extends Drawable {
   }
 
   addOutput(output) {
-    assert(!output.parent);
     this.outputs.push(output);
-    output.parent = this;
-    this.el.appendChild(output.el);
+    output.target = this;
 
     var curve = new Curve(this, output);
+    output.curve = this.curves.length >= 1 ? curve : null;
     this.curves.push(curve);
-    this.el.appendChild(curve.el);
-    output.curve = curve;
 
     this.el.appendChild(this.outputs[0].el);
   }
@@ -514,8 +512,8 @@ class Operator extends Drawable {
     this.outputs.forEach(o => o.layoutChildren());
     if (this.dirty) {
       this.dirty = false;
-      this.layoutSelf();
     }
+      this.layoutSelf();
   }
 
   drawChildren() {
@@ -612,6 +610,8 @@ class Result extends Drawable {
     this.value = "3.14";
     this.label = new Label(this.value, 'result-label');
     this.el.appendChild(this.label.el);
+    
+    if (target.workspace) target.workspace.add(this);
   }
 
   get isResult() { return true; }
@@ -626,7 +626,10 @@ class Result extends Drawable {
   }
 
   detach() {
-    return this.curve ? this : this.copy();
+    if (!this.curve) {
+      return this.copy();
+    }
+    return this;
   }
 
   copy() {
@@ -646,7 +649,7 @@ class Result extends Drawable {
   }
 
   moved() {
-    this.target.curves[this.target.outputs.indexOf(this)].layoutSelf();
+    if (this.curve) this.curve.layoutSelf();
   }
 
   layoutSelf() {
@@ -717,33 +720,32 @@ class Curve extends Drawable {
 
     this.target = target;
     this.result = result;
+
+    if (target.workspace) target.workspace.add(this);
   }
+
+  get isCurve() { return true; }
+
+  objectFromPoint() {}
 
   layoutSelf() {
     if (!this.result.curve) return;
+    assert(this.workspace);
 
     var target = this.target;
-    var x = target.width / 2 - 1;
-    var y = target.ownHeight - 2;
-    var startX = target.x + x;
-    var startY = target.y + y;
+    var start = this.workspace.positionOf(target);
+    start.x += target.width / 2 - 1;
+    start.y += target.ownHeight - 2;
 
     var result = this.result;
-    if (result.workspace) {
-      var end = result.workspacePosition;
-    } else {
-      var pos = result.screenPosition;
-      var end = this.target.workspace.worldPositionOf(pos.x, pos.y);
-    }
-    //assert(''+end.x !== 'NaN');
-    console.log(startX, startY, end.x, end.y, result.workspace);
+    var end = this.workspace.positionOf(result);
     end.x += result.width / 2 - 1;
 
-    var dx = (end.x - startX + 0.5) | 0;
-    var dy = (end.y - startY + 0.5) | 0;
-    if (dx < 0) x += dx;
-    if (dy < 0) y += dy;
-    this.moveTo(x | 0, y | 0);
+    var dx = (end.x - start.x + 0.5) | 0;
+    var dy = (end.y - start.y + 0.5) | 0;
+    if (dx < 0) start.x += dx;
+    if (dy < 0) start.y += dy;
+    this.moveTo(start.x | 0, start.y | 0);
     this.width = Math.abs(dx) + 2;
     this.height = Math.abs(dy) + 2;
     this.dx = dx;
@@ -826,7 +828,14 @@ class Workspace {
 
   layout() {}
 
-  get workspacePosition() { return {x: 0, y: 0}; }
+  positionOf(obj) {
+    if (obj.workspace === this) {
+      return obj.workspacePosition;
+    }
+    var pos = obj.screenPosition;
+    return this.worldPositionOf(pos.x, pos.y);
+  }
+
   get screenPosition() {
     var bb = this.el.getBoundingClientRect();
     var x = Math.round(bb.left);
@@ -835,7 +844,7 @@ class Workspace {
   }
   screenPositionOf(x, y) {
     var pos = this.screenPosition;
-    return {x: x + pos.x, y: y + pos.y};
+    return {x: x + pos.x - this.scrollX, y: y + pos.y - this.scrollY};
   }
 
   worldPositionOf(x, y) {
@@ -847,10 +856,13 @@ class Workspace {
     if (script.parent) script.parent.remove(script);
     script.parent = this;
     this.scripts.push(script)
-    script.layoutSelf();
     script.layoutChildren();
     script.drawChildren();
-    this.elContents.appendChild(script.el);
+    if (script.isCurve) {
+      this.elContents.insertBefore(script.el, this.elContents.children[0]);
+    } else {
+      this.elContents.appendChild(script.el);
+    }
   }
 
   remove() {}
@@ -1267,7 +1279,6 @@ class App {
       }
       g.dragScript.parent = this;
       this.elScripts.appendChild(g.dragScript.el);
-      g.dragScript.layoutSelf();
       g.dragScript.layoutChildren();
       g.dragScript.drawChildren();
       // g.dragScript.addShadow(this.dragShadowX, this.dragShadowY, this.dragShadowBlur, this.dragShadowColor);
