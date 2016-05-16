@@ -147,7 +147,11 @@ class Drawable {
   }
 
   transform() {
-    this.el.style.transform = `translate(${this.x}px, ${this.y}px) scale(${this._zoom})`;
+    var t = '';
+    t += `translate(${this.x + (this._flip ? 1 : 0)}px, ${this.y}px)`;
+    if (this._zoom !== 1) t += ` scale(${this._zoom})`;
+    t += ' translateZ(0)';
+    this.el.style.transform = t;
   }
 
   moved() {}
@@ -185,8 +189,8 @@ class Drawable {
     }
 
     // for debugging
-    this.el.style.width = this.width;
-    this.el.style.height = this.height;
+    this.el.style.width = this.width + 'px';
+    this.el.style.height = this.height + 'px';
   }
 
   // layoutSelf() {}
@@ -1090,10 +1094,10 @@ class World extends Workspace {
 
   makeBounds() {
     this.bounds = {
-      left: this.scrollX - (this.width / 2) / this.zoom | 0,
-      right: this.scrollX + (this.width / 2) / this.zoom | 0,
-      bottom: this.scrollY - (this.height / 2) / this.zoom | 0,
-      top: this.scrollY + (this.height / 2) / this.zoom | 0,
+      left: this.scrollX - (this.width / 2) / this.zoom + 0.5| 0,
+      right: this.scrollX + (this.width / 2) / this.zoom + 0.5| 0,
+      bottom: this.scrollY - (this.height / 2) / this.zoom + 0.5 | 0,
+      top: this.scrollY + (this.height / 2) / this.zoom + 0.5 | 0,
     };
   }
 
@@ -1129,6 +1133,8 @@ class App {
     this.workspaces = [this.world, this.palette];
     this.el.appendChild(this.world.el);
     this.el.appendChild(this.palette.el);
+
+    this.world.app = this; // TODO
 
     document.body.appendChild(this.el);
     document.body.appendChild(this.elScripts = el('absolute dragging'));
@@ -1496,5 +1502,5 @@ class App {
 
 }
 
-var app = new App();
+window.app = new App();
 
