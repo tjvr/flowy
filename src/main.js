@@ -428,7 +428,7 @@ class Operator extends Drawable {
     var index = this.parts.indexOf(oldPart);
     this.parts.splice(index, 1, newPart);
 
-    var array = oldPart.isOperator || part.isInput  ? this.args : this.labels;
+    var array = oldPart.isOperator || oldPart.isInput ? this.args : this.labels;
     var index = array.indexOf(oldPart);
     array.splice(index, 1, newPart);
 
@@ -565,7 +565,7 @@ class Operator extends Drawable {
     this.outputs.forEach(output => {
       if (output.parent === this) {
         var x = (width - output.width) / 2;
-        output.moveTo(x, height - 1);
+        output.moveTo(x, height - 1 + Result.tipSize);
       }
     });
     this.width = width;
@@ -640,13 +640,16 @@ class Result extends Drawable {
     if (!this.curve) {
       return this.copy();
     }
+    if (this.parent.isOperator) {
+      this.parent.replace(this, new Input(""));
+      return this;
+    }
     return this;
   }
 
   copy() {
     var r = new Result(this.target);
     this.target.addOutput(r);
-    this.target.layoutChildren();
     return r;
   }
 
@@ -655,7 +658,7 @@ class Result extends Drawable {
   }
 
   moveTo(x, y) {
-    super.moveTo(x, y);
+    super.moveTo(x, y - Result.tipSize);
     this.moved();
   }
 
@@ -668,7 +671,9 @@ class Result extends Drawable {
     var px = Result.paddingX
     var py = Result.paddingY;
     this.width = Math.max(Result.minWidth, this.label.width + 2 * px);
-    this.height = this.label.height + t + 2 * py;
+    this.height = this.label.height + 2 * py;
+    this.canvasWidth = this.width;
+    this.canvasHeight = this.height + t;
     var x = (this.width - this.label.width) / 2;
     var y = t + py;
     this.label.moveTo(x, y);
@@ -676,10 +681,10 @@ class Result extends Drawable {
   }
 
   pathBubble(context) {
-    var w = this.width;
-    var h = this.height;
-    var r = 6;
     var t = Result.tipSize;
+    var w = this.width;
+    var h = this.height + t;
+    var r = 6;
     var w12 = this.width / 2;
 
     context.moveTo(1, t + r + .5);
@@ -693,10 +698,10 @@ class Result extends Drawable {
   }
 
   draw() {
-    this.canvas.width = this.width * density;
-    this.canvas.height = this.height * density;
-    this.canvas.style.width = this.width + 'px';
-    this.canvas.style.height = this.height + 'px';
+    this.canvas.width = this.canvasWidth * density;
+    this.canvas.height = this.canvasHeight * density;
+    this.canvas.style.width = this.canvasWidth + 'px';
+    this.canvas.style.height = this.canvasHeight + 'px';
     this.context.scale(density, density);
     this.drawOn(this.context);
   }
@@ -1294,7 +1299,7 @@ class App {
       this.elScripts.appendChild(g.dragScript.el);
       g.dragScript.layoutChildren();
       g.dragScript.drawChildren();
-      // g.dragScript.addShadow(this.dragShadowX, this.dragShadowY, this.dragShadowBlur, this.dragShadowColor);
+      // TODO add shadow
     }
 
     if (g.scrolling) {
@@ -1304,7 +1309,7 @@ class App {
       e.preventDefault();
     } else if (g.dragging) {
       g.dragScript.moveTo((g.dragX + g.mouseX), (g.dragY + g.mouseY));
-      // TODO drop feedback
+      this.showFeedback(g);
       e.preventDefault();
     }
   }
@@ -1332,8 +1337,12 @@ class App {
     // TODO
     g.dropWorkspace = this.world; // TODO
     var pos = g.dropWorkspace.worldPositionOf(g.dragX + g.mouseX, g.dragY + g.mouseY);
-    g.dropWorkspace.add(g.dragScript);
-    g.dragScript.moveTo(pos.x, pos.y);
+    if (g.feedbackTarget) {
+      g.feedbackTarget.parent.replace(g.feedbackTarget, g.dragScript);
+    } else {
+      g.dropWorkspace.add(g.dragScript);
+      g.dragScript.moveTo(pos.x, pos.y);
+    }
 
     g.dragging = false;
     g.dragPos = null;
@@ -1349,6 +1358,39 @@ class App {
     // TODO
   }
 
+  showFeedback(g) {
+    g.feedbackDistance = Infinity;
+    g.feedbackTarget = null;
+
+    var w = this.workspaceFromPoint(g.mouseX, g.mouseY);
+    if (w === this.world) {
+      var pos = w.worldPositionOf(0, 0);
+      w.scripts.forEach(script => this.addNodeFeedback(g, -pos.x, -pos.y, script));
+    }
+
+    if (g.feedbackTarget) console.log(g.feedbackTarget);
+  }
+
+  addNodeFeedback(g, x, y, node) {
+    x += node.x;
+    y += node.y;
+    if (node.isOperator) {
+      node.parts.forEach(child => this.addNodeFeedback(g, x, y, child));
+    }
+
+    if (node.isInput) {
+      var dx = x - g.dragScript.x;
+      var dy = y - g.dragScript.y;
+      var d2 = dx * dx + dy * dy;
+      if (Math.abs(dx) > this.feedbackRange || Math.abs(dy) > this.feedbackRange || d2 > g.feedbackDistance) return;
+      g.feedbackDistance = d2;
+      g.feedbackTarget = node;
+    }
+  }
+
+  get feedbackRange() {
+    return 20;
+  }
 
 }
 
