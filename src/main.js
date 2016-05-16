@@ -131,12 +131,23 @@ class Drawable {
     this.parent = null;
     this.dirty = true;
     this.graphicsDirty = true;
+
+    this._zoom = 1;
   }
 
   moveTo(x, y) {
     this.x = x | 0;
     this.y = y | 0;
-    this.el.style.transform = `translate(${x}px, ${y}px)`;
+    this.transform();
+  }
+
+  set zoom(value) {
+    this._zoom = value;
+    this.transform();
+  }
+
+  transform() {
+    this.el.style.transform = `translate(${this.x}px, ${this.y}px) scale(${this._zoom})`;
   }
 
   moved() {}
@@ -855,6 +866,7 @@ class Workspace {
   add(script) {
     if (script.parent) script.parent.remove(script);
     script.parent = this;
+    script.zoom = 1;
     this.scripts.push(script)
     script.layoutChildren();
     script.drawChildren();
@@ -1278,6 +1290,7 @@ class App {
         g.dragScript.parent.remove(g.dragScript);
       }
       g.dragScript.parent = this;
+      g.dragScript.zoom = this.world.zoom;
       this.elScripts.appendChild(g.dragScript.el);
       g.dragScript.layoutChildren();
       g.dragScript.drawChildren();
