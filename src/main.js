@@ -391,7 +391,7 @@ class Input extends Drawable {
 }
 Input.measure = createMetrics('field');
 
-Input.prototype.minWidth = 6;
+Input.prototype.minWidth = 12;
 Input.prototype.fieldPadding = 4;
 
 
@@ -762,19 +762,19 @@ class Bubble extends Drawable {
   }
 
   layoutSelf() {
-    var px = Bubble.paddingX
+    var px = Bubble.paddingX;
     var py = Bubble.paddingY;
     this.width = Math.max(Bubble.minWidth, this.label.width + 2 * px);
     var t = Bubble.tipSize // Math.min(, this.width / 2);
     this.height = this.label.height + 2 * py + t;
     var x = (this.width - this.label.width) / 2;
-    var y = t + py;
+    var y = t + py + 1;
     this.label.moveTo(x, y);
     this.redraw();
   }
 
   pathBubble(context) {
-    var t = this.isInside ? Bubble.tipSize : 4;
+    var t = Bubble.tipSize;
     var w = this.width;
     var h = this.height;
     var r = 6;
@@ -808,7 +808,6 @@ class Bubble extends Drawable {
       context.fillStyle = '#fff';
       bezel(context, this.pathBubble, this, true, density);
     } else {
-      console.log(this.parent, this.parent.bubble);
       this.pathBubble(context);
       context.closePath();
       context.fillStyle = '#fff';
@@ -821,8 +820,8 @@ class Bubble extends Drawable {
 }
 
 Bubble.tipSize = 6;
-Bubble.paddingX = 2;
-Bubble.paddingY = 1;
+Bubble.paddingX = 4;
+Bubble.paddingY = 0;
 Bubble.minWidth = 32; //26;
 
 
@@ -1097,15 +1096,21 @@ class Workspace {
 
 import {primitives} from "./runtime";
 
+var donePrims = new Map();
 var paletteContents = primitives.map(function(prim) {
   if (typeof prim === 'string') return;
   let [spec, type, js] = prim;
   var words = spec.split(/ |(_[a-z]*:\([^)]+\))/g).filter(x => x);
+
+  var hash = words.map(word => {
+    return word.split(/:/)[0];
+  }).join(" ");
+  if (donePrims.has(hash)) return;
+  donePrims.set(hash, true);
+
   var parts = words.map(word => {
     if (/:|^_/.test(word)) {
-      var value = /Float/.test(word) ? "0.0" :
-                  /Int/.test(word) ? "10" :
-                  /Str/.test(word) ? "hello" : "";
+      var value = "";
       return new Input(value)
     } else {
       return new Label(word);
