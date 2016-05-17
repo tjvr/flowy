@@ -1580,15 +1580,18 @@ class App {
     if (!g.dragging) return;
     g.feedback.canvas.style.display = 'none';
 
-    // TODO
-    g.dropWorkspace = this.world; // TODO
-    var pos = g.dropWorkspace.worldPositionOf(g.dragX + g.mouseX, g.dragY + g.mouseY);
     if (g.feedbackInfo) {
       var info = g.feedbackInfo;
       info.node.replaceWith(g.dragScript);
     } else {
-      g.dropWorkspace.add(g.dragScript);
-      g.dragScript.moveTo(pos.x, pos.y);
+      g.dropWorkspace = this.workspaceFromPoint(g.dragX + g.mouseX, g.dragY + g.mouseY);
+      if (g.dropWorkspace.isWorld) {
+        var pos = g.dropWorkspace.worldPositionOf(g.dragX + g.mouseX, g.dragY + g.mouseY);
+        g.dropWorkspace.add(g.dragScript);
+        g.dragScript.moveTo(pos.x, pos.y);
+      } else {
+        this.remove(g.dragScript);
+      }
     }
 
     g.dragging = false;
