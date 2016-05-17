@@ -1,4 +1,8 @@
 
+function assert(x) {
+  if (!x) throw "Assertion failed!";
+}
+
 var old = [
   
     // {}  -> Block
@@ -216,6 +220,25 @@ export const primitives = {
   "join _ _": imm((x, y) => [Str(x), Str(y)].join("")),
   "error": imm(() => {throw "foo"}),
 
+
+  "get _": url => {
+    if (!url) return null;
+    return loadURL('http://crossorigin.me/' + url)
+    .then(r => {
+      var mime = r.contentType;
+      var blob = r.response;
+      if (/^image\//.test(mime)) {
+        var img = new Image();
+        img.src = URL.createObjectURL(blob);
+        return img;
+      } else {
+        return readBlobAsText(blob);
+      }
+    });
+  },
+
+  "get image _": loadImageURL,
+
   /*
   "join _ _": (args, cb) => {
     let [x, y] = args;
@@ -413,7 +436,9 @@ class Future {
     this.isDone = true;
     this.isError = true;
     this.err = error;
-    this.dispatchError(error);
+    if (!this.cancelled) {
+      this.dispatchError(error);
+    }
   }
 
   withLoad(cb) {
@@ -430,6 +455,46 @@ class Future {
         cb(this.err);
       }
     }
+  }
+
+  then(cb) {
+    var cf = new CompositeFuture;
+    cf.defer = true;
+    cf.add(this);
+    function next(result, err) {
+      var next = cb(result, err);
+      cf.defer = false;
+      if (next.isFuture) {
+        cf.add(next);
+        cf.getResult = function() {
+          return next.result;
+        };
+      } else {
+        cf.load(next);
+      }
+    }
+    this.onLoad(result => next(result, null));
+    this.onError(err => next(null, err));
+    return cf;
+  }
+
+  then(cb) {
+    var cf = new CompositeFuture;
+    cf.defer = true;
+    cf.add(this);
+    this.onLoad(result => {
+      var next = cb(result);
+      cf.defer = false;
+      if (next.isFuture) {
+        cf.add(next);
+        cf.getResult = function() {
+          return next.result;
+        };
+      } else {
+        cf.load(next);
+      }
+    });
+    return cf;
   }
 
   static all(futures) {
@@ -514,9 +579,12 @@ class CompositeFuture extends Future {
     this.doneCount = done;
     this.isDone = done === requests.length;
     if (this.isDone && !this.defer) {
-      //this.load(this.getResult());
-      this.party();
+      this.finish();
     }
+  }
+
+  finish() {
+    this.load(this.getResult());
   }
 
   getResult() {
@@ -536,7 +604,10 @@ function loadURL(url) {
   };
   xhr.onload = function() {
     if (xhr.status === 200) {
-      request.load(xhr.response);
+      request.load({
+        contentType: xhr.getResponseHeader('content-type'),
+        response: xhr.response,
+      });
     } else {
       request.error(new Error('HTTP ' + xhr.status + ': ' + xhr.statusText));
     }
@@ -564,48 +635,44 @@ function loadImageURL(url) {
   return request;
 }
 
+function readBlobAsText(blob) {
+  var future = new Future;
+  var reader = new FileReader;
+  reader.onloadend = function() {
+    future.load(reader.result);
+  };
+  reader.onprogress = function(e) {
+    future.progress(e.loaded, e.total, e.lengthComputable);
+  };
+  reader.readAsText(blob);
+  return future;
+}
+
 /*****************************************************************************/
 
 export const evaluate = (info, args) => {
   var func = info.prim;
-  if (!func) throw func;
-  // TODO if (func.isImmediate) {
-
-  var future = new CompositeFuture();
-  args.forEach(arg => {
-    if (arg && arg.isFuture) future.add(arg);
-  });
-  future.party = function() {
-    var values = args.map(x => x && x.isFuture ? x.result : x);
-    try {
-      var result = func.apply(null, values);
-      if (isNaN(result) && ''+result === NaN) result = "";
-      future.load(result);
-    } catch(e) {
-      future.error(e);
-    }
-  };
-  future.update();
-  return future;
-}
-
-  /*
-  try {
-    var func = this.info.prim;
-    if (func.isImmediate) {
-      return new Future.all(args).then(func);
-    } else {
-    }
-
-    (args, result => {
-      this.value = result;
+  if (func.isImmediate) {
+    var future = new CompositeFuture();
+    args.forEach(arg => {
+      if (arg && arg.isFuture) future.add(arg);
     });
-  } catch (e) {
-    this.value = "!!!"; //"Error: " + e;
-    console.error(e);
+    future.finish = function() {
+      var values = args.map(x => x && x.isFuture ? x.result : x);
+      try {
+        var result = func.apply(null, values);
+        if (isNaN(result) && ''+result === NaN) result = "";
+        future.load(result);
+      } catch(e) {
+        future.error(e);
+      }
+    };
+    future.update();
+    return future;
+  } else {
+    var result = func.apply(null, args);
+    assert(result !== undefined);
+    return result;
   }
-  // setTimeout(() => {
-  //   this.value = Math.random() * 50 | 0;
-  // }, Math.random() * 100);
-  */
+}
 

@@ -783,6 +783,7 @@ class Bubble extends Drawable {
 
     this.el = el('absolute bubble');
     this.el.appendChild(this.canvas = el('canvas', 'absolute'));
+    this.el.appendChild(this.progress = el('progress absolute'));
     this.context = this.canvas.getContext('2d');
 
     this.target = target;
@@ -795,6 +796,9 @@ class Bubble extends Drawable {
 
     target.request(this);
   }
+
+  get isBubble() { return true; }
+  get isDraggable() { return true; }
 
   get parent() { return this._parent }
   set parent(p) {
@@ -813,7 +817,9 @@ class Bubble extends Drawable {
   set value(value) {
     this._value = value;
     this.invalid = false;
+    this.fraction = 0;
     this.el.classList.remove('error');
+    this.progress.classList.remove('error');
     if (value) this.bindEvents(value);
 
     if (this.parent && this.isInside) {
@@ -837,17 +843,20 @@ class Bubble extends Drawable {
     this.value.withLoad(result => {
       assert(this.value === future);
       this.label.text = "" + result;
+      this.fraction = 1;
       this.layout();
     });
-    this.value.withError(message => {
+    this.value.withError(err => {
+      console.log('error', err);
       assert(this.value === future);
-      this.label.text = message;
+      this.label.text = err.message || err;
       this.el.classList.add('error');
+      this.progress.classList.add('error');
       this.layout();
     });
-    this.value.onProgress(function() {
-      assert(this.value === future);
-      this.redraw();
+    this.value.onProgress(p => {
+      if (this.value !== future) return;
+      this.fraction = p.loaded / p.total;
     });
 
     /*
@@ -879,8 +888,14 @@ class Bubble extends Drawable {
     }
   }
 
-  get isBubble() { return true; }
-  get isDraggable() { return true; }
+  get fraction() { return this._fraction }
+  set fraction(value) {
+    this._fraction = value;
+    setTimeout(() => {
+      this.progress.classList[value !== 1 ? 'add' : 'remove']('progress-loading');
+    });
+    this.drawProgress();
+  }
 
   objectFromPoint(x, y) {
     return opaqueAt(this.context, x * density, y * density) ? this : null;
@@ -960,7 +975,7 @@ class Bubble extends Drawable {
     var t = Bubble.tipSize;
     var w = this.width;
     var h = this.height;
-    var r = 6;
+    var r = Bubble.radius;
     var w12 = this.width / 2;
 
     context.moveTo(1, t + r + .5);
@@ -980,6 +995,17 @@ class Bubble extends Drawable {
     this.canvas.style.height = this.height + 'px';
     this.context.scale(density, density);
     this.drawOn(this.context);
+
+    this.drawProgress();
+  }
+
+  drawProgress() {
+    var f = 0.1 + (this.fraction * 0.9);
+    var pw = this.width - 2 * Bubble.radius;
+    console.log(f * pw);
+    this.progress.style.left = `${Bubble.radius}px`;
+    this.progress.style.top = `${Bubble.tipSize}px`;
+    this.progress.style.width = `${f * pw}px`;
   }
 
   get isInside() {
@@ -1009,6 +1035,7 @@ class Bubble extends Drawable {
 Bubble.measure = createMetrics('result-label');
 
 Bubble.tipSize = 6;
+Bubble.radius = 6;
 Bubble.paddingX = 4;
 Bubble.paddingY = 0;
 Bubble.minWidth = 32; //26;

@@ -141,6 +141,21 @@ html, body {
 }
 
 .error .result-label {
-  color: #e40046; /* cf .error-widget */
+  color: #e40046;
+}
+
+.progress {
+  left: 0;
+  height: 2px;
+  background: #468;
+  opacity: 0;
+  transition: .3s;
+}
+.progress-loading {
+  opacity: 1;
+}
+.progress.error {
+  background: #e40046;
+  background: #ecc;
 }
 
