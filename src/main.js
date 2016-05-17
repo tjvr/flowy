@@ -753,6 +753,9 @@ class Bubble extends Drawable {
   }
 
   moveTo(x, y) {
+    if (this.parent && !(this.isInside || this.parent.bubble === this)) {
+      y = Math.max(y, this.target.y + this.target.ownHeight);
+    }
     super.moveTo(x, y);
     this.moved();
   }
@@ -1647,6 +1650,8 @@ class App {
   }
 
   addFeedback(g, x, y, node) {
+    if (node.isCurve) return;
+
     assert(''+x !== 'NaN');
     x += node.x * this.world.zoom;
     y += node.y * this.world.zoom;
@@ -1657,10 +1662,18 @@ class App {
       }
     }
 
-    var canDrop = (
-      (node.isInput && g.dragScript.target !== node.parent) ||
-      (g.dragScript.isBubble && node.isBlob && node.target === g.dragScript.target)
-    );
+    var canDrop = false;
+    if (g.dragScript.isBubble && node.isBlob && node.target === g.dragScript.target) {
+      canDrop = true;
+    } else if (node.isInput) {
+      if (g.dragScript.isNode) {
+        canDrop = g.dragScript.outputs.length === 1 && g.dragScript.bubble.isBubble;
+      } else if (g.dragScript.isBubble) {
+        canDrop = g.dragScript.target !== node.parent;
+      } else {
+        canDrop = true;
+      }
+    }
 
     if (canDrop) {
       var dx = x - g.dragScript.x;
