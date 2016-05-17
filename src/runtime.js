@@ -237,7 +237,6 @@ export const primitives = {
           var img = new Image();
           img.src = URL.createObjectURL(xhr.response);
           cb(img);
-          debugger;
         } else {
           var reader = new FileReader;
           reader.onloadend = function() {
@@ -260,16 +259,6 @@ export const primitives = {
     xhr.responseType = 'blob';
     setTimeout(xhr.send.bind(xhr));
   },
-
-  /*
-  "soup from _": (args, cb) => {
-    let [html] = args;
-    var el = document.createElement('html');
-    el.innerHTML = html;
-    var el = /^\<\!doctype/i.test(html) ? el : el.querySelector('body');
-    cb(el);
-  },
-  */
 
   "select _ from _": (args, cb) => {
     let [selector, dom] = args;

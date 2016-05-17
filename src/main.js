@@ -756,7 +756,7 @@ class Bubble extends Drawable {
   constructor(target) {
     super();
 
-    this.el = el('absolute');
+    this.el = el('absolute bubble');
     this.el.appendChild(this.canvas = el('canvas', 'absolute'));
     this.context = this.canvas.getContext('2d');
 
@@ -775,7 +775,7 @@ class Bubble extends Drawable {
   set parent(value) {
     this._parent = value;
     if (value) {
-      if (this.isInside) {
+      if (this.isInside || value.isPalette) {
         this.target.cancelRequest(this);
       } else {
         this.target.request(this);
@@ -786,6 +786,8 @@ class Bubble extends Drawable {
   get value() { return this._value }
   set value(value) {
     this._value = value;
+    this.invalid = false;
+
     var repr = display(value);
     this._isLabel = typeof repr === 'string';
     if (typeof repr === 'string') {
@@ -795,6 +797,7 @@ class Bubble extends Drawable {
       this.el.innerHTML = '';
       this.el.appendChild(repr);
     }
+
     this.layout();
     if (this.parent && this.isInside) {
       this.parent.invalidate();
@@ -802,8 +805,15 @@ class Bubble extends Drawable {
     //this.redraw();
   }
 
+  get invalid() { return this._invalid }
+  set invalid(value) {
+    this._invalid = value;
+    this.el.classList[value ? 'add' : 'remove']('invalid');
+    this.redraw();
+  }
+
   invalidate() {
-    this.label.text = "...";
+    this.invalid = true;
     if (this.isInside) {
       this.parent.invalidate();
     }
@@ -921,7 +931,7 @@ class Bubble extends Drawable {
     } else {
       this.pathBubble(context);
       context.closePath();
-      context.fillStyle = '#fff';
+      context.fillStyle = this.invalid ? '#aaa' : '#fff';
       context.fill();
       context.strokeStyle = '#555';
       context.lineWidth = density;
