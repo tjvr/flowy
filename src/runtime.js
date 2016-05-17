@@ -142,23 +142,50 @@ function isInt(x) {
 
 function Float(x) {
   if (isInt(x)) {
-    return +x.toString();
+    var val = +x.toString();
   } else {
-    return +x;
+    var val = +x;
   }
+  if (isNaN(val)) throw val;
+  return val;
 }
 
 function infixMath(name, op) {
   var BI = BigInteger;
-  return imm(eval(`(function(a, b) {
+  return eval(`(function(args, cb) {
+    let [a, b] = args;
     if (isInt(a) && isInt(b)) {
-      return BI.${name}(a, b);
+      var val = BI.${name}(a, b);
     } else {
       var x = Float(a);
       var y = Float(b);
-      return ${op};
+      var val = ${op};
     }
-  })`));
+    cb(val);
+  })`);
+}
+
+function round(args, cb) {
+  let [x] = args;
+  cb(isInt(x) ? x : Math.round(Float(x)));
+}
+
+function trig(name) {
+  return eval(`(function(deg, cb) {
+    cb(Math.${name}(Math.PI / 180 * Float(deg)));
+  })`);
+}
+
+function sqrt(args, cb) {
+  let x = args[0];
+  cb(Math.sqrt(Float(x)));
+}
+
+function equals(args, cb) {
+  let [a, b] = args;
+  if (a === b) return cb(true);
+  // TODO
+  return cb(false);
 }
 
 export const primitives = {
@@ -167,12 +194,58 @@ export const primitives = {
   "_ × _": infixMath('multiply', 'x * y'),
   "_ ÷ _": infixMath('divide', 'x / y'),
   "_ mod _": infixMath('remainder', '(((x % y) + y) % y)'),
+  "round _": round,
+
+  "join _ _": (args, cb) => {
+    let [x, y] = args;
+
+  },
+
+  "sqrt of _": sqrt,
+
+  "sin of _": trig('sin'),
+  "cos of _": trig('cos'),
+  "tan of _": trig('tan'),
+
+  "_ = _": equals,
+
+  "GET _": (args, cb) => {
+    let [url] = args;
+    // TODO debounce
+    var xhr = new XMLHttpRequest;
+    xhr.open('GET', 'http://crossorigin.me/' + url, true);
+    xhr.onprogress = function(e) {
+      // progress(e.loaded, e.total, e.lengthComputable);
+    };
+    xhr.onload = function() {
+      if (xhr.status === 200) {
+        cb(xhr.response);
+      } else {
+        // request.error(new Error('HTTP ' + xhr.status + ': ' + xhr.statusText));
+      }
+    };
+    xhr.onerror = function() {
+      // request.error(new Error('XHR Error'));
+    };
+    xhr.responseType = 'text'; // type || '';
+    xhr.send();
+  },
+
+  "soup from _": (args, cb) => {
+  },
+
+  "delay _ by _ secs": (args, cb) => {
+    let [value, secs] = args;
+    setTimeout(() => {
+      cb(value);
+    }, Float(secs) * 1000);
+  },
 };
 
 export const literal = value => {
   if (/^-?[0-9]+$/.test(value)) {
     return BigInteger.parseInt(value);
-  } else {
+  } else if (value !== '' && value !== '.') {
     var n = +value;
     if (''+n !== 'NaN') {
       return n;

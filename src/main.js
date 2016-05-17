@@ -745,7 +745,8 @@ class Node extends Drawable {
         this.value = result;
       });
     } catch (e) {
-      this.value = "Error: " + e;
+      this.value = "!!!"; //"Error: " + e;
+      console.error(e);
     }
     // setTimeout(() => {
     //   this.value = Math.random() * 50 | 0;
@@ -847,7 +848,7 @@ class Bubble extends Drawable {
 
   moveTo(x, y) {
     if (this.parent && !(this.isInside || this.parent.bubble === this)) {
-      y = Math.max(y, this.target.y + this.target.ownHeight);
+      //y = Math.max(y, this.target.y + this.target.ownHeight);
     }
     super.moveTo(x, y);
     this.moved();
@@ -860,12 +861,19 @@ class Bubble extends Drawable {
   layoutSelf() {
     var px = Bubble.paddingX;
     var py = Bubble.paddingY;
-    this.width = Math.max(Bubble.minWidth, this.label.width + 2 * px);
+
+    var w = Math.min(512, this.label.width);
+    var h = Math.min(256, this.label.height);
+    this.label.el.style.width = `${w}px`;
+    this.label.el.style.height = `${h}px`;
+
+    this.width = Math.max(Bubble.minWidth, w + 2 * px);
     var t = Bubble.tipSize // Math.min(, this.width / 2);
-    this.height = this.label.height + 2 * py + t;
-    var x = (this.width - this.label.width) / 2;
+    this.height = h + 2 * py + t;
+    var x = (this.width - w) / 2;
     var y = t + py + 1;
     this.label.moveTo(x, y);
+
     this.redraw();
   }
 
@@ -1203,7 +1211,7 @@ for (var spec in primitives) {
   var prim = primitives[spec];
   var words = spec.split(/ /g);
   var parts = words.map(word => {
-    if (/:|^_/.test(word)) {
+    if (/^_/.test(word)) {
       var value = "";
       return new Input(value)
     } else {
@@ -1445,6 +1453,11 @@ class App {
   wheel(e) {
     // TODO trackpad should scroll vertically; mouse scroll wheel should zoom!
     // TODO Safari 9.1 has *actual* gesture events: gestureDown/Change/Up to zoom
+
+    if (e.target.className.split(/ /g).indexOf('result-label') !== -1) {
+      return;
+    }
+
     var w = this.workspaceFromPoint(e.clientX, e.clientY);
     if (w) {
       if (e.ctrlKey) {

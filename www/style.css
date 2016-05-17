@@ -107,6 +107,9 @@ html, body {
 .result-label {
   color: #000;
   font: 16px/20px Lucida Grande, Verdana, Arial, DejaVu Sans, sans-serif;
+
+  /* TODO frames */
+  overflow-y: scroll;
 }
 
 .field {
