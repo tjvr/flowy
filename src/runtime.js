@@ -140,7 +140,7 @@ function isArray(o) {
 }
 
 function isInt(x) {
-  return (x && x.constructor === BigInteger) || /-?[0-9]+/.test(''+x);
+  return (x && x.constructor === BigInteger) || /^-?[0-9]+$/.test(''+x);
 }
 
 function Float(x) {
@@ -149,8 +149,12 @@ function Float(x) {
   } else {
     var val = +x;
   }
-  if (isNaN(val)) throw "NaN";
+  if (isNaN(val)) throw "Not a number";
   return val;
+}
+
+function Str(x) {
+  return x === undefined || x === null ? "" : "" + x;
 }
 
 function infixMath(name, op) {
@@ -201,9 +205,16 @@ export const primitives = {
   "_ + _": infixMath('add', 'x + y'),
   "_ - _": infixMath('subtract', 'x - y'),
   "_ × _": infixMath('multiply', 'x * y'),
-  "_ ÷ _": imm((a, b) => Float(a) / Float(b)),
+  "_ ÷ _": imm((a, b) => {
+    if (b === "") return;
+    let x = Float(a), y = Float(b);
+    if (y === 0) throw "Divide by Zero";
+    return x / y;
+  }),
   "_ mod _": infixMath('remainder', '(((x % y) + y) % y)'),
   "round _": imm(x => isInt(x) ? x : Math.round(Float(x))),
+  "join _ _": imm((x, y) => [Str(x), Str(y)].join("")),
+  "error": imm(() => {throw "foo"}),
 
   /*
   "join _ _": (args, cb) => {
@@ -366,6 +377,7 @@ class Future {
     this.lengthComputable = false;
 
     this.result = null;
+    this.err = null;
     this.isDone = false;
     this.isError = false;
     this.cancelled = false;
@@ -390,6 +402,7 @@ class Future {
   }
 
   load(result) {
+    this.isDone = true;
     this.result = result;
     if (!this.cancelled) {
       this.dispatchLoad(result);
@@ -397,8 +410,9 @@ class Future {
   }
 
   error(error) {
-    this.isDone = false;
-    this.isError = false;
+    this.isDone = true;
+    this.isError = true;
+    this.err = error;
     this.dispatchError(error);
   }
 
@@ -412,7 +426,9 @@ class Future {
   withError(cb) {
     this.onError(cb);
     if (this.isDone) {
-      if (this.isError) cb(this.error);
+      if (this.isError) {
+        cb(this.err);
+      }
     }
   }
 
@@ -563,10 +579,10 @@ export const evaluate = (info, args) => {
     var values = args.map(x => x && x.isFuture ? x.result : x);
     try {
       var result = func.apply(null, values);
+      if (isNaN(result) && ''+result === NaN) result = "";
       future.load(result);
     } catch(e) {
       future.error(e);
-      console.log('error', e);
     }
   };
   future.update();

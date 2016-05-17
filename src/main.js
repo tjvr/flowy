@@ -813,6 +813,7 @@ class Bubble extends Drawable {
   set value(value) {
     this._value = value;
     this.invalid = false;
+    this.el.classList.remove('error');
     if (value) this.bindEvents(value);
 
     if (this.parent && this.isInside) {
@@ -824,12 +825,12 @@ class Bubble extends Drawable {
     this.value.withLoad(result => {
       assert(this.value === future);
       this.label.text = "" + result;
-      this.redraw();
-      this.moved();
+      this.layout();
     });
-    this.value.withError(function() {
+    this.value.withError(message => {
       assert(this.value === future);
-      this.label.text = "!!!";
+      this.label.text = message;
+      this.el.classList.add('error');
       this.layout();
     });
     this.value.onProgress(function() {
@@ -882,13 +883,13 @@ class Bubble extends Drawable {
       if (this.parent.bubble !== this) {
         var value = "";
         if (this.value) {
-          var repr = display(this.value.result);
+          var repr = this.value.result; //display(this.value.result);
           if (this.value.isDone && typeof repr === 'string') {
             value = repr;
           }
         }
         // TODO literal images etc
-        this.parent.replace(this, new Input(value));
+        this.parent.replace(this, new Input(repr));
       }
     }
     return this;
@@ -946,6 +947,7 @@ class Bubble extends Drawable {
     var y = t + py + 1;
     this.label.moveTo(x, y);
 
+    this.moved();
     this.redraw();
   }
 
@@ -1508,10 +1510,12 @@ class App {
     document.addEventListener('mousedown', this.mouseDown.bind(this));
     document.addEventListener('mousemove', this.mouseMove.bind(this));
     document.addEventListener('mouseup', this.mouseUp.bind(this));
+    // TODO pointer events
 
     window.addEventListener('resize', this.resize.bind(this));
     document.addEventListener('wheel', this.wheel.bind(this));
     document.addEventListener('mousewheel', this.wheel.bind(this));
+    // TODO gesture events
   }
 
   get isApp() { return true; }
@@ -1525,7 +1529,6 @@ class App {
 
   wheel(e) {
     // TODO trackpad should scroll vertically; mouse scroll wheel should zoom!
-    // TODO Safari 9.1 has *actual* gesture events: gestureDown/Change/Up to zoom
 
     if (e.target.className.split(/ /g).indexOf('result-label') !== -1) {
       return;
@@ -1858,9 +1861,7 @@ class App {
 
     var gx = g.dragScript.x;
     var gy = g.dragScript.y;
-    if (g.dragScript.isBubble) {
-      gx += g.dragScript.width / 2;
-    }
+    gx += g.dragScript.width / 2;
 
     if (canDrop) {
       var dx = x - gx;
