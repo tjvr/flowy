@@ -57,6 +57,7 @@ html, body {
   left: 0;
   right: 0;
   bottom: 50px;
+  overflow: hidden;
 }
 
 .world-contents {
