@@ -423,7 +423,7 @@ class Node extends Drawable {
     this.addOutput(this.bubble);
     this.bubble.parent = this;
 
-    this.value = Math.random() * 20 | 0;
+    this.value = Math.random() * 200 | 0;
   }
 
   get isNode() { return true; }
@@ -465,6 +465,7 @@ class Node extends Drawable {
     array.splice(index, 1, newPart);
 
     newPart.layoutChildren();
+    newPart.redraw();
     this.layout();
     if (this.workspace) newPart.drawChildren();
 
@@ -763,10 +764,10 @@ class Bubble extends Drawable {
   }
 
   layoutSelf() {
-    var t = Bubble.tipSize;
     var px = Bubble.paddingX
     var py = Bubble.paddingY;
     this.width = Math.max(Bubble.minWidth, this.label.width + 2 * px);
+    var t = Bubble.tipSize // Math.min(, this.width / 2);
     this.height = this.label.height + 2 * py + t;
     var x = (this.width - this.label.width) / 2;
     var y = t + py;
@@ -801,21 +802,26 @@ class Bubble extends Drawable {
   }
 
   drawOn(context) {
-    this.pathBubble(context);
-    context.closePath();
-    context.fillStyle = '#fff';
-    context.fill();
-    context.strokeStyle = '#555';
-    context.lineWidth = density;
-    context.stroke();
+    if (this.parent.isNode && this.parent.bubble !== this) {
+      context.fillStyle = '#fff';
+      bezel(context, this.pathBubble, this, true, density);
+    } else {
+      console.log(this.parent, this.parent.bubble);
+      this.pathBubble(context);
+      context.closePath();
+      context.fillStyle = '#fff';
+      context.fill();
+      context.strokeStyle = '#555';
+      context.lineWidth = density;
+      context.stroke();
+    }
   }
-
 }
 
-Bubble.tipSize = 6;
-Bubble.paddingX = 6;
-Bubble.paddingY = 2;
-Bubble.minWidth = 32;
+Bubble.tipSize = 4;
+Bubble.paddingX = 2;
+Bubble.paddingY = 1;
+Bubble.minWidth = 26;
 
 
 class Blob extends Drawable {
@@ -828,7 +834,7 @@ class Blob extends Drawable {
 
     this.parent = target;
     this.target = target;
-    this.color = '#888';
+    this.setHover(false);
   }
 
   get isBlob() { return true; }
@@ -900,8 +906,10 @@ class Blob extends Drawable {
   }
 
   drawOn(context) {
+    this.pathBlob(context);
+    context.closePath();
     context.fillStyle = this.color;
-    bezel(context, this.pathBlob, this, false, density);
+    context.fill();
   }
 
   pathShadowOn(context) {

@@ -100,6 +100,11 @@ html, body {
   z-index: 1;
 }
 
+.result-label {
+  color: #000;
+  font: 10px/14px Lucida Grande, Verdana, Arial, DejaVu Sans, sans-serif;
+}
+
 .field {
   color: #505050;
   font: 9px/14px Lucida Grande, Verdana, Arial, DejaVu Sans, sans-serif;
@@ -123,9 +128,5 @@ html, body {
 
 .enum-field {
   color: #fff;
-}
-
-.result-label {
-  color: #000;
 }
 
