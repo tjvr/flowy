@@ -237,8 +237,40 @@ export const primitives = {
     });
   },
 
-  "get image _": loadImageURL,
+  // "get image _": loadImageURL,
 
+  "delay _ by _ secs": (value, secs) => {
+    var f = new Future();
+    var frames = secs * 60;
+    var count = 0;
+    var interval = setInterval(() => {
+      console.log(count, frames);
+      f.progress(++count, frames, true);
+      if (count >= frames) {
+        f.load(value);
+        clearInterval(interval);
+      }
+    }, 1000 / 60);
+    return f;
+  },
+
+  "time": () => {
+    var f = new Future();
+    var count = 0;
+    var interval = setInterval(() => {
+      count++;
+      f.progress(count, 10, true);
+      if (count === 10) {
+        f.load(new Date());
+        count = 0;
+      }
+    }, 100);
+    f.onCancel(() => {
+      clearInterval(interval);
+    });
+    return f;
+  },
+  
   /*
   "join _ _": (args, cb) => {
     let [x, y] = args;
@@ -253,56 +285,9 @@ export const primitives = {
 
   "_ = _": equals,
 
-  "GET _": (args, cb) => {
-    let [url] = args;
-    if (!url) cb(null);
-    // TODO debounce
-    var xhr = new XMLHttpRequest;
-    xhr.open('GET', 'http://crossorigin.me/' + url, true);
-    xhr.onprogress = function(e) {
-      // progress(e.loaded, e.total, e.lengthComputable);
-    };
-    xhr.onload = function() {
-      if (xhr.status === 200) {
-        var mime = xhr.getResponseHeader('content-type');
-        var response;
-        if (/^image\//.test(mime)) {
-          var img = new Image();
-          img.src = URL.createObjectURL(xhr.response);
-          cb(img);
-        } else {
-          var reader = new FileReader;
-          reader.onloadend = function() {
-            var text = reader.result;
-            if (mime === 'text/html') {
-              text = parseHTML(text);
-            }
-            cb(text);
-          };
-          reader.readAsText(xhr.response);
-        }
-        cb(response);
-      } else {
-        // request.error(new Error('HTTP ' + xhr.status + ': ' + xhr.statusText));
-      }
-    };
-    xhr.onerror = function() {
-      // request.error(new Error('XHR Error'));
-    };
-    xhr.responseType = 'blob';
-    setTimeout(xhr.send.bind(xhr));
-  },
-
   "select _ from _": (args, cb) => {
     let [selector, dom] = args;
     cb(selector && dom ? [].slice.apply(dom.querySelectorAll(selector)) : null);
-  },
-
-  "delay _ by _ secs": (args, cb) => {
-    let [value, secs] = args;
-    setTimeout(() => {
-      cb(value);
-    }, Float(secs) * 1000);
   },
 
   "time": (args, cb) => {
@@ -417,11 +402,13 @@ class Future {
     this.loaded = loaded;
     this.total = total;
     this.lengthComputable = lengthComputable;
-    this.dispatchProgress({
-      loaded: loaded,
-      total: total,
-      lengthComputable: lengthComputable
-    });
+    if (!this.cancelled) {
+      this.dispatchProgress({
+        loaded: loaded,
+        total: total,
+        lengthComputable: lengthComputable
+      });
+    }
   }
 
   load(result) {
@@ -654,9 +641,11 @@ export const evaluate = (info, args) => {
   var func = info.prim;
   if (func.isImmediate) {
     var future = new CompositeFuture();
+    future.defer = true;
     args.forEach(arg => {
       if (arg && arg.isFuture) future.add(arg);
     });
+    future.defer = false;
     future.finish = function() {
       var values = args.map(x => x && x.isFuture ? x.result : x);
       try {

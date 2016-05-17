@@ -145,16 +145,17 @@ html, body {
 }
 
 .progress {
-  left: 0;
+  left: 6px;
+  top: 6px;
   height: 2px;
   background: #468;
   opacity: 0;
-  transition: .3s;
+  /* transition: .3s; */
 }
 .progress-loading {
   opacity: 1;
 }
-.progress.error {
+.progress-error {
   background: #e40046;
   background: #ecc;
 }

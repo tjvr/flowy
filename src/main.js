@@ -783,8 +783,11 @@ class Bubble extends Drawable {
 
     this.el = el('absolute bubble');
     this.el.appendChild(this.canvas = el('canvas', 'absolute'));
-    this.el.appendChild(this.progress = el('progress absolute'));
     this.context = this.canvas.getContext('2d');
+
+    this.el.appendChild(this.progress = el('progress absolute'));
+    // this.progress.style.left = `${Bubble.radius}px`;
+    // this.progress.style.top = `${Bubble.tipSize}px`;
 
     this.target = target;
     this.curve = null;
@@ -819,7 +822,8 @@ class Bubble extends Drawable {
     this.invalid = false;
     this.fraction = 0;
     this.el.classList.remove('error');
-    this.progress.classList.remove('error');
+    this.progress.classList.remove('progress-error');
+    this.progress.classList.add('progress-loading');
     if (value) this.bindEvents(value);
 
     if (this.parent && this.isInside) {
@@ -827,36 +831,31 @@ class Bubble extends Drawable {
     }
   }
 
-  get displayValue() {
-    var value = "";
-    if (this.value) {
-      var repr = this.value.result;
-      if (repr && this.value.isDone && typeof repr === 'string') {
-        value = repr;
-        assert(value !== '[object Object]');
-      }
-    }
-    return value;
-  }
-
   bindEvents(future) {
     this.value.withLoad(result => {
       assert(this.value === future);
       this.label.text = "" + result;
       this.fraction = 1;
+      this.drawProgress();
+      setTimeout(() => {
+        this.progress.classList.remove('progress-loading');
+      });
       this.layout();
     });
     this.value.withError(err => {
-      console.log('error', err);
       assert(this.value === future);
       this.label.text = err.message || err;
       this.el.classList.add('error');
-      this.progress.classList.add('error');
+      this.progress.classList.add('progress-error');
       this.layout();
     });
     this.value.onProgress(p => {
-      if (this.value !== future) return;
+      assert(this.value === future);
       this.fraction = p.loaded / p.total;
+      if (this.fraction < 1) {
+        this.progress.classList.add('progress-loading');
+      }
+      this.drawProgress();
     });
 
     /*
@@ -888,13 +887,16 @@ class Bubble extends Drawable {
     }
   }
 
-  get fraction() { return this._fraction }
-  set fraction(value) {
-    this._fraction = value;
-    setTimeout(() => {
-      this.progress.classList[value !== 1 ? 'add' : 'remove']('progress-loading');
-    });
-    this.drawProgress();
+  get displayValue() {
+    var value = "";
+    if (this.value) {
+      var repr = this.value.result;
+      if (repr && this.value.isDone && typeof repr === 'string') {
+        value = repr;
+        assert(value !== '[object Object]');
+      }
+    }
+    return value;
   }
 
   objectFromPoint(x, y) {
@@ -1000,11 +1002,9 @@ class Bubble extends Drawable {
   }
 
   drawProgress() {
-    var f = 0.1 + (this.fraction * 0.9);
+    var f = this.fraction; //  0.1 + (this.fraction * 0.9);
     var pw = this.width - 2 * Bubble.radius;
     console.log(f * pw);
-    this.progress.style.left = `${Bubble.radius}px`;
-    this.progress.style.top = `${Bubble.tipSize}px`;
     this.progress.style.width = `${f * pw}px`;
   }
 
