@@ -565,7 +565,7 @@ class Node extends Drawable {
     if (arg.parent !== this || !arg.isNode && !arg.isInput) return this;
 
     var i = this.args.indexOf(arg);
-    this.replace(arg, new Input(arg.value));
+    this.replace(arg, new Input(arg.isInput ? arg.value : arg.displayValue));
   };
 
   detach() {
@@ -821,6 +821,18 @@ class Bubble extends Drawable {
     }
   }
 
+  get displayValue() {
+    var value = "";
+    if (this.value) {
+      var repr = this.value.result;
+      if (repr && this.value.isDone && typeof repr === 'string') {
+        value = repr;
+        assert(value !== '[object Object]');
+      }
+    }
+    return value;
+  }
+
   bindEvents(future) {
     this.value.withLoad(result => {
       assert(this.value === future);
@@ -881,15 +893,8 @@ class Bubble extends Drawable {
   detach() {
     if (this.parent.isNode) {
       if (this.parent.bubble !== this) {
-        var value = "";
-        if (this.value) {
-          var repr = this.value.result; //display(this.value.result);
-          if (this.value.isDone && typeof repr === 'string') {
-            value = repr;
-          }
-        }
         // TODO literal images etc
-        this.parent.replace(this, new Input(repr));
+        this.parent.replace(this, new Input(this.displayValue));
       }
     }
     return this;
@@ -1855,7 +1860,7 @@ class App {
       }
     } else if (node.isBubble) {
       if (g.dragScript.isNode) {
-        canDrop = g.dragScript === node.target && g.dragScript.outputs.length === 1;
+        canDrop = node.isInside && g.dragScript === node.target && g.dragScript.outputs.length === 1;
       }
     }
 
