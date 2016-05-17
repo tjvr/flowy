@@ -306,31 +306,37 @@ class Input extends Drawable {
 
   get isInput() { return true; }
 
-  get value() { return this._value; }
+  get value() {
+    return literal(this._value);
+  }
   set value(value) {
+    value = ''+value;
     this._value = value;
     this.field.value = value;
     this.layout();
   }
 
-  copy() {
-    return new Input(this.value);
-  }
-
-  replaceWith(other) {
-    this.parent.replace(this, other);
-  }
-
   change(e) {
     this._value = this.field.value;
     this.layout();
-  }
+    this.parent.invalidate();
+    console.log('change', this._value);
+    assert(this.parent);
+  };
   keyDown(e) {
     // TODO up-down to change value
   }
 
   get dragObject() {
     return this.parent.dragObject;
+  }
+
+  copy() {
+    return new Input(this._value);
+  }
+
+  replaceWith(other) {
+    this.parent.replace(this, other);
   }
 
   click() {
@@ -408,6 +414,8 @@ class Node extends Drawable {
     this.labels = [];
     this.args = [];
 
+    this.initValue();
+
     this.info = info;
     for (var i=0; i<parts.length; i++) {
       this.add(parts[i]);
@@ -423,7 +431,7 @@ class Node extends Drawable {
     this.addOutput(this.bubble);
     this.bubble.parent = this;
 
-    this.value = Math.random() * 200 | 0;
+    this.invalidate();
   }
 
   get isNode() { return true; }
@@ -445,8 +453,10 @@ class Node extends Drawable {
     this.layout();
     this.el.appendChild(part.el);
 
-    var array = part.isNode || part.isInput ? this.args : this.labels;
+    var array = part.isLabel ? this.labels : this.args;
     array.push(part);
+
+    this.invalidate();
   }
 
   replace(oldPart, newPart) {
@@ -460,7 +470,7 @@ class Node extends Drawable {
     var index = this.parts.indexOf(oldPart);
     this.parts.splice(index, 1, newPart);
 
-    var array = oldPart.isNode || oldPart.isInput ? this.args : this.labels;
+    var array = oldPart.isLabel ? this.labels : this.args;
     var index = array.indexOf(oldPart);
     array.splice(index, 1, newPart);
 
@@ -470,6 +480,8 @@ class Node extends Drawable {
     if (this.workspace) newPart.drawChildren();
 
     this.el.replaceChild(newPart.el, oldPart.el);
+
+    this.invalidate();
   };
 
   remove(part) {
@@ -485,9 +497,11 @@ class Node extends Drawable {
     this.parts.splice(index, 1);
     this.el.removeChild(part.el);
 
-    var array = part.isNode ? this.args : this.labels;
+    var array = part.isLabel ? this.labels : this.args;
     var index = array.indexOf(part);
     array.splice(index, 1);
+
+    this.invalidate();
   }
 
   addOutput(output) {
@@ -670,7 +684,7 @@ class Node extends Drawable {
     this.canvas.style.height = this.ownHeight + 'px';
     this.context.scale(density, density);
     this.drawOn(this.context);
-    
+
     this.bubble.el.style.visibility = this.bubbleVisible ? 'visible' : 'hidden';
   }
 
@@ -681,14 +695,62 @@ class Node extends Drawable {
 
   /* * */
 
+  initValue() {
+    this._invalid = true;
+    this.requests = new Map();
+  }
+
   get value() { return this._value }
   set value(value) {
     this._value = value;
-    this.outputs.forEach(o => {
-      o.value = value;
-    });
+    if (this.parent && this.parent.isNode) {
+      this.parent.invalidate();
+    } else {
+      this.outputs.forEach(o => {
+        o.value = value;
+      });
+    }
   }
 
+  invalidate() {
+    if (!this.outputs) return;
+    this._invalid = true;
+    this.value = null;
+    if (this.parent && this.parent.isNode) {
+      this.parent.invalidate();
+    } else {
+      this.outputs.forEach(o => o.invalidate());
+    }
+    if (this.requests) {
+      this.evaluate();
+    }
+  }
+
+  request(who) {
+    this.requests.set(who, true);
+    if (this._invalid) {
+      this.evaluate();
+    }
+  }
+
+  cancelRequest(who) {
+    this.requests.set(who, false);
+    // TODO cancel in-progress evaluation
+  }
+
+  evaluate() {
+    var args = this.args.map(x => x.value);
+    try {
+      this.info.prim(args, result => {
+        this.value = result;
+      });
+    } catch (e) {
+      this.value = "Error: " + e;
+    }
+    // setTimeout(() => {
+    //   this.value = Math.random() * 50 | 0;
+    // }, Math.random() * 100);
+  }
 }
 
 
@@ -708,13 +770,38 @@ class Bubble extends Drawable {
     this.el.appendChild(this.label.el);
 
     if (target.workspace) target.workspace.add(this);
+
+    target.request(this);
+  }
+
+  get parent() { return this._parent }
+  set parent(value) {
+    this._parent = value;
+    if (value) {
+      if (this.isInside) {
+        this.target.cancelRequest(this);
+      } else {
+        this.target.request(this);
+      }
+    }
   }
 
   get value() { return this._value }
   set value(value) {
     this._value = value;
     this.label.text = value;
+    this.layout();
+    if (this.parent && this.isInside) {
+      this.parent.invalidate();
+    }
     //this.redraw();
+  }
+
+  invalidate() {
+    this.label.text = "...";
+    if (this.isInside) {
+      this.parent.invalidate();
+    }
   }
 
   get isBubble() { return true; }
@@ -744,8 +831,14 @@ class Bubble extends Drawable {
   }
 
   replaceWith(other) {
-    assert(this.parent.isNode);
-    this.parent.replace(this, other);
+    assert(this.isInside);
+    var node = this.parent;
+    node.replace(this, other);
+    if (other === this.target) {
+      assert(this.target.bubble.isBlob);
+      other.addBubble(this);
+      other.layoutChildren();
+    }
   }
 
   click() {
@@ -819,6 +912,11 @@ class Bubble extends Drawable {
       context.lineWidth = density;
       context.stroke();
     }
+  }
+
+  pathShadowOn(context) {
+    this.pathBubble(context);
+    context.closePath();
   }
 }
 
@@ -1098,19 +1196,12 @@ class Workspace {
 /*****************************************************************************/
 
 import {primitives} from "./runtime";
+import {literal} from "./runtime";
 
-var donePrims = new Map();
-var paletteContents = primitives.map(function(prim) {
-  if (typeof prim === 'string') return;
-  let [spec, type, js] = prim;
-  var words = spec.split(/ |(_[a-z]*:\([^)]+\))/g).filter(x => x);
-
-  var hash = words.map(word => {
-    return word.split(/:/)[0];
-  }).join(" ");
-  if (donePrims.has(hash)) return;
-  donePrims.set(hash, true);
-
+var paletteContents = [];
+for (var spec in primitives) {
+  var prim = primitives[spec];
+  var words = spec.split(/ /g);
   var parts = words.map(word => {
     if (/:|^_/.test(word)) {
       var value = "";
@@ -1119,10 +1210,8 @@ var paletteContents = primitives.map(function(prim) {
       return new Label(word);
     }
   });
-  return new Node({}, parts);
-}).filter(x => !!x);
-
-
+  paletteContents.push(new Node({prim}, parts));
+}
 
 class Palette extends Workspace {
   constructor() {
@@ -1346,6 +1435,8 @@ class App {
 
   get isApp() { return true; }
   get app() { return this; }
+
+  layout() {}
 
   resize(e) {
     this.workspaces.forEach(w => w.resize());
@@ -1587,7 +1678,7 @@ class App {
       var info = g.feedbackInfo;
       info.node.replaceWith(g.dragScript);
     } else {
-      g.dropWorkspace = this.workspaceFromPoint(g.dragX + g.mouseX, g.dragY + g.mouseY);
+      g.dropWorkspace = this.workspaceFromPoint(g.dragX + g.mouseX, g.dragY + g.mouseY) || this.world;
       if (g.dropWorkspace.isWorld) {
         var pos = g.dropWorkspace.worldPositionOf(g.dragX + g.mouseX, g.dragY + g.mouseY);
         g.dropWorkspace.add(g.dragScript);
@@ -1672,6 +1763,10 @@ class App {
         canDrop = g.dragScript.target !== node.parent;
       } else {
         canDrop = true;
+      }
+    } else if (node.isBubble) {
+      if (g.dragScript.isNode) {
+        canDrop = g.dragScript === node.target && g.dragScript.outputs.length === 1;
       }
     }
 

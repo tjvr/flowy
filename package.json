@@ -16,5 +16,8 @@
     "browserify": "^13.0.1",
     "distfs": "^0.1.2",
     "moduleserve": "^0.7.1"
+  },
+  "dependencies": {
+    "js-big-integer": "^1.0.2"
   }
 }

@@ -1,5 +1,5 @@
 
-export const primitives = [
+var old = [
   
     // {}  -> Block
 
@@ -94,6 +94,30 @@ export const primitives = [
 
 ];
 
+/*
+var donePrims = new Map();
+var paletteContents = primitives.map(function(prim) {
+  if (typeof prim === 'string') return;
+  let [spec, type, js] = prim;
+  var words = spec.split(/ |(_[a-z]*:\([^)]+\))/g).filter(x => x);
+
+  var hash = words.map(word => {
+    return word.split(/:/)[0];
+  }).join(" ");
+  if (donePrims.has(hash)) return;
+  donePrims.set(hash, true);
+
+  var parts = words.map(word => {
+    if (/:|^_/.test(word)) {
+      var value = "";
+      return new Input(value)
+    } else {
+      return new Label(word);
+    }
+  });
+  return new Node({}, parts);
+}).filter(x => !!x);
+*/
 
 class RecordType {
   constructor(fields) {
@@ -102,4 +126,58 @@ class RecordType {
 
 
 }
+
+import {BigInteger} from "js-big-integer";
+//var BigInteger = yaffle.BigInteger
+
+var imm = function(f) {
+  return (args, cb) => {
+    cb(f.apply(null, args));
+  };
+};
+
+function isInt(x) {
+  return (x && x.constructor === BigInteger) || /-?[0-9]+/.test(''+x);
+}
+
+function Float(x) {
+  if (isInt(x)) {
+    return +x.toString();
+  } else {
+    return +x;
+  }
+}
+
+function infixMath(name, op) {
+  var BI = BigInteger;
+  return imm(eval(`(function(a, b) {
+    if (isInt(a) && isInt(b)) {
+      return BI.${name}(a, b);
+    } else {
+      var x = Float(a);
+      var y = Float(b);
+      return ${op};
+    }
+  })`));
+}
+
+export const primitives = {
+  "_ + _": infixMath('add', 'x + y'),
+  "_ - _": infixMath('subtract', 'x - y'),
+  "_ × _": infixMath('multiply', 'x * y'),
+  "_ ÷ _": infixMath('divide', 'x / y'),
+  "_ mod _": infixMath('remainder', '(((x % y) + y) % y)'),
+};
+
+export const literal = value => {
+  if (/^-?[0-9]+$/.test(value)) {
+    return BigInteger.parseInt(value);
+  } else {
+    var n = +value;
+    if (''+n !== 'NaN') {
+      return n;
+    }
+  }
+  return value;
+};
 
