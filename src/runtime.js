@@ -130,11 +130,10 @@ class RecordType {
 import {BigInteger} from "js-big-integer";
 //var BigInteger = yaffle.BigInteger
 
-var imm = function(f) {
-  return (args, cb) => {
-    cb(f.apply(null, args));
-  };
-};
+function imm(f) {
+  f.isImmediate = true;
+  return f;
+}
 
 function isArray(o) {
   return o && o.constructor === Array;
@@ -150,14 +149,13 @@ function Float(x) {
   } else {
     var val = +x;
   }
-  if (isNaN(val)) throw val;
+  if (isNaN(val)) throw "NaN";
   return val;
 }
 
 function infixMath(name, op) {
   var BI = BigInteger;
-  return eval(`(function(args, cb) {
-    let [a, b] = args;
+  return eval(`imm(function(a, b) {
     if (isInt(a) && isInt(b)) {
       var val = BI.${name}(a, b);
     } else {
@@ -165,7 +163,7 @@ function infixMath(name, op) {
       var y = Float(b);
       var val = ${op};
     }
-    cb(val);
+    return val;
   })`);
 }
 
@@ -203,10 +201,11 @@ export const primitives = {
   "_ + _": infixMath('add', 'x + y'),
   "_ - _": infixMath('subtract', 'x - y'),
   "_ × _": infixMath('multiply', 'x * y'),
-  "_ ÷ _": infixMath('divide', 'x / y'),
+  "_ ÷ _": imm((a, b) => Float(a) / Float(b)),
   "_ mod _": infixMath('remainder', '(((x % y) + y) % y)'),
-  "round _": round,
+  "round _": imm(x => isInt(x) ? x : Math.round(Float(x))),
 
+  /*
   "join _ _": (args, cb) => {
     let [x, y] = args;
     cb(x, y);
@@ -277,6 +276,7 @@ export const primitives = {
       cb(new Date());
     }, 1000);
   },
+  */
 };
 
 export const literal = text => {
@@ -301,4 +301,295 @@ export const display = value => {
   }
   return '' + value;
 }
+
+/*****************************************************************************/
+
+var addEvents = function(cla /*, events... */) {
+  [].slice.call(arguments, 1).forEach(function(event) {
+    addEvent(cla, event);
+  });
+};
+
+var addEvent = function(cla, event) {
+  var capital = event[0].toUpperCase() + event.substr(1);
+
+  cla.prototype.addEventListener = cla.prototype.addEventListener || function(event, listener) {
+    var listeners = this['$' + event] = this['$' + event] || [];
+    listeners.push(listener);
+    return this;
+  };
+
+  cla.prototype.removeEventListener = cla.prototype.removeEventListener || function(event, listener) {
+    var listeners = this['$' + event];
+    if (listeners) {
+      var i = listeners.indexOf(listener);
+      if (i !== -1) {
+        listeners.splice(i, 1);
+      }
+    }
+    return this;
+  };
+
+  cla.prototype.dispatchEvent = cla.prototype.dispatchEvent || function(event, arg) {
+    var listeners = this['$' + event];
+    if (listeners) {
+      listeners.forEach(function(listener) {
+        listener(arg);
+      });
+    }
+    var listener = this['on' + event];
+    if (listener) {
+      listener(arg);
+    }
+    return this;
+  };
+
+  cla.prototype['on' + capital] = function(listener) {
+    this.addEventListener(event, listener);
+    return this;
+  };
+
+  cla.prototype['dispatch' + capital] = function(arg) {
+    this.dispatchEvent(event, arg);
+    return this;
+  };
+};
+
+// the value of a node is a Future.
+// a Future represents an "execution operation", that is, the evaluation of that node.
+// the evaluation of a node depends on the evaluation of its (non-literal) arguments.
+
+class Future {
+  constructor() {
+    this.loaded = 0;
+    this.total = null;
+    this.lengthComputable = false;
+
+    this.result = null;
+    this.isDone = false;
+    this.isError = false;
+    this.cancelled = false;
+  }
+  get isFuture() { return true; }
+
+  cancel() {
+    if (this.cancelled) return;
+    this.cancelled = true;
+    this.dispatchCancel();
+  }
+
+  progress(loaded, total, lengthComputable) {
+    this.loaded = loaded;
+    this.total = total;
+    this.lengthComputable = lengthComputable;
+    this.dispatchProgress({
+      loaded: loaded,
+      total: total,
+      lengthComputable: lengthComputable
+    });
+  }
+
+  load(result) {
+    this.result = result;
+    if (!this.cancelled) {
+      this.dispatchLoad(result);
+    }
+  }
+
+  error(error) {
+    this.isDone = false;
+    this.isError = false;
+    this.dispatchError(error);
+  }
+
+  withLoad(cb) {
+    this.onLoad(cb);
+    if (this.isDone) {
+      if (!this.isError) cb(this.result);
+    }
+  }
+
+  withError(cb) {
+    this.onError(cb);
+    if (this.isDone) {
+      if (this.isError) cb(this.error);
+    }
+  }
+
+  static all(futures) {
+    return new CompositeFuture();
+  }
+}
+addEvents(Future, 'load', 'progress', 'error', 'cancel');
+
+
+class CompositeFuture extends Future {
+  constructor() {
+    super();
+    this.requests = [];
+    this.isDone = true;
+    this.update = this.update.bind(this);
+    this.error = this.error.bind(this);
+    this.defer = false;
+  }
+
+  add(request) {
+    if (request instanceof CompositeFuture) {
+      for (var i = 0; i < request.requests.length; i++) {
+        this.add(request.requests[i]);
+      }
+    } else {
+      this.requests.push(request);
+      request.addEventListener('progress', this.update);
+      request.addEventListener('load', this.update);
+      request.addEventListener('error', this.error);
+      this.update();
+    }
+  }
+
+  cancel() {
+    if (this.cancelled) return;
+    this.requests.forEach(request => {
+      if (!request.isDone) request.cancel();
+    });
+    super.cancel();
+  }
+
+  update() {
+    if (this.isError || this.cancelled) return;
+    var requests = this.requests;
+    var i = requests.length;
+    var total = 0;
+    var loaded = 0;
+    var lengthComputable = true;
+    var uncomputable = 0;
+    var done = 0;
+    while (i--) {
+      var r = requests[i];
+      loaded += r.loaded;
+      if (r.isDone) {
+        total += r.loaded;
+        done += 1;
+      } else if (r.lengthComputable) {
+        total += r.total;
+      } else {
+        lengthComputable = false;
+        uncomputable += 1;
+      }
+    }
+    if (!lengthComputable && uncomputable !== requests.length) {
+      var each = total / (requests.length - uncomputable) * uncomputable;
+      i = requests.length;
+      total = 0;
+      loaded = 0;
+      lengthComputable = true;
+      while (i--) {
+        var r = requests[i];
+        if (r.lengthComputable) {
+          loaded += r.loaded;
+          total += r.total;
+        } else {
+          total += each;
+          if (r.isDone) loaded += each;
+        }
+      }
+    }
+    this.progress(loaded, total, lengthComputable);
+    this.doneCount = done;
+    this.isDone = done === requests.length;
+    if (this.isDone && !this.defer) {
+      //this.load(this.getResult());
+      this.party();
+    }
+  }
+
+  getResult() {
+    throw new Error('Users must implement getResult()');
+  }
+
+}
+
+
+
+function loadURL(url) {
+  var request = new Future;
+  var xhr = new XMLHttpRequest;
+  xhr.open('GET', url, true);
+  xhr.onprogress = function(e) {
+    request.progress(e.loaded, e.total, e.lengthComputable);
+  };
+  xhr.onload = function() {
+    if (xhr.status === 200) {
+      request.load(xhr.response);
+    } else {
+      request.error(new Error('HTTP ' + xhr.status + ': ' + xhr.statusText));
+    }
+  };
+  xhr.onerror = function() {
+    request.error(new Error('XHR Error'));
+  };
+  xhr.responseType = 'blob';
+  setTimeout(xhr.send.bind(xhr));
+
+  return request;
+}
+
+function loadImageURL(url) {
+  var request = new Future;
+  var image = new Image;
+  image.crossOrigin = 'anonymous';
+  image.src = url;
+  image.onload = function() {
+    request.load(image);
+  };
+  image.onerror = function() {
+    request.error(new Error('Failed to load image: ' + url));
+  };
+  return request;
+}
+
+/*****************************************************************************/
+
+export const evaluate = (info, args) => {
+  var func = info.prim;
+  if (!func) throw func;
+  // TODO if (func.isImmediate) {
+
+  var future = new CompositeFuture();
+  args.forEach(arg => {
+    if (arg && arg.isFuture) future.add(arg);
+  });
+  future.party = function() {
+    var values = args.map(x => x && x.isFuture ? x.result : x);
+    try {
+      var result = func.apply(null, values);
+      future.load(result);
+    } catch(e) {
+      future.error(e);
+      console.log('error', e);
+    }
+  };
+  future.update();
+  return future;
+}
+
+  /*
+  try {
+    var func = this.info.prim;
+    if (func.isImmediate) {
+      return new Future.all(args).then(func);
+    } else {
+    }
+
+    (args, result => {
+      this.value = result;
+    });
+  } catch (e) {
+    this.value = "!!!"; //"Error: " + e;
+    console.error(e);
+  }
+  // setTimeout(() => {
+  //   this.value = Math.random() * 50 | 0;
+  // }, Math.random() * 100);
+  */
 

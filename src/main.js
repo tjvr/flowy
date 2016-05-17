@@ -316,7 +316,6 @@ class Input extends Drawable {
     this._value = this.field.value;
     this.layout();
     this.parent.invalidate();
-    console.log('change', this._value);
     assert(this.parent);
   };
   keyDown(e) {
@@ -452,6 +451,10 @@ class Node extends Drawable {
     var array = part.isLabel ? this.labels : this.args;
     array.push(part);
 
+    var node = part.target || part;
+    if (node && node.isNode) {
+      node.request(this);
+    }
     this.invalidate();
   }
 
@@ -477,6 +480,15 @@ class Node extends Drawable {
 
     this.el.replaceChild(newPart.el, oldPart.el);
 
+    
+    var node = oldPart.target || oldPart;
+    if (node && node.isNode) {
+      node.cancelRequest(this);
+    }
+    var node = newPart.target || newPart;
+    if (node && node.isNode) {
+      node.request(this);
+    }
     this.invalidate();
   };
 
@@ -488,6 +500,7 @@ class Node extends Drawable {
       }
       return;
     }
+
     part.parent = null;
     var index = this.parts.indexOf(part);
     this.parts.splice(index, 1);
@@ -497,6 +510,10 @@ class Node extends Drawable {
     var index = array.indexOf(part);
     array.splice(index, 1);
 
+    var node = part.target || part;
+    if (node && node.isNode) {
+      node.cancelRequest(this);
+    }
     this.invalidate();
   }
 
@@ -693,7 +710,7 @@ class Node extends Drawable {
 
   initValue() {
     this._invalid = true;
-    this.requests = new Map();
+    this.requests = new Set();
   }
 
   get value() { return this._value }
@@ -709,44 +726,52 @@ class Node extends Drawable {
   }
 
   invalidate() {
-    if (!this.outputs) return;
+    if (!this.outputs) return; // wait for init to finish
     this._invalid = true;
+    if (this.value) this.value.cancel();
     this.value = null;
     if (this.parent && this.parent.isNode) {
       this.parent.invalidate();
     } else {
       this.outputs.forEach(o => o.invalidate());
     }
-    if (this.requests) {
+    if (this.needed) {
       this.evaluate();
     }
   }
 
   request(who) {
-    this.requests.set(who, true);
-    if (this._invalid) {
-      this.evaluate();
-    }
+    this.requests.add(who);
+    this.needed = !!this.requests.size;
   }
 
   cancelRequest(who) {
-    this.requests.set(who, false);
+    this.requests.delete(who);
+    this.needed = !!this.requests.size;
     // TODO cancel in-progress evaluation
   }
 
-  evaluate() {
-    var args = this.args.map(x => x.value);
-    try {
-      this.info.prim(args, result => {
-        this.value = result;
-      });
-    } catch (e) {
-      this.value = "!!!"; //"Error: " + e;
-      console.error(e);
+  get needed() { return this._needed }
+  set needed(needed) {
+    this._needed = needed;
+    if (needed) {
+      if (this._invalid) this.evaluate();
+    } else {
+      this.value.cancel();
     }
-    // setTimeout(() => {
-    //   this.value = Math.random() * 50 | 0;
-    // }, Math.random() * 100);
+
+    this.args.forEach(arg => {
+      var node = arg.target || arg;
+      if (node.isNode) {
+        needed ? node.request() : node.cancelRequest();
+      }
+    });
+  }
+
+  evaluate() {
+    if (this.value) this.value.cancel();
+    var args = this.args.map(x => x.value);
+    this.value = evaluate(this.info, args);
   }
 }
 
@@ -772,13 +797,14 @@ class Bubble extends Drawable {
   }
 
   get parent() { return this._parent }
-  set parent(value) {
-    this._parent = value;
-    if (value) {
-      if (this.isInside || value.isPalette) {
-        this.target.cancelRequest(this);
-      } else {
+  set parent(p) {
+    this._parent = p;
+    if (p) {
+      var isSink = !this.parent.isNode || this.target.bubble === this;
+      if (isSink && !(this.workspace && this.workspace.isPalette)) {
         this.target.request(this);
+      } else {
+        this.target.cancelRequest(this);
       }
     }
   }
@@ -787,7 +813,31 @@ class Bubble extends Drawable {
   set value(value) {
     this._value = value;
     this.invalid = false;
+    if (value) this.bindEvents(value);
 
+    if (this.parent && this.isInside) {
+      this.parent.invalidate();
+    }
+  }
+
+  bindEvents(future) {
+    this.value.withLoad(result => {
+      assert(this.value === future);
+      this.label.text = "" + result;
+      this.redraw();
+      this.moved();
+    });
+    this.value.withError(function() {
+      assert(this.value === future);
+      this.label.text = "!!!";
+      this.layout();
+    });
+    this.value.onProgress(function() {
+      assert(this.value === future);
+      this.redraw();
+    });
+
+    /*
     var repr = display(value);
     this._isLabel = typeof repr === 'string';
     if (typeof repr === 'string') {
@@ -797,12 +847,9 @@ class Bubble extends Drawable {
       this.el.innerHTML = '';
       this.el.appendChild(repr);
     }
+    */
 
     this.layout();
-    if (this.parent && this.isInside) {
-      this.parent.invalidate();
-    }
-    //this.redraw();
   }
 
   get invalid() { return this._invalid }
@@ -814,7 +861,7 @@ class Bubble extends Drawable {
 
   invalidate() {
     this.invalid = true;
-    if (this.isInside) {
+    if (this.parent && this.isInside) {
       this.parent.invalidate();
     }
   }
@@ -833,7 +880,15 @@ class Bubble extends Drawable {
   detach() {
     if (this.parent.isNode) {
       if (this.parent.bubble !== this) {
-        this.parent.replace(this, new Input(this.value));
+        var value = "";
+        if (this.value) {
+          var repr = display(this.value.result);
+          if (this.value.isDone && typeof repr === 'string') {
+            value = repr;
+          }
+        }
+        // TODO literal images etc
+        this.parent.replace(this, new Input(value));
       }
     }
     return this;
@@ -1222,7 +1277,7 @@ class Workspace {
 /*****************************************************************************/
 
 import {primitives} from "./runtime";
-import {literal, display} from "./runtime";
+import {literal, display, evaluate} from "./runtime";
 
 var paletteContents = [];
 for (var spec in primitives) {
