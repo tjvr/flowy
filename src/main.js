@@ -422,6 +422,8 @@ class Node extends Drawable {
     this.el.appendChild(this.bubble.el);
     this.addOutput(this.bubble);
     this.bubble.parent = this;
+
+    this.value = Math.random() * 20 | 0;
   }
 
   get isNode() { return true; }
@@ -535,7 +537,7 @@ class Node extends Drawable {
     if (arg.parent !== this || !arg.isNode && !arg.isInput) return this;
 
     var i = this.args.indexOf(arg);
-    this.replace(arg, new Input("123"));
+    this.replace(arg, new Input(arg.value));
   };
 
   detach() {
@@ -677,6 +679,17 @@ class Node extends Drawable {
     context.fillStyle = this._color;
     bezel(context, this.pathBlock, this, false, density);
   }
+
+  /* * */
+
+  get value() { return this._value }
+  set value(value) {
+    this._value = value;
+    this.outputs.forEach(o => {
+      o.value = value;
+    });
+  }
+
 }
 
 
@@ -691,11 +704,18 @@ class Bubble extends Drawable {
 
     this.target = target;
     this.curve = null;
-    this.value = "3.14";
-    this.label = new Label(this.value, 'result-label');
+    this.label = new Label("", 'result-label');
+    this.value = target.value;
     this.el.appendChild(this.label.el);
 
     if (target.workspace) target.workspace.add(this);
+  }
+
+  get value() { return this._value }
+  set value(value) {
+    this._value = value;
+    this.label.text = value;
+    //this.redraw();
   }
 
   get isBubble() { return true; }
@@ -712,7 +732,7 @@ class Bubble extends Drawable {
   detach() {
     if (this.parent.isNode) {
       if (this.parent.bubble !== this) {
-        this.parent.replace(this, new Input(""));
+        this.parent.replace(this, new Input(this.value));
       }
     }
     return this;
