@@ -1791,9 +1791,15 @@ class App {
       }
     }
 
+    var gx = g.dragScript.x;
+    var gy = g.dragScript.y;
+    if (g.dragScript.isBubble) {
+      gx += g.dragScript.width / 2;
+    }
+
     if (canDrop) {
-      var dx = x - g.dragScript.x;
-      var dy = y - g.dragScript.y;
+      var dx = x - gx;
+      var dy = y - gy;
       var d2 = dx * dx + dy * dy;
       if (Math.abs(dx) > this.feedbackRange || Math.abs(dy) > this.feedbackRange || d2 > g.feedbackDistance) return;
       g.feedbackDistance = d2;

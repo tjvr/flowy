@@ -305,7 +305,7 @@ export const literal = text => {
 export const display = value => {
   if (!value) return "";
   if (value.tagName) {
-    return value; //value.outerHTML;
+    return value.outerHTML;
   }
   if (isArray(value)) {
     return `[${value.map(display).join(",\n")}]`;
