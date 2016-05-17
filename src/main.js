@@ -365,7 +365,7 @@ class Input extends Drawable {
   pathFn(context) {
     var w = this.width;
     var h = this.height;
-    var r = 4;
+    var r = 6;
 
     context.moveTo(0, r + .5);
     context.arc(r, r + .5, r, PI, PI32, false);
@@ -377,7 +377,7 @@ class Input extends Drawable {
   layoutSelf() {
     var metrics = Input.measure(this.field.value);
     this.width = Math.max(this.minWidth, metrics.width) + this.fieldPadding * 2;
-    this.height = metrics.height + 1;
+    this.height = metrics.height + 3;
     this.field.style.width = this.width + 'px';
     this.field.style.height = this.height + 'px';
     this.redraw();
@@ -618,8 +618,7 @@ class Node extends Drawable {
     for (var i=0; i<length; i++) {
       var part = parts[i];
 
-      var h = part.height + 4;
-      if (part.isBubble) h -= Bubble.tipSize;
+      var h = part.height + (part.isBubble ? 0 : 4);
       height = Math.max(height, h);
       xs.push(width);
       width += part.width;
@@ -632,10 +631,9 @@ class Node extends Drawable {
     for (var i=0; i<length; i++) {
       var part = parts[i];
       var h = part.height;
-      if (part.isBubble) h -= Bubble.tipSize;
       var x = xs[i];
       var y = (height - h) / 2;
-      if (part.isBubble) y -= Bubble.tipSize;
+      if (part.isBubble) y -= 2;
       part.moveTo(x, y);
     }
     this.width = width;
@@ -656,7 +654,7 @@ class Node extends Drawable {
   pathBlock(context) {
     var w = this.ownWidth;
     var h = this.ownHeight;
-    var r = 6;
+    var r = 8;
 
     context.moveTo(0, r + .5);
     context.arc(r, r + .5, r, PI, PI32, false);
@@ -776,7 +774,7 @@ class Bubble extends Drawable {
   }
 
   pathBubble(context) {
-    var t = Bubble.tipSize;
+    var t = this.isInside ? Bubble.tipSize : 4;
     var w = this.width;
     var h = this.height;
     var r = 6;
@@ -801,8 +799,12 @@ class Bubble extends Drawable {
     this.drawOn(this.context);
   }
 
+  get isInside() {
+    return this.parent.isNode && this.parent.bubble !== this;
+  }
+
   drawOn(context) {
-    if (this.parent.isNode && this.parent.bubble !== this) {
+    if (this.isInside) {
       context.fillStyle = '#fff';
       bezel(context, this.pathBubble, this, true, density);
     } else {
@@ -818,10 +820,10 @@ class Bubble extends Drawable {
   }
 }
 
-Bubble.tipSize = 4;
+Bubble.tipSize = 6;
 Bubble.paddingX = 2;
 Bubble.paddingY = 1;
-Bubble.minWidth = 26;
+Bubble.minWidth = 32; //26;
 
 
 class Blob extends Drawable {

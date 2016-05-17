@@ -69,12 +69,15 @@ html, body {
 .palette {
   position: fixed;
   bottom: 0;
-  height: 48px;
+  height: 64px;
   z-index: 101;
   border-top: 2px solid #ccc;
   left: 0;
   right: 0;
   background: #fff;
+  overflow-y: hidden;
+  overflow-x: scroll;
+  -webkit-overflow-scrolling: touch;
 }
 
 .feedback {
@@ -95,19 +98,19 @@ html, body {
 }
 
 .label {
-  font: bold 10px/14px Lucida Grande, Verdana, Arial, DejaVu Sans, sans-serif;
+  font: bold 16px/20px Lucida Grande, Verdana, Arial, DejaVu Sans, sans-serif;
   color: #fff;
   z-index: 1;
 }
 
 .result-label {
   color: #000;
-  font: 10px/14px Lucida Grande, Verdana, Arial, DejaVu Sans, sans-serif;
+  font: 16px/20px Lucida Grande, Verdana, Arial, DejaVu Sans, sans-serif;
 }
 
 .field {
   color: #505050;
-  font: 9px/14px Lucida Grande, Verdana, Arial, DejaVu Sans, sans-serif;
+  font: 16px/20px Lucida Grande, Verdana, Arial, DejaVu Sans, sans-serif;
   margin: 0;
   padding: 0;
   border: 0;
