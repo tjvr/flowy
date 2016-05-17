@@ -106,7 +106,10 @@ html, body {
 
 .result-label {
   color: #000;
-  font: 16px/20px Lucida Grande, Verdana, Arial, DejaVu Sans, sans-serif;
+  font: 16px/20px Source Code Pro, Monaco, monospace;
+  letter-spacing: -1px;
+  overflow-y: scroll;
+  white-space: pre-wrap;
 
   /* TODO frames */
   overflow-y: scroll;

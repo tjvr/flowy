@@ -136,6 +136,10 @@ var imm = function(f) {
   };
 };
 
+function isArray(o) {
+  return o && o.constructor === Array;
+}
+
 function isInt(x) {
   return (x && x.constructor === BigInteger) || /-?[0-9]+/.test(''+x);
 }
@@ -188,6 +192,13 @@ function equals(args, cb) {
   return cb(false);
 }
 
+function parseHTML(html) {
+  var el = document.createElement('html');
+  el.innerHTML = html;
+  var el = /^\<\!doctype/i.test(html) ? el : el.querySelector('body');
+  return el;
+}
+
 export const primitives = {
   "_ + _": infixMath('add', 'x + y'),
   "_ - _": infixMath('subtract', 'x - y'),
@@ -198,7 +209,7 @@ export const primitives = {
 
   "join _ _": (args, cb) => {
     let [x, y] = args;
-
+    cb(x, y);
   },
 
   "sqrt of _": sqrt,
@@ -211,6 +222,7 @@ export const primitives = {
 
   "GET _": (args, cb) => {
     let [url] = args;
+    if (!url) cb(null);
     // TODO debounce
     var xhr = new XMLHttpRequest;
     xhr.open('GET', 'http://crossorigin.me/' + url, true);
@@ -219,7 +231,25 @@ export const primitives = {
     };
     xhr.onload = function() {
       if (xhr.status === 200) {
-        cb(xhr.response);
+        var mime = xhr.getResponseHeader('content-type');
+        var response;
+        if (/^image\//.test(mime)) {
+          var img = new Image();
+          img.src = URL.createObjectURL(xhr.response);
+          cb(img);
+          debugger;
+        } else {
+          var reader = new FileReader;
+          reader.onloadend = function() {
+            var text = reader.result;
+            if (mime === 'text/html') {
+              text = parseHTML(text);
+            }
+            cb(text);
+          };
+          reader.readAsText(xhr.response);
+        }
+        cb(response);
       } else {
         // request.error(new Error('HTTP ' + xhr.status + ': ' + xhr.statusText));
       }
@@ -227,11 +257,23 @@ export const primitives = {
     xhr.onerror = function() {
       // request.error(new Error('XHR Error'));
     };
-    xhr.responseType = 'text'; // type || '';
-    xhr.send();
+    xhr.responseType = 'blob';
+    setTimeout(xhr.send.bind(xhr));
   },
 
+  /*
   "soup from _": (args, cb) => {
+    let [html] = args;
+    var el = document.createElement('html');
+    el.innerHTML = html;
+    var el = /^\<\!doctype/i.test(html) ? el : el.querySelector('body');
+    cb(el);
+  },
+  */
+
+  "select _ from _": (args, cb) => {
+    let [selector, dom] = args;
+    cb(selector && dom ? [].slice.apply(dom.querySelectorAll(selector)) : null);
   },
 
   "delay _ by _ secs": (args, cb) => {
@@ -240,17 +282,34 @@ export const primitives = {
       cb(value);
     }, Float(secs) * 1000);
   },
+
+  "time": (args, cb) => {
+    setInterval(() => {
+      cb(new Date());
+    }, 1000);
+  },
 };
 
-export const literal = value => {
-  if (/^-?[0-9]+$/.test(value)) {
-    return BigInteger.parseInt(value);
-  } else if (value !== '' && value !== '.') {
-    var n = +value;
+export const literal = text => {
+  if (/^-?[0-9]+$/.test(text)) {
+    return BigInteger.parseInt(text);
+  } else if (text !== '' && text !== '.') {
+    var n = +text;
     if (''+n !== 'NaN') {
       return n;
     }
   }
-  return value;
+  return ''+text;
 };
+
+export const display = value => {
+  if (!value) return "";
+  if (value.tagName) {
+    return value; //value.outerHTML;
+  }
+  if (isArray(value)) {
+    return `[${value.map(display).join(",\n")}]`;
+  }
+  return '' + value;
+}
 

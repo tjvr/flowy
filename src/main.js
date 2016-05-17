@@ -3,10 +3,6 @@ function assert(x) {
   if (!x) throw "Assertion failed!";
 }
 
-function isArray(o) {
-  return o && o.constructor === Array;
-}
-
 function extend(src, dest) {
   src = src || {};
   dest = dest || {};
@@ -790,7 +786,15 @@ class Bubble extends Drawable {
   get value() { return this._value }
   set value(value) {
     this._value = value;
-    this.label.text = value;
+    var repr = display(value);
+    this._isLabel = typeof repr === 'string';
+    if (typeof repr === 'string') {
+      this.label.text = repr;
+      this.el.appendChild(this.label.el);
+    } else {
+      this.el.innerHTML = '';
+      this.el.appendChild(repr);
+    }
     this.layout();
     if (this.parent && this.isInside) {
       this.parent.invalidate();
@@ -862,8 +866,11 @@ class Bubble extends Drawable {
     var px = Bubble.paddingX;
     var py = Bubble.paddingY;
 
-    var w = Math.min(512, this.label.width);
-    var h = Math.min(256, this.label.height);
+    // TODO layout custom dom things
+    var metrics = Bubble.measure(this.label.text);
+
+    var w = Math.min(512, metrics.width);
+    var h = Math.min(256, metrics.height);
     this.label.el.style.width = `${w}px`;
     this.label.el.style.height = `${h}px`;
 
@@ -927,6 +934,7 @@ class Bubble extends Drawable {
     context.closePath();
   }
 }
+Bubble.measure = createMetrics('result-label');
 
 Bubble.tipSize = 6;
 Bubble.paddingX = 4;
@@ -1204,7 +1212,7 @@ class Workspace {
 /*****************************************************************************/
 
 import {primitives} from "./runtime";
-import {literal} from "./runtime";
+import {literal, display} from "./runtime";
 
 var paletteContents = [];
 for (var spec in primitives) {
