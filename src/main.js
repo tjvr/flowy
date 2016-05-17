@@ -249,6 +249,8 @@ class Drawable {
   }
 
   click() {}
+
+  setHover(hover) {}
 }
 
 
@@ -313,6 +315,10 @@ class Input extends Drawable {
 
   copy() {
     return new Input(this.value);
+  }
+
+  replaceWith(other) {
+    this.parent.replace(this, other);
   }
 
   change(e) {
@@ -390,7 +396,7 @@ Input.prototype.fieldPadding = 4;
 
 
 
-class Operator extends Drawable {
+class Node extends Drawable {
   constructor(info, parts) {
     super();
 
@@ -411,12 +417,14 @@ class Operator extends Drawable {
 
     this.outputs = [];
     this.curves = [];
-    this.addOutput(new Result(this));
-    this.outputs[0].curve = null;
-    this.outputs[0].parent = this;
+    this.blob = new Blob(this);
+    this.bubble = new Bubble(this);
+    this.el.appendChild(this.bubble.el);
+    this.addOutput(this.bubble);
+    this.bubble.parent = this;
   }
 
-  get isOperator() { return true; }
+  get isNode() { return true; }
   get isDraggable() { return true; }
 
   get color() { return this._color }
@@ -435,7 +443,7 @@ class Operator extends Drawable {
     this.layout();
     this.el.appendChild(part.el);
 
-    var array = part.isOperator || part.isInput ? this.args : this.labels;
+    var array = part.isNode || part.isInput ? this.args : this.labels;
     array.push(part);
   }
 
@@ -450,7 +458,7 @@ class Operator extends Drawable {
     var index = this.parts.indexOf(oldPart);
     this.parts.splice(index, 1, newPart);
 
-    var array = oldPart.isOperator || oldPart.isInput ? this.args : this.labels;
+    var array = oldPart.isNode || oldPart.isInput ? this.args : this.labels;
     var index = array.indexOf(oldPart);
     array.splice(index, 1, newPart);
 
@@ -463,13 +471,18 @@ class Operator extends Drawable {
 
   remove(part) {
     if (part.parent !== this) return;
-    if (part.isResult) return this.removeOutput(part);
+    if (part.isBubble) {
+      if (this.bubble === part) {
+        this.removeBubble(part);
+      }
+      return;
+    }
     part.parent = null;
     var index = this.parts.indexOf(part);
     this.parts.splice(index, 1);
     this.el.removeChild(part.el);
 
-    var array = part.isOperator ? this.args : this.labels;
+    var array = part.isNode ? this.args : this.labels;
     var index = array.indexOf(part);
     array.splice(index, 1);
   }
@@ -479,10 +492,10 @@ class Operator extends Drawable {
     output.target = this;
 
     var curve = new Curve(this, output);
-    output.curve = this.curves.length >= 1 ? curve : null;
+    output.curve = curve;
     this.curves.push(curve);
 
-    this.el.appendChild(this.outputs[0].el);
+    this.layoutBubble(output);
   }
 
   removeOutput(output) {
@@ -491,8 +504,35 @@ class Operator extends Drawable {
     output.parent = null;
   }
 
+  addBubble(bubble) {
+    assert(bubble);
+    assert(this.bubble === this.blob);
+    if (this.outputs.length > 1) {
+      // destroy bubble
+      bubble.curve.parent.remove(bubble.curve);
+      bubble.parent.remove(bubble);
+      this.removeOutput(bubble);
+      return;
+    }
+    bubble.zoom = 1;
+    this.el.removeChild(this.blob.el);
+    this.bubble = bubble;
+    bubble.parent = this;
+    this.el.appendChild(bubble.el);
+    this.layoutBubble(bubble);
+  }
+
+  removeBubble(bubble) {
+    assert(this.bubble === bubble);
+    this.bubble = this.blob;
+    this.el.appendChild(this.blob.el);
+    this.blob.layoutSelf();
+    this.layoutBubble(this.bubble);
+    this.el.removeChild(bubble.el);
+  }
+
   reset(arg) {
-    if (arg.parent !== this || !arg.isOperator && !arg.isInput) return this;
+    if (arg.parent !== this || !arg.isNode && !arg.isInput) return this;
 
     var i = this.args.indexOf(arg);
     this.replace(arg, new Input("123"));
@@ -502,18 +542,18 @@ class Operator extends Drawable {
     if (this.workspace.isPalette) {
       return this.copy();
     }
-    if (this.parent.isOperator) {
+    if (this.parent.isNode) {
       this.parent.reset(this);
-      // return this; //new Script().setScale(this._scale).add(this);
     }
     return this;
-    // if (this.parent.isScript) {
-    //   return this.parent.splitAt(this);
-    // }
   }
 
   copy() {
-    return new Operator(this.info, this.parts.map(c => c.copy()));
+    return new Node(this.info, this.parts.map(c => c.copy()));
+  }
+
+  replaceWith(other) {
+    this.parent.replace(this, other);
   }
 
   moveTo(x, y) {
@@ -526,15 +566,17 @@ class Operator extends Drawable {
     this.curves.forEach(c => c.layoutSelf());
   }
 
+  get bubbleVisible() {
+    return !this.parent.isNode && !(this.workspace && this.workspace.isPalette);
+  }
+
   objectFromPoint(x, y) {
-    var output = this.outputs[0];
-    assert(output.parent === this);
-    // TODO don't grab invisible bubbles
-    var o = output.objectFromPoint(x - output.x, y - output.y)
-    if (o) return o;
-    var args = this.args;
-    for (var i = args.length; i--;) {
-      var arg = args[i];
+    if (this.bubble && this.bubbleVisible) {
+      var o = this.bubble.objectFromPoint(x - this.bubble.x, y - this.bubble.y)
+      if (o) return o;
+    }
+    for (var i = this.args.length; i--;) {
+      var arg = this.args[i];
       var o = arg.objectFromPoint(x - arg.x, y - arg.y);
       if (o) return o;
     }
@@ -547,11 +589,11 @@ class Operator extends Drawable {
 
   layoutChildren() {
     this.parts.forEach(c => c.layoutChildren());
-    this.outputs.forEach(o => o.layoutChildren()); // TODO ew
+    this.bubble.layoutChildren();
     if (this.dirty) {
       this.dirty = false;
     }
-      this.layoutSelf(); // TODO mark dirty when hiding/showing result bubble
+    this.layoutSelf();
   }
 
   drawChildren() {
@@ -573,7 +615,9 @@ class Operator extends Drawable {
     for (var i=0; i<length; i++) {
       var part = parts[i];
 
-      height = Math.max(height, part.height + 4);
+      var h = part.height + 4;
+      if (part.isBubble) h -= Bubble.tipSize;
+      height = Math.max(height, h);
       xs.push(width);
       width += part.width;
       width += 4;
@@ -584,20 +628,26 @@ class Operator extends Drawable {
 
     for (var i=0; i<length; i++) {
       var part = parts[i];
+      var h = part.height;
+      if (part.isBubble) h -= Bubble.tipSize;
       var x = xs[i];
-      var y = (height - part.height) / 2;
+      var y = (height - h) / 2;
+      if (part.isBubble) y -= Bubble.tipSize;
       part.moveTo(x, y);
     }
-
-    var output = this.outputs[0];
-    assert(output.parent === this);
-    var x = (width - output.width) / 2;
-    output.moveTo(x, height - 1 + Result.tipSize);
     this.width = width;
     this.height = height;
 
+    this.layoutBubble(this.bubble);
     this.curves.forEach(c => c.layoutSelf());
     this.redraw();
+  }
+
+  layoutBubble(bubble) {
+    if (!bubble) return;
+    var x = (this.width - bubble.width) / 2;
+    var y = this.height - 1;
+    bubble.moveTo(x, y);
   }
 
   pathBlock(context) {
@@ -619,10 +669,8 @@ class Operator extends Drawable {
     this.canvas.style.height = this.ownHeight + 'px';
     this.context.scale(density, density);
     this.drawOn(this.context);
-    var hideOutput = (this.parent && this.parent.isOperator) || !this.workspace || this.workspace.isPalette || this.parent.isApp;
-    //console.log(this.parts[0].text, hideOutput, this.parent);
-    this.outputs[0].el.style.visibility = hideOutput ? 'hidden' : 'visible';
-    this.curves[0].el.style.visibility = 'hidden';
+    
+    this.bubble.el.style.visibility = this.bubbleVisible ? 'visible' : 'hidden';
   }
 
   drawOn(context) {
@@ -633,7 +681,7 @@ class Operator extends Drawable {
 
 
 
-class Result extends Drawable {
+class Bubble extends Drawable {
   constructor(target) {
     super();
 
@@ -650,7 +698,7 @@ class Result extends Drawable {
     if (target.workspace) target.workspace.add(this);
   }
 
-  get isResult() { return true; }
+  get isBubble() { return true; }
   get isDraggable() { return true; }
 
   objectFromPoint(x, y) {
@@ -662,20 +710,23 @@ class Result extends Drawable {
   }
 
   detach() {
-    if (!this.curve) {
-      return this.copy();
-    }
-    if (this.parent.isOperator) {
-      this.parent.replace(this, new Input(""));
-      return this;
+    if (this.parent.isNode) {
+      if (this.parent.bubble !== this) {
+        this.parent.replace(this, new Input(""));
+      }
     }
     return this;
   }
 
   copy() {
-    var r = new Result(this.target);
+    var r = new Bubble(this.target);
     this.target.addOutput(r);
     return r;
+  }
+
+  replaceWith(other) {
+    assert(this.parent.isNode);
+    this.parent.replace(this, other);
   }
 
   click() {
@@ -683,7 +734,7 @@ class Result extends Drawable {
   }
 
   moveTo(x, y) {
-    super.moveTo(x, y - Result.tipSize);
+    super.moveTo(x, y);
     this.moved();
   }
 
@@ -692,13 +743,11 @@ class Result extends Drawable {
   }
 
   layoutSelf() {
-    var t = Result.tipSize;
-    var px = Result.paddingX
-    var py = Result.paddingY;
-    this.width = Math.max(Result.minWidth, this.label.width + 2 * px);
-    this.height = this.label.height + 2 * py;
-    this.canvasWidth = this.width;
-    this.canvasHeight = this.height + t;
+    var t = Bubble.tipSize;
+    var px = Bubble.paddingX
+    var py = Bubble.paddingY;
+    this.width = Math.max(Bubble.minWidth, this.label.width + 2 * px);
+    this.height = this.label.height + 2 * py + t;
     var x = (this.width - this.label.width) / 2;
     var y = t + py;
     this.label.moveTo(x, y);
@@ -706,9 +755,9 @@ class Result extends Drawable {
   }
 
   pathBubble(context) {
-    var t = Result.tipSize;
+    var t = Bubble.tipSize;
     var w = this.width;
-    var h = this.height + t;
+    var h = this.height;
     var r = 6;
     var w12 = this.width / 2;
 
@@ -723,10 +772,10 @@ class Result extends Drawable {
   }
 
   draw() {
-    this.canvas.width = this.canvasWidth * density;
-    this.canvas.height = this.canvasHeight * density;
-    this.canvas.style.width = this.canvasWidth + 'px';
-    this.canvas.style.height = this.canvasHeight + 'px';
+    this.canvas.width = this.width * density;
+    this.canvas.height = this.height * density;
+    this.canvas.style.width = this.width + 'px';
+    this.canvas.style.height = this.height + 'px';
     this.context.scale(density, density);
     this.drawOn(this.context);
   }
@@ -743,10 +792,104 @@ class Result extends Drawable {
 
 }
 
-Result.tipSize = 6;
-Result.paddingX = 6;
-Result.paddingY = 2;
-Result.minWidth = 32;
+Bubble.tipSize = 6;
+Bubble.paddingX = 6;
+Bubble.paddingY = 2;
+Bubble.minWidth = 32;
+
+
+class Blob extends Drawable {
+  constructor(target) {
+    super();
+
+    this.el = el('absolute');
+    this.el.appendChild(this.canvas = el('canvas', 'absolute'));
+    this.context = this.canvas.getContext('2d');
+
+    this.parent = target;
+    this.target = target;
+    this.color = '#888';
+  }
+
+  get isBlob() { return true; }
+  get isDraggable() { return true; }
+
+  get color() { return this._color }
+  set color(value) {
+    this._color = value;
+    this.redraw();
+  }
+
+  objectFromPoint(x, y) {
+    var px = 8;
+    var py = 8;
+    var touchExtent = {width: this.width + px * 2, height: this.height + py};
+    if (containsPoint(touchExtent, x + px, y)) {
+      return this;
+    }
+  }
+
+  setHover(hover) {
+    this.color = hover ? '#5B57C5' : '#636284';
+  }
+
+  get dragObject() {
+    return this;
+  }
+
+  detach() {
+    var target = this.target;
+    var bubble = new Bubble(target);
+    target.addOutput(bubble);
+    return bubble;
+  }
+
+  dragOffset(obj) {
+    return {x: -obj.width / 2 + this.width / 2, y: -1};
+  }
+
+  replaceWith(other) {
+    assert(other.isBubble && other.target === this.target && this.target.bubble === this);
+    this.target.addBubble(other);
+  }
+
+  layoutSelf() {
+    this.width = Blob.radius * 2;
+    this.height = Blob.radius * 2;
+    this.redraw();
+  }
+
+  pathBlob(context) {
+    var r = Blob.radius;
+    var r2 = r * 2;
+    context.moveTo(r, 0);
+    context.lineTo(r2, r);
+    context.lineTo(r, r2);
+    context.lineTo(0, r);
+  }
+
+  draw() {
+    this.canvas.width = this.width * density;
+    this.canvas.height = this.height * density;
+    this.canvas.style.width = this.width + 'px';
+    this.canvas.style.height = this.height + 'px';
+    this.canvas.style.left = `${(this.width - this.canvasWidth) / 2}px`;
+    this.canvas.style.top = '0px';
+    this.context.scale(density, density);
+    this.drawOn(this.context);
+  }
+
+  drawOn(context) {
+    context.fillStyle = this.color;
+    bezel(context, this.pathBlob, this, false, density);
+  }
+
+  pathShadowOn(context) {
+    this.pathBlob(context);
+    context.closePath();
+  }
+}
+Blob.radius = 6;
 
 
 
@@ -770,8 +913,7 @@ class Curve extends Drawable {
   objectFromPoint() {}
 
   layoutSelf() {
-    if (!this.result.curve) return;
-    assert(this.workspace);
+    if (!this.workspace) return;
 
     var target = this.target;
     var start = this.workspace.positionOf(target);
@@ -907,11 +1049,17 @@ class Workspace {
     } else {
       this.elContents.appendChild(script.el);
     }
+    if (script.isNode && script.bubble && script.bubble.isBubble) {
+      this.add(script.bubble.curve);
+    }
   }
 
   remove(script) {
+    assert(script.parent === this);
+    script.parent = null;
     var index = this.scripts.indexOf(script);
     this.scripts.splice(index, 1);
+    this.elContents.removeChild(script.el);
   }
 }
 
@@ -933,7 +1081,7 @@ var paletteContents = primitives.map(function(prim) {
       return new Label(word);
     }
   });
-  return new Operator({}, parts);
+  return new Node({}, parts);
 }).filter(x => !!x);
 
 
@@ -976,16 +1124,16 @@ class World extends Workspace {
 
     // TODO
     /*
-    this.add(new Operator({}, [
+    this.add(new Node({}, [
       new Label("bob"),
-      new Operator({}, [
+      new Node({}, [
         new Label("cow"),
       ]),
       new Label("fred"),
     ]));
 
     var o;
-    this.add(o = new Operator({}, [
+    this.add(o = new Node({}, [
       new Label("go"),
       new Input("123"),
       new Label("house"),
@@ -993,13 +1141,13 @@ class World extends Workspace {
     ]));
     o.moveTo(0, 50);
 
-    this.add(o = new Operator({}, [
+    this.add(o = new Node({}, [
       new Label("quxx"),
-      new Operator({}, [
+      new Node({}, [
         new Label("wilfred"),
         new Input("man"),
         new Label("has"),
-        new Operator({}, [
+        new Node({}, [
           new Label("burb"),
         ]),
       ]),
@@ -1258,6 +1406,8 @@ class App {
       g.resizing = false;
       g.shouldDrag = false;
       g.dragScript = null;
+      if (g.hoverScript) g.hoverScript.setHover(false);
+      g.hoverScript = null;
 
       delete this.fingers[id];
     }
@@ -1333,6 +1483,11 @@ class App {
       g.dragY = pos.y - g.pressY;
       assert(''+g.dragX !== 'NaN');
       g.dragScript = obj.detach();
+      if (obj.dragOffset) {
+        var offset = obj.dragOffset(g.dragScript);
+        g.dragX += offset.x * this.world.zoom;
+        g.dragY += offset.y * this.world.zoom;
+      }
       if (g.dragScript.parent) {
         g.dragScript.parent.remove(g.dragScript);
       }
@@ -1344,6 +1499,11 @@ class App {
       // TODO add shadow
     }
 
+    if (g.scrolling || g.dragging) {
+      if (g.hoverScript) g.hoverScript.setHover(false);
+      g.hoverScript = null;
+    }
+
     if (g.scrolling) {
       g.pressObject.fingerScroll(g.mouseX - g.scrollX, g.mouseY - g.scrollY)
       g.scrollX = g.mouseX;
@@ -1353,6 +1513,14 @@ class App {
       g.dragScript.moveTo((g.dragX + g.mouseX), (g.dragY + g.mouseY));
       this.showFeedback(g);
       e.preventDefault();
+    } else if (!g.pressed) {
+      var obj = this.objectFromPoint(g.mouseX, g.mouseY);
+      if (!obj.setHover) obj = null;
+      if (obj !== g.hoverScript) {
+        if (g.hoverScript) g.hoverScript.setHover(false);
+        g.hoverScript = obj;
+        if (g.hoverScript) g.hoverScript.setHover(true);
+      }
     }
   }
 
@@ -1382,7 +1550,7 @@ class App {
     var pos = g.dropWorkspace.worldPositionOf(g.dragX + g.mouseX, g.dragY + g.mouseY);
     if (g.feedbackInfo) {
       var info = g.feedbackInfo;
-      info.node.parent.replace(info.node, g.dragScript);
+      info.node.replaceWith(g.dragScript);
     } else {
       g.dropWorkspace.add(g.dragScript);
       g.dragScript.moveTo(pos.x, pos.y);
@@ -1399,6 +1567,7 @@ class App {
   }
 
   remove(o) {
+    this.elScripts.removeChild(o.el);
     // TODO
   }
 
@@ -1428,7 +1597,7 @@ class App {
     var w = this.workspaceFromPoint(g.mouseX, g.mouseY);
     if (w === this.world) {
       var pos = w.toScreen(0, 0);
-      w.scripts.forEach(script => this.addNodeFeedback(g, pos.x, pos.y, script));
+      w.scripts.forEach(script => this.addFeedback(g, pos.x, pos.y, script));
     }
 
     if (g.feedbackInfo) {
@@ -1439,14 +1608,23 @@ class App {
     }
   }
 
-  addNodeFeedback(g, x, y, node) {
+  addFeedback(g, x, y, node) {
+    assert(''+x !== 'NaN');
     x += node.x * this.world.zoom;
     y += node.y * this.world.zoom;
-    if (node.isOperator) {
-      node.parts.forEach(child => this.addNodeFeedback(g, x, y, child));
+    if (node.isNode) {
+      node.parts.forEach(child => this.addFeedback(g, x, y, child));
+      if (node.bubble.isBlob) {
+        this.addFeedback(g, x, y, node.blob); // + node.ownWidth / 2, y + node.ownHeight / 2, node.blob)
+      }
     }
 
-    if (node.isInput) {
+    var canDrop = (
+      (node.isInput && g.dragScript.target !== node.parent) ||
+      (g.dragScript.isBubble && node.isBlob && node.target === g.dragScript.target)
+    );
+
+    if (canDrop) {
       var dx = x - g.dragScript.x;
       var dy = y - g.dragScript.y;
       var d2 = dx * dx + dy * dy;
