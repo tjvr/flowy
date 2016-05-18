@@ -168,7 +168,13 @@ function Str(x) {
 
 function infixMath(name, op) {
   var BI = BigInteger;
-  return eval(`imm(function(a, b) {
+  return eval(`imm(function infix(a, b) {
+    if (isArray(a)) {
+      return a.map(x => infix(x, b));
+    }
+    if (isArray(b)) {
+      return b.map(y => infix(a, y));
+    }
     if (isInt(a) && isInt(b)) {
       var val = BI.${name}(a, b);
     } else {
@@ -372,9 +378,8 @@ export const primitives = [
   // }],
 
   ["get _", "sensing", url => {
-    // TODO url can be a future
-    if (!url) return null;
-    return loadURL('http://crossorigin.me/' + url)
+    return url
+    .then(url => loadURL('http://crossorigin.me/' + url))
     .then(r => {
       var mime = r.contentType;
       var blob = r.response;
@@ -573,7 +578,7 @@ class Future {
     var cf = new CompositeFuture;
     cf.defer = true;
     cf.add(this);
-    this.onLoad(result => {
+    this.withLoad(result => {
       var next = cb(result);
       cf.defer = false;
       if (next.isFuture) {
