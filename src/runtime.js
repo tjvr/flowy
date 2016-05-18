@@ -207,10 +207,10 @@ export const primitives = {
   "_ mod _": infixMath('remainder', '(((x % y) + y) % y)'),
   "round _": imm(x => isInt(x) ? x : Math.round(Float(x))),
 
-  "sqrt of _": x => Math.sqrt(Float(x)),
-  "sin of _": x => Math.sin(Math.PI / 180 * Float(x)),
-  "cos of _": x => Math.cos(Math.PI / 180 * Float(x)),
-  "tan of _": x => Math.tan(Math.PI / 180 * Float(x)),
+  "sqrt of _": imm(x => Math.sqrt(Float(x))),
+  "sin of _": imm(x => Math.sin(Math.PI / 180 * Float(x))),
+  "cos of _": imm(x => Math.cos(Math.PI / 180 * Float(x))),
+  "tan of _": imm(x => Math.tan(Math.PI / 180 * Float(x))),
 
   "_ = _": imm((a, b) => {
     if (isInt(a) && isInt(b)) {
@@ -426,9 +426,14 @@ export const display = value => {
     return "function " + value.name;
   } else if (value.tagName) {
     return value.outerHTML;
-  }
-  if (isArray(value)) {
+  } else if (isArray(value)) {
     return `[${value.map(display).join(",\n ")}]`;
+  } else if (value.constructor === Number) {
+    if ((''+value).indexOf('.') !== -1) {
+      return value.toFixed(2);
+    } else {
+      return ''+value;
+    }
   }
   return '' + value;
 }
