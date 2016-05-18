@@ -1004,7 +1004,6 @@ class Bubble extends Drawable {
   drawProgress() {
     var f = this.fraction; //  0.1 + (this.fraction * 0.9);
     var pw = this.width - 2 * Bubble.radius;
-    console.log(f * pw);
     this.progress.style.width = `${f * pw}px`;
   }
 

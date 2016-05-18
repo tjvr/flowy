@@ -4,7 +4,7 @@ function assert(x) {
 }
 
 var old = [
-  
+
     // {}  -> Block
 
     // let _:Word := _:Expr
@@ -175,29 +175,6 @@ function infixMath(name, op) {
   })`);
 }
 
-function round(args, cb) {
-  let [x] = args;
-  cb(isInt(x) ? x : Math.round(Float(x)));
-}
-
-function trig(name) {
-  return eval(`(function(deg, cb) {
-    cb(Math.${name}(Math.PI / 180 * Float(deg)));
-  })`);
-}
-
-function sqrt(args, cb) {
-  let x = args[0];
-  cb(Math.sqrt(Float(x)));
-}
-
-function equals(args, cb) {
-  let [a, b] = args;
-  if (a === b) return cb(true);
-  // TODO
-  return cb(false);
-}
-
 function parseHTML(html) {
   var el = document.createElement('html');
   el.innerHTML = html;
@@ -205,7 +182,14 @@ function parseHTML(html) {
   return el;
 }
 
+function ring(script) {
+  return script;
+}
+ring.isRing = true;
+
 export const primitives = {
+  "  _  ": ring,
+
   "_ + _": infixMath('add', 'x + y'),
   "_ - _": infixMath('subtract', 'x - y'),
   "_ × _": infixMath('multiply', 'x * y'),
@@ -217,9 +201,35 @@ export const primitives = {
   }),
   "_ mod _": infixMath('remainder', '(((x % y) + y) % y)'),
   "round _": imm(x => isInt(x) ? x : Math.round(Float(x))),
-  "join _ _": imm((x, y) => [Str(x), Str(y)].join("")),
-  "error": imm(() => {throw "foo"}),
 
+  "sqrt of _": x => Math.sqrt(Float(x)),
+  "sin of _": x => Math.sin(Math.PI / 180 * Float(x)),
+  "cos of _": x => Math.cos(Math.PI / 180 * Float(x)),
+  "tan of _": x => Math.tan(Math.PI / 180 * Float(x)),
+
+  "_ = _": imm((a, b) => {
+    if (isInt(a) && isInt(b)) {
+      return BigInteger.compareTo(a, b) === 0;
+    }
+    return a === b;
+  }),
+
+  "_ < _": imm((a, b) => {
+    if (isInt(a) && isInt(b)) {
+      return BigInteger.compareTo(a, b) === -1;
+    }
+    return a < b;
+  }),
+
+  "_ and _": imm((a, b) => { return a && b; }),
+  "_ or _": imm((a, b) => { return a || b; }),
+  "not _": imm(x => { return !x; }),
+  "true": imm(x => { return true; }),
+  "false": imm(x => { return false; }),
+
+  "join _ _": imm((x, y) => [Str(x), Str(y)].join("")),
+
+  "error": imm(() => {throw "foo"}),
 
   "get _": url => {
     if (!url) return null;
@@ -270,32 +280,11 @@ export const primitives = {
     });
     return f;
   },
-  
-  /*
-  "join _ _": (args, cb) => {
-    let [x, y] = args;
-    cb(x, y);
-  },
 
-  "sqrt of _": sqrt,
+  "select _ from _": imm((selector, dom) => {
+    return selector && dom ? [].slice.apply(dom.querySelectorAll(selector)) : null;
+  }),
 
-  "sin of _": trig('sin'),
-  "cos of _": trig('cos'),
-  "tan of _": trig('tan'),
-
-  "_ = _": equals,
-
-  "select _ from _": (args, cb) => {
-    let [selector, dom] = args;
-    cb(selector && dom ? [].slice.apply(dom.querySelectorAll(selector)) : null);
-  },
-
-  "time": (args, cb) => {
-    setInterval(() => {
-      cb(new Date());
-    }, 1000);
-  },
-  */
 };
 
 export const literal = text => {
@@ -661,6 +650,11 @@ export const evaluate = (info, args) => {
   } else {
     var result = func.apply(null, args);
     assert(result !== undefined);
+    if (!(result && result instanceof Future)) {
+      var f = new Future;
+      f.load(result);
+      return f;
+    }
     return result;
   }
 }
