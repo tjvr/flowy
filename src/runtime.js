@@ -159,7 +159,7 @@ function Float(x) {
 
 function Int(x) {
   if (!x) return 0;
-  return BigInteger.parseInt(''+x);
+  return Math.round(x);
 }
 
 function Str(x) {
@@ -192,63 +192,66 @@ function ring(script) {
 }
 ring.isRing = true;
 
-export const primitives = {
-  "_": ring,
+export const primitives = [
+  ["_", "ring", ring],
 
-  "_ + _": infixMath('add', 'x + y'),
-  "_ – _": infixMath('subtract', 'x - y'),
-  "_ × _": infixMath('multiply', 'x * y'),
-  "_ ∕ _": imm((a, b) => {
+  ["_ + _", "math", infixMath('add', 'x + y')],
+  ["_ – _", "math", infixMath('subtract', 'x - y')],
+  ["_ × _", "math", infixMath('multiply', 'x * y')],
+  ["_ ∕ _", "math", imm((a, b) => {
     if (b === "") return;
     let x = Float(a), y = Float(b);
     if (y === 0) throw "Divide by Zero";
     return x / y;
-  }),
-  "_ mod _": infixMath('remainder', '(((x % y) + y) % y)'),
-  "round _": imm(x => isInt(x) ? x : Math.round(Float(x))),
+  })],
+  ["_ mod _", "math", infixMath('remainder', '(((x % y) + y) % y)')],
+  ["round _", "math", imm(x => isInt(x) ? x : Math.round(Float(x)))],
 
-  "sqrt of _": imm(x => Math.sqrt(Float(x))),
-  "sin of _": imm(x => Math.sin(Math.PI / 180 * Float(x))),
-  "cos of _": imm(x => Math.cos(Math.PI / 180 * Float(x))),
-  "tan of _": imm(x => Math.tan(Math.PI / 180 * Float(x))),
+  ["sqrt of _", "math", imm(x => Math.sqrt(Float(x)))],
+  ["sin of _", "math", imm(x => Math.sin(Math.PI / 180 * Float(x)))],
+  ["cos of _", "math", imm(x => Math.cos(Math.PI / 180 * Float(x)))],
+  ["tan of _", "math", imm(x => Math.tan(Math.PI / 180 * Float(x)))],
 
-  "_ = _": imm((a, b) => {
+  ["_ = _", "ops", imm((a, b) => {
     if (isInt(a) && isInt(b)) {
       return BigInteger.compareTo(a, b) === 0;
     }
     return a === b;
-  }),
-  "_ < _": imm((a, b) => {
+  })],
+  ["_ < _", "ops", imm((a, b) => {
     if (isInt(a) && isInt(b)) {
       return BigInteger.compareTo(a, b) === -1;
     }
     return a < b;
-  }),
+  })],
 
-  "_ and _": imm((a, b) => a && b),
-  "_ or _": imm((a, b) => a || b),
-  "not _": imm(x => !x),
-  "true": imm(() => true),
-  "false": imm(() => false),
+  ["_ and _", "bool", imm((a, b) => a && b)],
+  ["_ or _", "bool", imm((a, b) => a || b)],
+  ["not _", "bool", imm(x => !x)],
+  ["true", "bool", imm(() => true)],
+  ["false", "bool", imm(() => false)],
 
-  "join _ _": imm((x, y) => [Str(x), Str(y)].join("")),
+  ["join _ _", "str", imm((x, y) => [Str(x), Str(y)].join(""))],
+  ["join words _", "str", imm(x => (x || []).join(" "))],
+  ["split words _", "str", imm(x => Str(x).split(/\s+/g))],
 
-  "random _1 to _10": imm((a, b) => {
+  ["random _1 to _10", "math", imm((a, b) => {
     var x = Int(a); var y = Int(b);
     return x + (Math.random() * (y - x)) | 0;
-  }),
+  })],
 
-  "list _": imm(x => [x]),
-  "list _ _ _": imm((a, b, c) => [a, b, c]),
-  "range _1 to _5": imm((a, b) => {
+  ["item _ of _", "list", imm((i, l) => l[Int(i) - 1])],
+  ["list _", "list", imm(x => [x])],
+  ["list _ _ _", "list", imm((a, b, c) => [a, b, c])],
+  ["range _1 to _5", "list", imm((a, b) => {
     var l = []; var x = Int(a); var y = Int(b);
     for (var i = x; i <= y; i++) {
       l.push(i);
     }
     return l;
-  }),
+  })],
 
-  "map _ring over _": (a, b) => {
+  ["map _ring over _", "list", (a, b) => {
     if (!a || !a.isFuture) return null;
     if (!b || !b.isFuture) return null;
     var cf = new CompositeFuture;
@@ -282,9 +285,9 @@ export const primitives = {
       });
     });
     return cf;
-  },
+  }],
 
-  "keep _ring from _": (a, b) => {
+  ["keep _ring from _", "list", (a, b) => {
     if (!a || !a.isFuture) return null;
     if (!b || !b.isFuture) return null;
     var cf = new CompositeFuture;
@@ -326,10 +329,10 @@ export const primitives = {
       });
     });
     return cf;
-  },
+  }],
 
   /*
-  "combine _ with _ring": (a, b) => {
+  ["combine _ with _ring", "list", (a, b) => {
     if (!a || !a.isFuture) return null;
     if (!b || !b.isFuture) return null;
     var cf = new CompositeFuture;
@@ -344,9 +347,31 @@ export const primitives = {
   },
   */
 
-  "error": imm(() => {throw "foo"}),
+  ["error", "sensing", imm(() => {throw "foo"})],
 
-  "get _": url => {
+  ["time", "sensing", () => {
+    var f = new Future();
+    var count = 0;
+    var interval = setInterval(() => {
+      count++;
+      f.progress(count, 10, true);
+      if (count === 10) {
+        f.load(new Date());
+        count = 0;
+      }
+    }, 100);
+    f.onCancel(() => {
+      clearInterval(interval);
+    });
+    return f;
+  }],
+
+  // ["ip address", "sensing", () => {
+  //   return loadURL('http://ifconfig.co/json')
+  //   .then(JSON.parse);
+  // }],
+
+  ["get _", "sensing", url => {
     // TODO url can be a future
     if (!url) return null;
     return loadURL('http://crossorigin.me/' + url)
@@ -361,11 +386,11 @@ export const primitives = {
         return readBlobAsText(blob);
       }
     });
-  },
+  }],
 
-  // "get image _": loadImageURL,
+  // "get image _", loadImageURL,
 
-  "delay _ by _ secs": (value, secs) => {
+  ["delay _ by _ secs", "sensing", (value, secs) => {
     var f = new Future;
     secs.withLoad(secs => {
       var frames = secs * 60;
@@ -381,30 +406,13 @@ export const primitives = {
       }, 1000 / 60);
     });
     return f;
-  },
+  }],
 
-  "time": () => {
-    var f = new Future();
-    var count = 0;
-    var interval = setInterval(() => {
-      count++;
-      f.progress(count, 10, true);
-      if (count === 10) {
-        f.load(new Date());
-        count = 0;
-      }
-    }, 100);
-    f.onCancel(() => {
-      clearInterval(interval);
-    });
-    return f;
-  },
-
-  "select _ from _": imm((selector, dom) => {
+  ["select _ from _", "sensing", imm((selector, dom) => {
     return selector && dom ? [].slice.apply(dom.querySelectorAll(selector)) : null;
-  }),
+  })],
 
-};
+];
 
 export const literal = text => {
   if (/^-?[0-9]+$/.test(text)) {

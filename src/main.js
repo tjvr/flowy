@@ -410,7 +410,7 @@ class Node extends Drawable {
       this.add(parts[i]);
     }
 
-    this.color = '#7a48c3';
+    this.color = info.color; //'#7a48c3';
 
     this.outputs = [];
     this.curves = [];
@@ -1338,9 +1338,29 @@ class Workspace {
 import {primitives} from "./runtime";
 import {literal, display, evaluate, Future} from "./runtime";
 
+var colors = {
+  ring: '#969696',
+  math: '#5cb712',
+  ops: '#5cb712',
+  str: '#5cb712',
+  sensing: '#2ca5e2',
+  list: '#cc5b22',
+  variable: '#ee7d16',
+  custom: '#632d99',
+  arg: '#5947b1',
+  image: '#8a55d7',
+  shape: '#0e9a6c',
+  // .sb-motion { fill: #4a6cd4; }
+  // .sb-sound { fill: #bb42c3; }
+  // .sb-events { fill: #c88330; }
+  // .sb-control { fill: #e1a91a; }
+  // .sb-extension { fill: #4b4a60; }
+};
+
 var paletteContents = [];
-for (var spec in primitives) {
-  var prim = primitives[spec];
+primitives.forEach(p => {
+  let [spec, category, prim] = p;
+  var color = colors[category] || '#555';
   var words = spec.split(/ /g);
   var parts = words.map(word => {
     if (word === '_ring') {
@@ -1353,8 +1373,8 @@ for (var spec in primitives) {
     }
   });
   var isRing = prim.isRing;
-  paletteContents.push(new Node({prim, isRing}, parts));
-}
+  paletteContents.push(new Node({prim, color, isRing}, parts));
+});
 
 class Palette extends Workspace {
   constructor() {
