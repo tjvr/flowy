@@ -153,8 +153,13 @@ function Float(x) {
   } else {
     var val = +x;
   }
-  if (isNaN(val)) throw "Not a number";
+  if (isNaN(val)) throw new Error("Not a number");
   return val;
+}
+
+function Int(x) {
+  if (!x) return 0;
+  return BigInteger.parseInt(''+x);
 }
 
 function Str(x) {
@@ -188,10 +193,10 @@ function ring(script) {
 ring.isRing = true;
 
 export const primitives = {
-  "  _  ": ring,
+  "_": ring,
 
   "_ + _": infixMath('add', 'x + y'),
-  "_ - _": infixMath('subtract', 'x - y'),
+  "_ – _": infixMath('subtract', 'x - y'),
   "_ × _": infixMath('multiply', 'x * y'),
   "_ ÷ _": imm((a, b) => {
     if (b === "") return;
@@ -213,7 +218,6 @@ export const primitives = {
     }
     return a === b;
   }),
-
   "_ < _": imm((a, b) => {
     if (isInt(a) && isInt(b)) {
       return BigInteger.compareTo(a, b) === -1;
@@ -221,17 +225,129 @@ export const primitives = {
     return a < b;
   }),
 
-  "_ and _": imm((a, b) => { return a && b; }),
-  "_ or _": imm((a, b) => { return a || b; }),
-  "not _": imm(x => { return !x; }),
-  "true": imm(x => { return true; }),
-  "false": imm(x => { return false; }),
+  "_ and _": imm((a, b) => a && b),
+  "_ or _": imm((a, b) => a || b),
+  "not _": imm(x => !x),
+  "true": imm(() => true),
+  "false": imm(() => false),
 
   "join _ _": imm((x, y) => [Str(x), Str(y)].join("")),
+
+  "random _1 to _10": imm((a, b) => {
+    var x = Int(a); var y = Int(b);
+    return x + (Math.random() * (y - x)) | 0;
+  }),
+
+  "list _": imm(x => [x]),
+  "list _ _ _": imm((a, b, c) => [a, b, c]),
+  "range _1 to _5": imm((a, b) => {
+    var l = []; var x = Int(a); var y = Int(b);
+    for (var i = x; i <= y; i++) {
+      l.push(i);
+    }
+    return l;
+  }),
+
+  "map _ring over _": (a, b) => {
+    if (!a || !a.isFuture) return null;
+    if (!b || !b.isFuture) return null;
+    var cf = new CompositeFuture;
+    cf.defer = true;
+    cf.add(a);
+    a.withLoad(ring => {
+      if (typeof ring !== 'function') return cf.error("not a function"); 
+      b.withLoad(list => {
+        var out = [];
+        for (var i=0; i<list.length; i++) {
+          var item = list[i];
+          if (!item.isFuture) {
+            var f = new Future;
+            f.load(item);
+            item = f;
+          }
+          var newItem = ring(item);
+          cf.add(newItem);
+          out.push(newItem);
+        }
+        cf.getResult = function() {
+          return out;
+        };
+        cf.defer = false;
+        cf.update();
+        out.forEach(newItem => {
+          newItem.withLoad(() => {
+            cf.finish();
+          });
+        });
+      });
+    });
+    return cf;
+  },
+
+  "keep _ring from _": (a, b) => {
+    if (!a || !a.isFuture) return null;
+    if (!b || !b.isFuture) return null;
+    var cf = new CompositeFuture;
+    cf.defer = true;
+    cf.add(a);
+    a.withLoad(ring => {
+      if (typeof ring !== 'function') return cf.error("not a function"); 
+      b.withLoad(list => {
+        var out = [];
+        var futures = [];
+        for (var i=0; i<list.length; i++) {
+          var item = list[i];
+          if (!item.isFuture) {
+            var f = new Future;
+            f.load(item);
+            item = f;
+          }
+          var newItem = ring(item);
+          newItem._from = item;
+          cf.add(newItem);
+          futures.push(newItem);
+        }
+        cf.getResult = function() {
+          if (cf.isDone) {
+            return out;
+          } else {
+            return out.concat(["<. . .>"]);
+          }
+        };
+        cf.defer = false;
+        cf.update();
+        futures.forEach(newItem => {
+          newItem.withLoad(include => {
+            if (!!include) out.push(newItem._from);
+            cf.finish();
+          });
+        });
+        
+      });
+    });
+    return cf;
+  },
+
+  /*
+  "combine _ with _ring": (a, b) => {
+    if (!a || !a.isFuture) return null;
+    if (!b || !b.isFuture) return null;
+    var cf = new CompositeFuture;
+    cf.defer = true;
+    cf.add(a);
+    b.withLoad(ring => {
+      if (typeof ring !== 'function') return cf.error("not a function"); 
+      a.withLoad(list => {
+      });
+    });
+    return cf;
+  },
+  */
 
   "error": imm(() => {throw "foo"}),
 
   "get _": url => {
+    // TODO url can be a future
     if (!url) return null;
     return loadURL('http://crossorigin.me/' + url)
     .then(r => {
@@ -250,17 +366,20 @@ export const primitives = {
   // "get image _": loadImageURL,
 
   "delay _ by _ secs": (value, secs) => {
-    var f = new Future();
-    var frames = secs * 60;
-    var count = 0;
-    var interval = setInterval(() => {
-      console.log(count, frames);
-      f.progress(++count, frames, true);
-      if (count >= frames) {
-        f.load(value);
-        clearInterval(interval);
-      }
-    }, 1000 / 60);
+    var f = new Future;
+    secs.withLoad(secs => {
+      var frames = secs * 60;
+      var count = 0;
+      var interval = setInterval(() => {
+        f.progress(++count, frames, true);
+        if (count >= frames) {
+          value.withLoad(value => {
+            f.load(value);
+          });
+          clearInterval(interval);
+        }
+      }, 1000 / 60);
+    });
     return f;
   },
 
@@ -301,11 +420,15 @@ export const literal = text => {
 
 export const display = value => {
   if (!value) return "";
-  if (value.tagName) {
+  if (value.isFuture) {
+    return value.isDone ? display(value.result) : "???";
+  } else if (typeof value === 'function') {
+    return "function " + value.name;
+  } else if (value.tagName) {
     return value.outerHTML;
   }
   if (isArray(value)) {
-    return `[${value.map(display).join(",\n")}]`;
+    return `[${value.map(display).join(",\n ")}]`;
   }
   return '' + value;
 }
@@ -437,27 +560,6 @@ class Future {
     var cf = new CompositeFuture;
     cf.defer = true;
     cf.add(this);
-    function next(result, err) {
-      var next = cb(result, err);
-      cf.defer = false;
-      if (next.isFuture) {
-        cf.add(next);
-        cf.getResult = function() {
-          return next.result;
-        };
-      } else {
-        cf.load(next);
-      }
-    }
-    this.onLoad(result => next(result, null));
-    this.onError(err => next(null, err));
-    return cf;
-  }
-
-  then(cb) {
-    var cf = new CompositeFuture;
-    cf.defer = true;
-    cf.add(this);
     this.onLoad(result => {
       var next = cb(result);
       cf.defer = false;
@@ -478,7 +580,6 @@ class Future {
   }
 }
 addEvents(Future, 'load', 'progress', 'error', 'cancel');
-
 
 class CompositeFuture extends Future {
   constructor() {
@@ -632,7 +733,8 @@ export const evaluate = (info, args) => {
     var future = new CompositeFuture();
     future.defer = true;
     args.forEach(arg => {
-      if (arg && arg.isFuture) future.add(arg);
+      assert(arg && arg.isFuture);
+      future.add(arg);
     });
     future.defer = false;
     future.finish = function() {
@@ -648,7 +750,14 @@ export const evaluate = (info, args) => {
     future.update();
     return future;
   } else {
-    var result = func.apply(null, args);
+    try {
+      var result = func.apply(null, args);
+    } catch (e) {
+      var f = new Future();
+      f.error(e);
+      console.error(e);
+      return f;
+    }
     assert(result !== undefined);
     if (!(result && result instanceof Future)) {
       var f = new Future;
@@ -659,3 +768,4 @@ export const evaluate = (info, args) => {
   }
 }
 
+export {Future};

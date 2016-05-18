@@ -769,9 +769,45 @@ class Node extends Drawable {
   }
 
   evaluate() {
+    if (this.info.isRing) {
+      var f = this.value = new Future;
+      var arg = this.args[0];
+      if (arg.isBubble) {
+        f.error("Ring can't accept bubble");
+      } else if (!arg.isNode) {
+        f.load(null);
+      } else {
+        f.load(arg.asRing());
+      }
+      return;
+    }
     if (this.value) this.value.cancel();
-    var args = this.args.map(x => x.value);
+    var args = this.args.map(x => {
+      if (x.value && x.value.isFuture) return x.value;
+      var f = new Future;
+      f.load(x.value);
+      return f;
+    });
     this.value = evaluate(this.info, args);
+  }
+
+  asRing() {
+    var args = this.args.map(x => {
+      if (x.isInput && x.value === "") return "";
+      if (x.value && x.value.isFuture) return x.value;
+      var f = new Future;
+      f.load(x.value);
+      return f;
+    });
+    return input => {
+      var instance = args.slice();
+      var index = args.indexOf("");
+      while (index !== -1) {
+        instance[index] = input;
+        index = instance.indexOf("");
+      }
+      return evaluate(this.info, instance);
+    };
   }
 }
 
@@ -834,8 +870,9 @@ class Bubble extends Drawable {
   bindEvents(future) {
     this.value.withLoad(result => {
       assert(this.value === future);
-      this.label.text = "" + result;
-      this.fraction = 1;
+      var repr = display(result);
+      this.label.text = repr;
+      if (this.fraction === 0) this.fraction = 1;
       this.drawProgress();
       setTimeout(() => {
         this.progress.classList.remove('progress-loading');
@@ -1036,7 +1073,7 @@ Bubble.measure = createMetrics('result-label');
 Bubble.tipSize = 6;
 Bubble.radius = 6;
 Bubble.paddingX = 4;
-Bubble.paddingY = 0;
+Bubble.paddingY = 2;
 Bubble.minWidth = 32; //26;
 
 
@@ -1310,21 +1347,24 @@ class Workspace {
 /*****************************************************************************/
 
 import {primitives} from "./runtime";
-import {literal, display, evaluate} from "./runtime";
+import {literal, display, evaluate, Future} from "./runtime";
 
 var paletteContents = [];
 for (var spec in primitives) {
   var prim = primitives[spec];
   var words = spec.split(/ /g);
   var parts = words.map(word => {
-    if (/^_/.test(word)) {
-      var value = "";
+    if (word === '_ring') {
+      return paletteContents[0].copy();
+    } else if (/^_/.test(word)) {
+      var value = word.slice(1);
       return new Input(value)
     } else {
       return new Label(word);
     }
   });
-  paletteContents.push(new Node({prim}, parts));
+  var isRing = prim.isRing;
+  paletteContents.push(new Node({prim, isRing}, parts));
 }
 
 class Palette extends Workspace {
