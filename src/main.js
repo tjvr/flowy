@@ -339,12 +339,6 @@ class Input extends Drawable {
     this.field.setSelectionRange(0, this.field.value.length);
   }
 
-  acceptsDropOf(b) {
-    // TODO
-    return this.type !== 't';
-  };
-
-
   objectFromPoint(x, y) {
     return opaqueAt(this.context, x * density, y * density) ? this : null;
   };
@@ -359,7 +353,7 @@ class Input extends Drawable {
   }
 
   drawOn(context) {
-    context.fillStyle = '#fff';
+    context.fillStyle = '#f7f7f7';
     bezel(context, this.pathFn, this, true, density);
   }
 
@@ -1049,18 +1043,13 @@ class Bubble extends Drawable {
   }
 
   drawOn(context) {
-    if (this.isInside) {
-      context.fillStyle = '#fff';
-      bezel(context, this.pathBubble, this, true, density);
-    } else {
-      this.pathBubble(context);
-      context.closePath();
-      context.fillStyle = this.invalid ? '#aaa' : '#fff';
-      context.fill();
-      context.strokeStyle = '#555';
-      context.lineWidth = density;
-      context.stroke();
-    }
+    this.pathBubble(context);
+    context.closePath();
+    context.fillStyle = this.invalid ? '#aaa' : '#fff';
+    context.fill();
+    context.strokeStyle = '#555';
+    context.lineWidth = density;
+    context.stroke();
   }
 
   pathShadowOn(context) {

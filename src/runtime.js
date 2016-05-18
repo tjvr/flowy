@@ -23,7 +23,7 @@ var old = [
     ["_:Int + _:Int",     "Int",  "BigInteger.add(_1, _2)"],
     ["_:Int - _:Int",     "Int",  "BigInteger.subtract(_1, _2)"],
     ["_:Int × _:Int",     "Int",  "BigInteger.multiply(_1, _2)"],
-    ["_:Int ÷ _:Int",     "Int",  "BigInteger.divide(_1, _2)"],
+    ["_:Int ⁄ _:Int",     "Int",  "BigInteger.divide(_1, _2)"],
     ["_:Int mod _:Int",   "Int",  "BigInteger.remainder(_1, _2)"],
     ["_:Int < _:Int",     "Bool", "(BigInteger.compareTo(_1, _2) === -1)"],
     ["_:Int = _:Int",     "Bool", "(BigInteger.compareTo(_1, _2) === 0)"],
@@ -198,7 +198,7 @@ export const primitives = {
   "_ + _": infixMath('add', 'x + y'),
   "_ – _": infixMath('subtract', 'x - y'),
   "_ × _": infixMath('multiply', 'x * y'),
-  "_ ÷ _": imm((a, b) => {
+  "_ ∕ _": imm((a, b) => {
     if (b === "") return;
     let x = Float(a), y = Float(b);
     if (y === 0) throw "Divide by Zero";
