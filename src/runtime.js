@@ -170,10 +170,10 @@ function infixMath(name, op) {
   var BI = BigInteger;
   return eval(`imm(function infix(a, b) {
     if (isArray(a)) {
-      return a.map(x => infix(x, b));
+      return a.map(function(x) { return infix(x, b) });
     }
     if (isArray(b)) {
-      return b.map(y => infix(a, y));
+      return b.map(function(y) { return infix(a, y) });
     }
     if (isInt(a) && isInt(b)) {
       var val = BI.${name}(a, b);
