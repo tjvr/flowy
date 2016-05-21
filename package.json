@@ -18,6 +18,7 @@
     "moduleserve": "^0.7.1"
   },
   "dependencies": {
+    "fraction.js": "^3.3.1",
     "js-big-integer": "^1.0.2"
   }
 }

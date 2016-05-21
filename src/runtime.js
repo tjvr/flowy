@@ -787,3 +787,6 @@ export const evaluate = (info, args) => {
 }
 
 export {Future};
+
+import {specs, functions} from "./eval";
+
