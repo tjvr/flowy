@@ -302,6 +302,13 @@ class Input extends Drawable {
 
   get isInput() { return true; }
 
+  get isDraggable() {
+    return this.workspace && this.workspace.isPalette;
+  }
+  get dragObject() {
+    return this.parent.dragObject;
+  }
+
   get value() {
     return literal(this._value);
   }
@@ -320,10 +327,6 @@ class Input extends Drawable {
   };
   keyDown(e) {
     // TODO up-down to change value
-  }
-
-  get dragObject() {
-    return this.parent.dragObject;
   }
 
   copy() {
@@ -630,7 +633,9 @@ class Node extends Drawable {
   }
 
   layoutSelf() {
-    var width = 4;
+    var px = 6;
+
+    var width = px;
     var height = 12;
     var xs = [];
 
@@ -645,6 +650,7 @@ class Node extends Drawable {
       width += part.width;
       width += 4;
     }
+    width += px - 4;
     //width = Math.max(40, width);
     this.ownWidth = width;
     this.ownHeight = height;
@@ -1131,9 +1137,7 @@ class Blob extends Drawable {
     var r = Blob.radius;
     var r2 = r * 2;
     context.moveTo(r, 0);
-    context.lineTo(r2, r);
-    context.lineTo(r, r2);
-    context.lineTo(0, r);
+    context.arc(r, r, r, 0, 2*Math.PI);
   }
 
   draw() {
@@ -1357,6 +1361,8 @@ var colors = {
   // .sb-extension { fill: #4b4a60; }
 };
 
+var ringBlock;
+
 var paletteContents = [];
 primitives.forEach(p => {
   let [spec, category, prim] = p;
@@ -1364,7 +1370,7 @@ primitives.forEach(p => {
   var words = spec.split(/ /g);
   var parts = words.map(word => {
     if (word === '_ring') {
-      return paletteContents[0].copy();
+      return ringBlock.copy();
     } else if (/^_/.test(word)) {
       var value = word.slice(1);
       return new Input(value)
@@ -1373,7 +1379,12 @@ primitives.forEach(p => {
     }
   });
   var isRing = prim.isRing;
-  paletteContents.push(new Node({prim, color, isRing}, parts));
+  var b = new Node({prim, color, isRing}, parts);
+  if (isRing) {
+    ringBlock = b;
+    return;
+  }
+  paletteContents.push(b);
 });
 
 class Palette extends Workspace {
@@ -1381,7 +1392,7 @@ class Palette extends Workspace {
     super();
     this.el.className += ' palette';
 
-    var x = 0;
+    var x = 10;
     paletteContents.forEach(o => {
       o.moveTo(x, 8);
       this.add(o);
@@ -1922,8 +1933,11 @@ class App {
       }
     }
 
+    var gx = g.dragScript.x;
+    var gy = g.dragScript.y;
     var canDrop = false;
     if (g.dragScript.isBubble && node.isBlob && node.target === g.dragScript.target) {
+      gx += g.dragScript.width / 2;
       canDrop = true;
     } else if (node.isInput) {
       if (g.dragScript.isNode) {
@@ -1938,10 +1952,6 @@ class App {
         canDrop = node.isInside && g.dragScript === node.target && g.dragScript.outputs.length === 1;
       }
     }
-
-    var gx = g.dragScript.x;
-    var gy = g.dragScript.y;
-    gx += g.dragScript.width / 2;
 
     if (canDrop) {
       var dx = x - gx;

@@ -153,7 +153,7 @@ function Float(x) {
   } else {
     var val = +x;
   }
-  if (isNaN(val)) throw new Error("Not a number");
+  if (isNaN(val)) throw new Error("Not a number: " + val);
   return val;
 }
 
@@ -168,6 +168,7 @@ function Str(x) {
 
 function infixMath(name, op) {
   var BI = BigInteger;
+  // TODO automatic vectorisation does not respect `Future List`.
   return eval(`imm(function infix(a, b) {
     if (isArray(a)) {
       return a.map(function(x) { return infix(x, b) });
@@ -210,7 +211,7 @@ export const primitives = [
     if (y === 0) throw "Divide by Zero";
     return x / y;
   })],
-  ["_ mod _", "math", infixMath('remainder', '(((x % y) + y) % y)')],
+  ["_ rem _", "math", infixMath('remainder', '(((x % y) + y) % y)')],
   ["round _", "math", imm(x => isInt(x) ? x : Math.round(Float(x)))],
 
   ["sqrt of _", "math", imm(x => Math.sqrt(Float(x)))],
@@ -247,8 +248,8 @@ export const primitives = [
   })],
 
   ["item _ of _", "list", imm((i, l) => l[Int(i) - 1])],
-  ["list _", "list", imm(x => [x])],
-  ["list _ _ _", "list", imm((a, b, c) => [a, b, c])],
+  ["a list _", "list", imm(x => [x])],
+  ["a list _ _ _", "list", imm((a, b, c) => [a, b, c])],
   ["range _1 to _5", "list", imm((a, b) => {
     var l = []; var x = Int(a); var y = Int(b);
     for (var i = x; i <= y; i++) {
