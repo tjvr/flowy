@@ -1859,12 +1859,16 @@ class App {
       info.node.replaceWith(g.dragScript);
     } else {
       g.dropWorkspace = this.workspaceFromPoint(g.dragX + g.mouseX, g.dragY + g.mouseY) || this.world;
-      if (g.dropWorkspace.isWorld) {
+      if (g.dropWorkspace.isPalette && g.dragScript.isNode && g.dragScript.outputs.length === 1 && g.dragScript.bubble.isBubble) {
+        this.remove(g.dragScript);
+        if (g.dragScript.bubble.curve.parent === this.world) {
+          this.world.remove(g.dragScript.bubble.curve)
+        }
+      } else {
+        g.dropWorkspace = this.world;
         var pos = g.dropWorkspace.worldPositionOf(g.dragX + g.mouseX, g.dragY + g.mouseY);
         g.dropWorkspace.add(g.dragScript);
         g.dragScript.moveTo(pos.x, pos.y);
-      } else {
-        this.remove(g.dragScript);
       }
     }
 
