@@ -394,7 +394,7 @@ Input.prototype.fieldPadding = 4;
 
 
 
-class Node extends Drawable {
+class Block extends Drawable {
   constructor(info, parts) {
     super();
 
@@ -426,7 +426,7 @@ class Node extends Drawable {
     this.invalidate();
   }
 
-  get isNode() { return true; }
+  get isBlock() { return true; }
   get isDraggable() { return true; }
 
   get color() { return this._color }
@@ -448,9 +448,9 @@ class Node extends Drawable {
     var array = part.isLabel ? this.labels : this.args;
     array.push(part);
 
-    var node = part.target || part;
-    if (node && node.isNode) {
-      node.request(this);
+    var obj = part.target || part;
+    if (obj && obj.isBlock) {
+      obj.request(this);
     }
     this.invalidate();
   }
@@ -478,13 +478,13 @@ class Node extends Drawable {
     this.el.replaceChild(newPart.el, oldPart.el);
 
     
-    var node = oldPart.target || oldPart;
-    if (node && node.isNode) {
-      node.cancelRequest(this);
+    var obj = oldPart.target || oldPart;
+    if (obj && obj.isBlock) {
+      obj.cancelRequest(this);
     }
-    var node = newPart.target || newPart;
-    if (node && node.isNode) {
-      node.request(this);
+    var obj = newPart.target || newPart;
+    if (obj && obj.isBlock) {
+      obj.request(this);
     }
     this.invalidate();
   };
@@ -507,9 +507,9 @@ class Node extends Drawable {
     var index = array.indexOf(part);
     array.splice(index, 1);
 
-    var node = part.target || part;
-    if (node && node.isNode) {
-      node.cancelRequest(this);
+    var obj = part.target || part;
+    if (obj && obj.isBlock) {
+      obj.cancelRequest(this);
     }
     this.invalidate();
   }
@@ -559,7 +559,7 @@ class Node extends Drawable {
   }
 
   reset(arg) {
-    if (arg.parent !== this || !arg.isNode && !arg.isInput) return this;
+    if (arg.parent !== this || !arg.isBlock && !arg.isInput) return this;
 
     var i = this.args.indexOf(arg);
     this.replace(arg, new Input(arg.isInput ? arg.value : arg.displayValue));
@@ -569,14 +569,14 @@ class Node extends Drawable {
     if (this.workspace.isPalette) {
       return this.copy();
     }
-    if (this.parent.isNode) {
+    if (this.parent.isBlock) {
       this.parent.reset(this);
     }
     return this;
   }
 
   copy() {
-    return new Node(this.info, this.parts.map(c => c.copy()));
+    return new Block(this.info, this.parts.map(c => c.copy()));
   }
 
   replaceWith(other) {
@@ -594,7 +594,7 @@ class Node extends Drawable {
   }
 
   get bubbleVisible() {
-    return !this.parent.isNode && !(this.workspace && this.workspace.isPalette);
+    return !this.parent.isBlock && !(this.workspace && this.workspace.isPalette);
   }
 
   objectFromPoint(x, y) {
@@ -716,7 +716,7 @@ class Node extends Drawable {
   get value() { return this._value }
   set value(value) {
     this._value = value;
-    if (this.parent && this.parent.isNode) {
+    if (this.parent && this.parent.isBlock) {
       this.parent.invalidate();
     } else {
       this.outputs.forEach(o => {
@@ -730,7 +730,7 @@ class Node extends Drawable {
     this._invalid = true;
     if (this.value) this.value.cancel();
     this.value = null;
-    if (this.parent && this.parent.isNode) {
+    if (this.parent && this.parent.isBlock) {
       this.parent.invalidate();
     } else {
       this.outputs.forEach(o => o.invalidate());
@@ -761,9 +761,9 @@ class Node extends Drawable {
     }
 
     this.args.forEach(arg => {
-      var node = arg.target || arg;
-      if (node.isNode) {
-        needed ? node.request() : node.cancelRequest();
+      var obj = arg.target || arg;
+      if (obj.isBlock) {
+        needed ? obj.request() : obj.cancelRequest();
       }
     });
   }
@@ -774,7 +774,7 @@ class Node extends Drawable {
       var arg = this.args[0];
       if (arg.isBubble) {
         f.error("Ring can't accept bubble");
-      } else if (!arg.isNode) {
+      } else if (!arg.isBlock) {
         f.load(null);
       } else {
         f.load(arg.asRing());
@@ -843,7 +843,7 @@ class Bubble extends Drawable {
   set parent(p) {
     this._parent = p;
     if (p) {
-      var isSink = !this.parent.isNode || this.target.bubble === this;
+      var isSink = !this.parent.isBlock || this.target.bubble === this;
       if (isSink && !(this.workspace && this.workspace.isPalette)) {
         this.target.request(this);
       } else {
@@ -945,7 +945,7 @@ class Bubble extends Drawable {
   }
 
   detach() {
-    if (this.parent.isNode) {
+    if (this.parent.isBlock) {
       if (this.parent.bubble !== this) {
         // TODO literal images etc
         this.parent.replace(this, new Input(this.displayValue));
@@ -962,8 +962,8 @@ class Bubble extends Drawable {
 
   replaceWith(other) {
     assert(this.isInside);
-    var node = this.parent;
-    node.replace(this, other);
+    var obj = this.parent;
+    obj.replace(this, other);
     if (other === this.target) {
       assert(this.target.bubble.isBlob);
       other.addBubble(this);
@@ -1045,7 +1045,7 @@ class Bubble extends Drawable {
   }
 
   get isInside() {
-    return this.parent.isNode && this.parent.bubble !== this;
+    return this.parent.isBlock && this.parent.bubble !== this;
   }
 
   drawOn(context) {
@@ -1323,7 +1323,7 @@ class Workspace {
     } else {
       this.elContents.appendChild(script.el);
     }
-    if (script.isNode && script.bubble && script.bubble.isBubble) {
+    if (script.isBlock && script.bubble && script.bubble.isBubble) {
       this.add(script.bubble.curve);
     }
   }
@@ -1379,7 +1379,7 @@ primitives.forEach(p => {
     }
   });
   var isRing = prim.isRing;
-  var b = new Node({prim, color, isRing}, parts);
+  var b = new Block({prim, color, isRing}, parts);
   if (isRing) {
     ringBlock = b;
     return;
@@ -1425,16 +1425,16 @@ class World extends Workspace {
 
     // TODO
     /*
-    this.add(new Node({}, [
+    this.add(new Block({}, [
       new Label("bob"),
-      new Node({}, [
+      new Block({}, [
         new Label("cow"),
       ]),
       new Label("fred"),
     ]));
 
     var o;
-    this.add(o = new Node({}, [
+    this.add(o = new Block({}, [
       new Label("go"),
       new Input("123"),
       new Label("house"),
@@ -1442,13 +1442,13 @@ class World extends Workspace {
     ]));
     o.moveTo(0, 50);
 
-    this.add(o = new Node({}, [
+    this.add(o = new Block({}, [
       new Label("quxx"),
-      new Node({}, [
+      new Block({}, [
         new Label("wilfred"),
         new Input("man"),
         new Label("has"),
-        new Node({}, [
+        new Block({}, [
           new Label("burb"),
         ]),
       ]),
@@ -1856,10 +1856,10 @@ class App {
 
     if (g.feedbackInfo) {
       var info = g.feedbackInfo;
-      info.node.replaceWith(g.dragScript);
+      info.obj.replaceWith(g.dragScript);
     } else {
       g.dropWorkspace = this.workspaceFromPoint(g.dragX + g.mouseX, g.dragY + g.mouseY) || this.world;
-      if (g.dropWorkspace.isPalette && g.dragScript.isNode && g.dragScript.outputs.length === 1 && g.dragScript.bubble.isBubble) {
+      if (g.dropWorkspace.isPalette && g.dragScript.isBlock && g.dragScript.outputs.length === 1 && g.dragScript.bubble.isBubble) {
         this.remove(g.dragScript);
         if (g.dragScript.bubble.curve.parent === this.world) {
           this.world.remove(g.dragScript.bubble.curve)
@@ -1924,36 +1924,36 @@ class App {
     }
   }
 
-  addFeedback(g, x, y, node) {
-    if (node.isCurve) return;
+  addFeedback(g, x, y, obj) {
+    if (obj.isCurve) return;
 
     assert(''+x !== 'NaN');
-    x += node.x * this.world.zoom;
-    y += node.y * this.world.zoom;
-    if (node.isNode) {
-      node.parts.forEach(child => this.addFeedback(g, x, y, child));
-      if (node.bubble.isBlob) {
-        this.addFeedback(g, x, y, node.blob); // + node.ownWidth / 2, y + node.ownHeight / 2, node.blob)
+    x += obj.x * this.world.zoom;
+    y += obj.y * this.world.zoom;
+    if (obj.isBlock) {
+      obj.parts.forEach(child => this.addFeedback(g, x, y, child));
+      if (obj.bubble.isBlob) {
+        this.addFeedback(g, x, y, obj.blob); // + obj.ownWidth / 2, y + obj.ownHeight / 2, obj.blob)
       }
     }
 
     var gx = g.dragScript.x;
     var gy = g.dragScript.y;
     var canDrop = false;
-    if (g.dragScript.isBubble && node.isBlob && node.target === g.dragScript.target) {
+    if (g.dragScript.isBubble && obj.isBlob && obj.target === g.dragScript.target) {
       gx += g.dragScript.width / 2;
       canDrop = true;
-    } else if (node.isInput) {
-      if (g.dragScript.isNode) {
+    } else if (obj.isInput) {
+      if (g.dragScript.isBlock) {
         canDrop = g.dragScript.outputs.length === 1 && g.dragScript.bubble.isBubble;
       } else if (g.dragScript.isBubble) {
-        canDrop = g.dragScript.target !== node.parent;
+        canDrop = g.dragScript.target !== obj.parent;
       } else {
         canDrop = true;
       }
-    } else if (node.isBubble) {
-      if (g.dragScript.isNode) {
-        canDrop = node.isInside && g.dragScript === node.target && g.dragScript.outputs.length === 1;
+    } else if (obj.isBubble) {
+      if (g.dragScript.isBlock) {
+        canDrop = obj.isInside && g.dragScript === obj.target && g.dragScript.outputs.length === 1;
       }
     }
 
@@ -1963,7 +1963,7 @@ class App {
       var d2 = dx * dx + dy * dy;
       if (Math.abs(dx) > this.feedbackRange || Math.abs(dy) > this.feedbackRange || d2 > g.feedbackDistance) return;
       g.feedbackDistance = d2;
-      g.feedbackInfo = {x, y, node};
+      g.feedbackInfo = {x, y, obj};
     }
   }
 
@@ -1978,8 +1978,8 @@ class App {
     var l = 2;
     var x = info.x - l;
     var y = info.y - l;
-    var w = info.node.width * this.world.zoom;
-    var h = info.node.height * this.world.zoom;
+    var w = info.obj.width * this.world.zoom;
+    var h = info.obj.height * this.world.zoom;
     canvas.width = w + l * 2;
     canvas.height = h + l * 2;
 
@@ -1987,7 +1987,7 @@ class App {
     var s = this.world.zoom;
     context.scale(s, s);
 
-    info.node.pathShadowOn(context);
+    info.obj.pathShadowOn(context);
 
     context.lineWidth = l / 1;
     context.lineCap = 'round';
@@ -1997,7 +1997,7 @@ class App {
 
     context.globalCompositeOperation = 'destination-out';
     context.beginPath();
-    info.node.pathShadowOn(context);
+    info.obj.pathShadowOn(context);
     context.fill();
     context.globalCompositeOperation = 'source-over';
     context.globalAlpha = .6;
