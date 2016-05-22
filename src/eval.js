@@ -13,8 +13,6 @@ class Evaluator {
     });
     setInterval(this.tick.bind(this), 1000 / 60);
 
-    this.functions = {};
-
     this._queue = [];
   }
 
@@ -48,7 +46,6 @@ class Evaluator {
   }
 
   onMessage(json) {
-    console.log('>' + json.action, json);
     switch (json.action) {
       case 'link':
         var link = this.linkFromJSON(json);
@@ -99,8 +96,18 @@ class Evaluator {
   /* * */
 
   getPrim(name, inputs) {
+    console.log(bySpec);
     var byInputs = bySpec[name];
-    return  byInputs[inputs.map(typeOf).join(", ")];
+    var hash = inputs.map(typeOf).join(", ");
+    var prim = byInputs[hash];
+    if (!prim) {
+      return {
+        output: null,
+        func: () => {},
+      };
+      // throw new Error(`No prim for '${name}' inputs [${inputs.join(', ')}]`);
+    }
+    return prim;
   }
 
   queue(task) {
@@ -121,7 +128,7 @@ class Evaluator {
     this._queue = [];
     for (var i=0; i<queue.length; i++) {
       var task = queue[i];
-      task.think();
+      task.func();
     }
   }
 
@@ -134,15 +141,15 @@ class Node {
   constructor(id, name, literal, isSink) {
     this.id = id == null ? ++Node.highestId : id;
     this.name = name;
-    this.literal = literal || null;
+    this.isLiteral = literal !== null && literal !== undefined;
     this.isSink = isSink || false;
     this.inputs = [];
     this.outputs = [];
 
-    this.invalid = true;
-    this.needed = this.isSink;
+    this.invalid = false;
+    this.needed = this.isSink || this.isLiteral;
     this.requestors = [];
-    this.task = new Task(this);
+    this.task = this.isLiteral ? literal : new Task(this);
   }
 
   static fromJSON(json) {
@@ -150,7 +157,7 @@ class Node {
   }
 
   toJSON() {
-    return {id: this.id, name: this.name, literal: this.literal, isSink: this.isSink};
+    return {id: this.id, name: this.name, literal: this.isLiteral ? this.task : null, isSink: this.isSink};
   }
 
   destroy() {
@@ -193,8 +200,9 @@ class Node {
 
   setLiteral(value) {
     if (this.literal === value) return;
-    this.literal = value;
-    this.invalidate();
+    if (!this.isLiteral) throw "Not a literal";
+    this.task = literal(value); //, this.types);
+    this.invalidateChildren();
   }
 
   setSink(isSink) {
@@ -210,16 +218,21 @@ class Node {
   /* * */
 
   invalidate() {
+    if (this.isLiteral) throw "ahh";
     if (!this.invalid) {
+      console.log('invalidate', this);
       this.invalid = true;
       this.task.stop();
       this.task = new Task(this);
-
-      this.outputs.forEach(node => node.invalidate());
     }
+    this.invalidateChildren();
     if (this.needed) {
       this.task.start();
     }
+  }
+
+  invalidateChildren() {
+    this.outputs.forEach(node => node.invalidate());
   }
 
   request(node) {
@@ -232,15 +245,15 @@ class Node {
     var index = this.requestors.indexOf(node);
     if (index === -1) return;
     this.requestors.splice(index, 1);
-    if (this.requestors.length === 0 && !this.isSink) {
+    if (this.requestors.length === 0 && !this.isSink && !this.isLiteral) {
       this.setNeeded(false);
     }
   }
 
   setNeeded(needed) {
-    console.log(this, needed);
     if (this.needed === needed) return;
     this.needed = needed;
+    if (this.isLiteral) return;
     if (needed) {
       this.inputs.forEach(node => node.request(this));
       this.task.start();
@@ -282,23 +295,37 @@ class Task {
   }
 
   start() {
-    console.log('start');
     // can be called more than once!
     if (this.isDone || this.isStopped) throw "Can't resume stopped task";
     this.isRunning = true;
+
     var name = this.node.name;
-    if (name === 'literal _') {
-      this.result = literal(this.node.literal);
-      this.isDone = true;
-      this.emit(this.result);
-      return;
-    }
+    console.log('start', name);
+
+    var next = () => {
+      this.prim = evaluator.getPrim(name, inputs);
+      this.func = compute;
+      evaluator.queue(this);
+    };
+
+    var compute = () => {
+      var prim = this.prim;
+      var func = prim.func;
+      if (/Future/.test(prim.output)) {
+        throw 'ahh'; // TODO
+      } else {
+        var args = inputs.map(task => task.result);
+        this.emit(func.apply(null, args));
+      }
+    };
+
+    this.node.inputs.forEach(node => {
+      if (!node.needed) throw 'poo';
+    });
+
     var inputs = this.node.inputs.map(node => node.task);
-    this.inputs = inputs;
-    var prim = this.prim = evaluator.getPrim(name, inputs);
-    if (!prim) throw new Error(`No prim for '${name}' inputs [${inputs.join(', ')}]`);
-    this.func = prim.func;
-    evaluator.queue(this);
+    var tasks = inputs.filter(task => task.isTask); // TODO
+    this.await(next, tasks);
   }
 
   think() {
@@ -314,7 +341,12 @@ class Task {
     evaluator.emit(this.node, result);
   }
 
-  await(func, ...tasks) {
+  await(func, tasks) {
+    if (!func) throw "noo";
+    if (!tasks.length) {
+      func();
+      return;
+    }
     this.func = func;
     tasks.forEach(task => {
       if (this.waiting.indexOf(task) === -1) {
@@ -330,8 +362,8 @@ class Task {
   signal(task) {
     var index = this.waiting.indexOf(task);
     if (index === -1) return;
-    this.waiting.remove(task);
-    this.resume();
+    this.waiting.splice(index, 1);
+    evaluator.queue(this);
   }
 
   stop() {

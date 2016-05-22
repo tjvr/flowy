@@ -97,11 +97,12 @@ window.evaluator = evaluator;
 evaluator.sendMessage = onMessage;
 
 function sendMessage(json) {
+  console.log(`=> ${json.action}`, json);
   evaluator.onMessage(json);
 }
 
 function onMessage(json) {
-  console.log('<' + json.action, json);
+  console.log(`<= ${json.action}`, json);
   switch (json.action) {
     case 'emit':
       Node.byId[json.id].emit(json.value);
@@ -199,7 +200,7 @@ class Node {
   }
 
   progress(loaded, total) {
-    this.dispatchEmit({loaded, total});
+    this.dispatchProgress({loaded, total});
   }
 
 }
@@ -510,7 +511,7 @@ class Input extends Drawable {
 }
 Input.measure = createMetrics('field');
 
-Input.prototype.minWidth = 12;
+Input.prototype.minWidth = 8;
 Input.prototype.fieldPadding = 4;
 
 
@@ -796,6 +797,7 @@ class Block extends Drawable {
       var x = xs[i];
       var y = (height - h) / 2;
       if (part.isBubble) y -= 2;
+      if (part.isLabel) y += 1;
       part.moveTo(x, y);
     }
     this.width = width;
@@ -872,8 +874,7 @@ class Bubble extends Drawable {
 
     this.node = target.node;
     this.target.repr.onEmit(value => {
-      assert(this.value === future);
-      var repr = display(result);
+      var repr = ''+value; //display(result);
       this.label.text = repr;
       if (this.fraction === 0) this.fraction = 1;
       this.drawProgress();

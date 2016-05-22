@@ -1,4 +1,42 @@
 
+import {BigInteger} from "js-big-integer";
+import Fraction from "fraction.js";
+
+var literals = [
+  ["Int", /^-?[0-9]+$/, BigInteger.parseInt],
+
+  ["Frac", /^-?[0-9]+\/[0-9]+$/, x => new Fraction(x)],
+
+  ["Float", /^[0-9]+(?:\.[0-9]+)?e-?[0-9]+$/, parseFloat], // 123[.123]e[-]123
+  ["Float", /^(?:0|[1-9][0-9]*)?\.[0-9]+$/,   parseFloat], // [123].123
+  ["Float", /^(?:0|[1-9][0-9]*)\.[0-9]*$/,    parseFloat], // 123.[123]
+
+  // ["Str", /^/, x => x],
+];
+
+var literalsByType = {};
+literals.forEach(l => {
+  let [type, pat, func] = l;
+  if (!literalsByType[type]) literalsByType[type] = [];
+  literalsByType[type].push([pat, func]);
+});
+
+
+export const literal = (value, types) => {
+  //for (var i=0; i<types.length; i++) {
+  //  var type = types[i];
+  //  var lits = literalsByType[type];
+  var lits = literals;
+  for (var j=0; j<lits.length; j++) {
+    let [type, pat, func] = lits[j];
+    if (pat.test(value)) {
+      return func(value);
+    }
+  }
+  return ''+value;
+};
+
+
 
 export const specs = [
 
@@ -9,13 +47,14 @@ export const specs = [
 
   ["ring", "_", []],
   ["hidden", "display _", []],
-  ["hidden", "literal _", []],
+
+  ["ops", "id _"],
 
   ["math", "_ + _"],
   ["math", "_ – _"],
   ["math", "_ × _"],
   ["math", "_ / _"],
-  ["math", "_ mod _"],
+  ["math", "_ rem _"],
   ["math", "_ ^ _", ["", 2]],
   ["math", "round _"],
 
@@ -75,17 +114,11 @@ class Imp {
   }
 }
 
-import {BigInteger} from "js-big-integer";
-import Fraction from "fraction.js";
-
 export const functions = {
 
-  "Str <- literal Str": x => x,
+  "Str <- id Str": x => x,
 
-  "Int <- literal Str": x => {
-    if (/^-?[0-9]+$/.test(x)) return BigInteger.parseInt(x);
-  },
-  "Int <- Float": x => +x.toString(),
+  //"Int <- Float": x => +x.toString(),
   "Int <- Int + Int": BigInteger.add,
   "Int <- Int – Int": BigInteger.subtract,
   "Int <- Int × Int": BigInteger.multiply,
@@ -96,10 +129,7 @@ export const functions = {
   "Frac <- Int / Int": (a, b) => new Fraction(a, b),
   "Str <- display Int": x => x.toString(),
 
-  "Frac <- literal Str": x => {
-    if (/^-?[0-9]+\/[0-9]+$/.test(x)) return new Fraction(x);
-  },
-  "Frac <- Int": x => new Fraction(x, 1),
+  //"Frac <- Int": x => new Fraction(x, 1),
   "Frac <- Frac + Frac": (a, b) => a.add(b),
   "Frac <- Frac – Frac": (a, b) => a.sub(b),
   "Frac <- Frac × Frac": (a, b) => a.mul(b),
@@ -109,11 +139,7 @@ export const functions = {
 
   // TODO Decimal
 
-  "Float <- literal Str": x => {
-    if (/^-?[0-9]*\.[0-9]+$/.test(x)) return 0+x;
-    // TODO e-notation
-  },
-  "Float <- Int": x => +x.toString(),
+  //"Float <- Int": x => +x.toString(),
   "Float <- Float + Float": (a, b) => a + b,
   "Float <- Float – Float": (a, b) => a + b,
   "Float <- Float × Float": (a, b) => a + b,
@@ -129,6 +155,7 @@ export const functions = {
 
   // TODO Complex
 
+  "Str <- display Str": x => x.toString(),
 
   // "URL <- Str": x => x,
 
@@ -239,7 +266,7 @@ Object.keys(functions).forEach(function(spec) {
 export {bySpec};
 
 export const typeOf = (value => {
-  if (value && value.isTask) return value.prim ? `${value.prim.output} Future` : 'Future';
+  if (value && value.isTask) return value.prim ? `${value.prim.output}` : 'Future';
   if (value && value.constructor === BigInteger) return 'Int';
   if (typeof value === 'number') return 'Float';
   if (typeof value === 'string') return 'Str';
@@ -247,18 +274,6 @@ export const typeOf = (value => {
 });
 
 console.log(bySpec);
-
-export const literal = text => {
-  if (/^-?[0-9]+$/.test(text)) {
-    return BigInteger.parseInt(text);
-  } else if (text !== '' && text !== '.') {
-    var n = +text;
-    if (''+n !== 'NaN') {
-      return n;
-    }
-  }
-  return ''+text;
-};
 
 
 

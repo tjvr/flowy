@@ -99,7 +99,7 @@ html, body {
 }
 
 .label {
-  font: 14px/20px Noto Sans, Lucida Grande, Verdana, Arial, DejaVu Sans, sans-serif;
+  font: bold 14px/20px Noto Sans, Lucida Grande, Verdana, Arial, DejaVu Sans, sans-serif;
   color: #fff;
   z-index: 1;
 }
