@@ -196,6 +196,7 @@ class Node {
   /* * */
 
   emit(value) {
+    this.value = value;
     this.dispatchEmit(value);
   }
 
@@ -873,27 +874,32 @@ class Bubble extends Drawable {
     if (target.workspace) target.workspace.add(this);
 
     this.node = target.node;
-    this.target.repr.onEmit(value => {
-      var repr = ''+value; //display(result);
-      this.label.text = repr;
-      if (this.fraction === 0) this.fraction = 1;
-      this.drawProgress();
-      setTimeout(() => {
-        this.progress.classList.remove('progress-loading');
-      });
-      this.layout();
-    });
-    this.target.repr.onProgress(e => {
-      this.fraction = e.loaded / e.total;
-      if (this.fraction < 1) {
-        this.progress.classList.add('progress-loading');
-      }
-      this.drawProgress();
-    });
+    this.display(this.target.repr.value);
+    this.target.repr.onEmit(this.display.bind(this));
+    this.target.repr.onProgress(this.onProgress.bind(this));
   }
 
   get isBubble() { return true; }
   get isDraggable() { return true; }
+
+  display(value) {
+    var repr = ''+value; //display(result);
+    this.label.text = repr;
+    if (this.fraction === 0) this.fraction = 1;
+    this.drawProgress();
+    setTimeout(() => {
+      this.progress.classList.remove('progress-loading');
+    });
+    this.layout();
+  }
+
+  onProgress(e) {
+    this.fraction = e.loaded / e.total;
+    if (this.fraction < 1) {
+      this.progress.classList.add('progress-loading');
+    }
+    this.drawProgress();
+  }
 
   objectFromPoint(x, y) {
     return opaqueAt(this.context, x * density, y * density) ? this : null;

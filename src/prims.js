@@ -141,9 +141,9 @@ export const functions = {
 
   //"Float <- Int": x => +x.toString(),
   "Float <- Float + Float": (a, b) => a + b,
-  "Float <- Float – Float": (a, b) => a + b,
-  "Float <- Float × Float": (a, b) => a + b,
-  "Float <- Float / Float": (a, b) => a + b,
+  "Float <- Float – Float": (a, b) => a - b,
+  "Float <- Float × Float": (a, b) => a * b,
+  "Float <- Float / Float": (a, b) => a / b,
   "Float <- Float mod Float": (a, b) => (((a % b) + b) % b),
   "Int <- round Float": x => BigInteger.pasreInt(''+Math.round(x)),
   "Str <- display Float": x => ''+x,

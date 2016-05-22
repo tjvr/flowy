@@ -296,13 +296,14 @@ class Task {
 
   start() {
     // can be called more than once!
-    if (this.isDone || this.isStopped) throw "Can't resume stopped task";
+    if (this.isStopped) throw "Can't resume stopped task";
     this.isRunning = true;
 
     var name = this.node.name;
     console.log('start', name);
 
     var next = () => {
+      this.node.task.invalid = false;
       this.prim = evaluator.getPrim(name, inputs);
       this.func = compute;
       evaluator.queue(this);
@@ -314,8 +315,10 @@ class Task {
       if (/Future/.test(prim.output)) {
         throw 'ahh'; // TODO
       } else {
-        var args = inputs.map(task => task.result);
-        this.emit(func.apply(null, args));
+        var args = inputs.map(task => task.isTask ? task.result : task); // TODO
+        var result = func.apply(null, args);
+        this.emit(result);
+        this.isRunning = false;
       }
     };
 
@@ -343,11 +346,11 @@ class Task {
 
   await(func, tasks) {
     if (!func) throw "noo";
+    this.func = func;
     if (!tasks.length) {
-      func();
+      evaluator.queue(this);
       return;
     }
-    this.func = func;
     tasks.forEach(task => {
       if (this.waiting.indexOf(task) === -1) {
         this.requests.push(task);
