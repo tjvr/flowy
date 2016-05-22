@@ -632,10 +632,30 @@ class Block extends Drawable {
     }
   }
 
-  layoutSelf() {
-    var px = 6;
+  minDistance(part) {
+    return -2 + part.height/2 | 0;
+    if (this.isBoolean) {
+      return (
+        child.isReporter ? 4 + child.height/4 | 0 :
+        child.isLabel ? 5 + child.height/2 | 0 :
+        child.isBoolean || child.shape === 'boolean' ? 5 :
+        2 + child.height/2 | 0
+      );
+    }
+    if (this.isReporter) {
+      return (
+        (child.isInput && child.isRound) || ((child.isReporter || child.isBoolean) && !child.hasScript) ? 0 :
+        child.isLabel ? 2 + child.height/2 | 0 :
+        -2 + child.height/2 | 0
+      );
+    }
+  }
 
-    var width = px;
+  layoutSelf() {
+    var px = 4;
+
+    var width = 0;
+    var innerWidth = 0;
     var height = 12;
     var xs = [];
 
@@ -644,15 +664,20 @@ class Block extends Drawable {
     for (var i=0; i<length; i++) {
       var part = parts[i];
 
-      var h = part.height + (part.isBubble ? 0 : 4);
-      height = Math.max(height, h);
+      var md = this.minDistance(part);
+      if (md && width < md - px) { // && first line
+        width = md - px;
+      }
       xs.push(width);
       width += part.width;
+      innerWidth = Math.max(innerWidth, width + Math.max(0, md - px));
       width += 4;
+
+      var h = part.height + (part.isBubble ? 0 : 4);
+      height = Math.max(height, h);
     }
-    width += px - 4;
-    //width = Math.max(40, width);
-    this.ownWidth = width;
+    innerWidth = Math.max(20, innerWidth + px); // * 2);
+    this.ownWidth = innerWidth;
     this.ownHeight = height;
 
     for (var i=0; i<length; i++) {
@@ -681,7 +706,7 @@ class Block extends Drawable {
   pathBlock(context) {
     var w = this.ownWidth;
     var h = this.ownHeight;
-    var r = 8;
+    var r = 12;
 
     context.moveTo(0, r + .5);
     context.arc(r, r + .5, r, PI, PI32, false);
