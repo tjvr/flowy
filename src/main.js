@@ -91,6 +91,126 @@ function bezel(context, path, thisArg, inset, scale) {
 
 /*****************************************************************************/
 
+import {evaluator} from "./eval"
+window.evaluator = evaluator;
+
+evaluator.sendMessage = onMessage;
+
+function sendMessage(json) {
+  evaluator.onMessage(json);
+}
+
+function onMessage(json) {
+  console.log('<' + json.action, json);
+  switch (json.action) {
+    case 'emit':
+      Node.byId[json.id].emit(json.value);
+      return;
+    case 'progress':
+      Node.byId[json.id].progress(json.loaded, json.total);
+      return;
+  }
+}
+
+class Node {
+  constructor(id, name, literal, isSink) {
+    this.id = id || ++Node.highestId;
+    this.name = name;
+    this.literal = literal || null;
+    this.isSink = isSink || false;
+    this.inputs = [];
+    this.outputs = [];
+
+    //sendMessage({action: 'create', id: this.id, name: this.name, literal: this.literal, isSink: this.isSink});
+    Node.byId[this.id] = this;
+  }
+
+  destroy() {
+    sendMessage({action: 'destroy', id: this.id});
+    delete Node.byId[this.id];
+    this.inputs.forEach(node => this.removeInput(this.inputs.indexOf(node)));
+    this.outputs.forEach(node => node.removeInput(node.inputs.indexOf(this)));
+  }
+
+  static input(literal) {
+    var name = "literal _";
+    var node = new Node(null, name, literal, false);
+    sendMessage({action: 'create', id: node.id, name: name, literal: literal});
+    return node;
+  }
+  static block(name) {
+    var node = new Node(null, name, null, false);
+    sendMessage({action: 'create', id: node.id, name: name});
+    return node;
+  }
+  static repr(node) {
+    var name = "display _";
+    var repr = new Node(null, name, null, false);
+    sendMessage({action: 'create', id: repr.id, name: name, isSink: false});
+    repr.addInput(0, node);
+    return repr;
+  }
+
+  /* * */
+
+  _addOutput(node) {
+    if (this.outputs.indexOf(node) !== -1) return;
+    this.outputs.push(node);
+  }
+
+  _removeOutput(node) {
+    var index = this.outputs.indexOf(node);
+    if (index === -1) return;
+    this.outputs.splice(index, 1);
+  }
+
+  addInput(index, node) {
+    this.removeInput(index);
+    this.inputs[index] = node;
+    node._addOutput(this);
+    sendMessage({action: 'link', from: node.id, index: index, to: this.id});
+  }
+
+  removeInput(index) {
+    var oldNode = this.inputs[index];
+    if (oldNode) {
+      oldNode._removeOutput(this);
+      sendMessage({action: 'unlink', from: oldNode.id, index: index, to: this.id});
+    }
+    this.inputs[index] = null;
+  }
+
+  setLiteral(value) {
+    if (this.literal === value) return;
+    this.literal = value;
+    sendMessage({action: 'setLiteral', id: this.id, literal: this.literal});
+  }
+
+  setSink(isSink) {
+    if (this.isSink === isSink) return;
+    this.isSink = isSink;
+    sendMessage({action: 'setSink', id: this.id, isSink: this.isSink});
+  }
+
+  /* * */
+
+  emit(value) {
+    this.dispatchEmit(value);
+  }
+
+  progress(loaded, total) {
+    this.dispatchEmit({loaded, total});
+  }
+
+}
+Node.highestId = 0;
+Node.byId = {};
+
+import {addEvents} from "./events";
+addEvents(Node, 'emit', 'progress');
+
+/*****************************************************************************/
+
 var density = 2;
 
 var metricsContainer = el('metrics-container');
@@ -297,6 +417,7 @@ class Input extends Drawable {
     this.field.addEventListener('input', this.change.bind(this));
     this.field.addEventListener('keydown', this.keyDown.bind(this));
 
+    this.node = Node.input(value);
     this.value = value;
   }
 
@@ -310,23 +431,23 @@ class Input extends Drawable {
   }
 
   get value() {
-    return literal(this._value);
+    return this._value;
   }
   set value(value) {
     value = ''+value;
     this._value = value;
+    this.node.setLiteral(value);
     this.field.value = value;
     this.layout();
   }
 
   change(e) {
-    this._value = this.field.value;
+    this.value = this.field.value;
     this.layout();
-    this.parent.invalidate();
     assert(this.parent);
   };
   keyDown(e) {
-    // TODO up-down to change value
+    // TODO up-down to increment number
   }
 
   copy() {
@@ -406,7 +527,8 @@ class Block extends Drawable {
     this.labels = [];
     this.args = [];
 
-    this.initValue();
+    this.node = Node.block(info.spec);
+    this.repr = Node.repr(this.node);
 
     this.info = info;
     for (var i=0; i<parts.length; i++) {
@@ -422,8 +544,6 @@ class Block extends Drawable {
     this.el.appendChild(this.bubble.el);
     this.addOutput(this.bubble);
     this.bubble.parent = this;
-
-    this.invalidate();
   }
 
   get isBlock() { return true; }
@@ -448,11 +568,10 @@ class Block extends Drawable {
     var array = part.isLabel ? this.labels : this.args;
     array.push(part);
 
-    var obj = part.target || part;
-    if (obj && obj.isBlock) {
-      obj.request(this);
+    if (!part.isLabel) {
+      var index = array.length - 1;
+      this.node.addInput(index, part.node);
     }
-    this.invalidate();
   }
 
   replace(oldPart, newPart) {
@@ -477,16 +596,7 @@ class Block extends Drawable {
 
     this.el.replaceChild(newPart.el, oldPart.el);
 
-    
-    var obj = oldPart.target || oldPart;
-    if (obj && obj.isBlock) {
-      obj.cancelRequest(this);
-    }
-    var obj = newPart.target || newPart;
-    if (obj && obj.isBlock) {
-      obj.request(this);
-    }
-    this.invalidate();
+    this.node.addInput(index, newPart.node);
   };
 
   remove(part) {
@@ -507,11 +617,8 @@ class Block extends Drawable {
     var index = array.indexOf(part);
     array.splice(index, 1);
 
-    var obj = part.target || part;
-    if (obj && obj.isBlock) {
-      obj.cancelRequest(this);
-    }
-    this.invalidate();
+    this.node.removeInput(index, newPart.node);
+    // TODO shift up others??
   }
 
   addOutput(output) {
@@ -556,6 +663,7 @@ class Block extends Drawable {
     this.blob.layoutSelf();
     this.layoutBubble(this.bubble);
     this.el.removeChild(bubble.el);
+    this.updateNeeded();
   }
 
   reset(arg) {
@@ -567,7 +675,9 @@ class Block extends Drawable {
 
   detach() {
     if (this.workspace.isPalette) {
-      return this.copy();
+      var block = this.copy();
+      block.repr.setSink(true);
+      return block;
     }
     if (this.parent.isBlock) {
       this.parent.reset(this);
@@ -733,107 +843,9 @@ class Block extends Drawable {
 
   /* * */
 
-  initValue() {
-    this._invalid = true;
-    this.requests = new Set();
+  updateNeeded() {
   }
 
-  get value() { return this._value }
-  set value(value) {
-    this._value = value;
-    if (this.parent && this.parent.isBlock) {
-      this.parent.invalidate();
-    } else {
-      this.outputs.forEach(o => {
-        o.value = value;
-      });
-    }
-  }
-
-  invalidate() {
-    if (!this.outputs) return; // wait for init to finish
-    this._invalid = true;
-    if (this.value) this.value.cancel();
-    this.value = null;
-    if (this.parent && this.parent.isBlock) {
-      this.parent.invalidate();
-    } else {
-      this.outputs.forEach(o => o.invalidate());
-    }
-    if (this.needed) {
-      this.evaluate();
-    }
-  }
-
-  request(who) {
-    this.requests.add(who);
-    this.needed = !!this.requests.size;
-  }
-
-  cancelRequest(who) {
-    this.requests.delete(who);
-    this.needed = !!this.requests.size;
-    // TODO cancel in-progress evaluation
-  }
-
-  get needed() { return this._needed }
-  set needed(needed) {
-    this._needed = needed;
-    if (needed) {
-      if (this._invalid) this.evaluate();
-    } else {
-      this.value.cancel();
-    }
-
-    this.args.forEach(arg => {
-      var obj = arg.target || arg;
-      if (obj.isBlock) {
-        needed ? obj.request() : obj.cancelRequest();
-      }
-    });
-  }
-
-  evaluate() {
-    if (this.info.isRing) {
-      var f = this.value = new Future;
-      var arg = this.args[0];
-      if (arg.isBubble) {
-        f.error("Ring can't accept bubble");
-      } else if (!arg.isBlock) {
-        f.load(null);
-      } else {
-        f.load(arg.asRing());
-      }
-      return;
-    }
-    if (this.value) this.value.cancel();
-    var args = this.args.map(x => {
-      if (x.value && x.value.isFuture) return x.value;
-      var f = new Future;
-      f.load(x.value);
-      return f;
-    });
-    this.value = evaluate(this.info, args);
-  }
-
-  asRing() {
-    var args = this.args.map(x => {
-      if (x.isInput && x.value === "") return "";
-      if (x.value && x.value.isFuture) return x.value;
-      var f = new Future;
-      f.load(x.value);
-      return f;
-    });
-    return input => {
-      var instance = args.slice();
-      var index = args.indexOf("");
-      while (index !== -1) {
-        instance[index] = input;
-        index = instance.indexOf("");
-      }
-      return evaluate(this.info, instance);
-    };
-  }
 }
 
 
@@ -858,42 +870,8 @@ class Bubble extends Drawable {
 
     if (target.workspace) target.workspace.add(this);
 
-    target.request(this);
-  }
-
-  get isBubble() { return true; }
-  get isDraggable() { return true; }
-
-  get parent() { return this._parent }
-  set parent(p) {
-    this._parent = p;
-    if (p) {
-      var isSink = !this.parent.isBlock || this.target.bubble === this;
-      if (isSink && !(this.workspace && this.workspace.isPalette)) {
-        this.target.request(this);
-      } else {
-        this.target.cancelRequest(this);
-      }
-    }
-  }
-
-  get value() { return this._value }
-  set value(value) {
-    this._value = value;
-    this.invalid = false;
-    this.fraction = 0;
-    this.el.classList.remove('error');
-    this.progress.classList.remove('progress-error');
-    this.progress.classList.add('progress-loading');
-    if (value) this.bindEvents(value);
-
-    if (this.parent && this.isInside) {
-      this.parent.invalidate();
-    }
-  }
-
-  bindEvents(future) {
-    this.value.withLoad(result => {
+    this.node = target.node;
+    this.target.repr.onEmit(value => {
       assert(this.value === future);
       var repr = display(result);
       this.label.text = repr;
@@ -904,62 +882,17 @@ class Bubble extends Drawable {
       });
       this.layout();
     });
-    this.value.withError(err => {
-      assert(this.value === future);
-      this.label.text = err.message || err;
-      this.el.classList.add('error');
-      this.progress.classList.add('progress-error');
-      this.layout();
-    });
-    this.value.onProgress(p => {
-      assert(this.value === future);
-      this.fraction = p.loaded / p.total;
+    this.target.repr.onProgress(e => {
+      this.fraction = e.loaded / e.total;
       if (this.fraction < 1) {
         this.progress.classList.add('progress-loading');
       }
       this.drawProgress();
     });
-
-    /*
-    var repr = display(value);
-    this._isLabel = typeof repr === 'string';
-    if (typeof repr === 'string') {
-      this.label.text = repr;
-      this.el.appendChild(this.label.el);
-    } else {
-      this.el.innerHTML = '';
-      this.el.appendChild(repr);
-    }
-    */
-
-    this.layout();
   }
 
-  get invalid() { return this._invalid }
-  set invalid(value) {
-    this._invalid = value;
-    this.el.classList[value ? 'add' : 'remove']('invalid');
-    this.redraw();
-  }
-
-  invalidate() {
-    this.invalid = true;
-    if (this.parent && this.isInside) {
-      this.parent.invalidate();
-    }
-  }
-
-  get displayValue() {
-    var value = "";
-    if (this.value) {
-      var repr = this.value.result;
-      if (repr && this.value.isDone && typeof repr === 'string') {
-        value = repr;
-        assert(value !== '[object Object]');
-      }
-    }
-    return value;
-  }
+  get isBubble() { return true; }
+  get isDraggable() { return true; }
 
   objectFromPoint(x, y) {
     return opaqueAt(this.context, x * density, y * density) ? this : null;
@@ -972,8 +905,7 @@ class Bubble extends Drawable {
   detach() {
     if (this.parent.isBlock) {
       if (this.parent.bubble !== this) {
-        // TODO literal images etc
-        this.parent.replace(this, new Input(this.displayValue));
+        this.parent.replace(this, new Input("")); // TODO leave our value behind
       }
     }
     return this;
@@ -1364,8 +1296,8 @@ class Workspace {
 
 /*****************************************************************************/
 
-import {primitives} from "./runtime";
-import {literal, display, evaluate, Future} from "./runtime";
+
+import {specs} from "./prims";
 
 var colors = {
   ring: '#969696',
@@ -1389,8 +1321,8 @@ var colors = {
 var ringBlock;
 
 var paletteContents = [];
-primitives.forEach(p => {
-  let [spec, category, prim] = p;
+specs.forEach(p => {
+  let [category, spec, defaults] = p;
   var color = colors[category] || '#555';
   var words = spec.split(/ /g);
   var parts = words.map(word => {
@@ -1403,10 +1335,13 @@ primitives.forEach(p => {
       return new Label(word);
     }
   });
-  var isRing = prim.isRing;
-  var b = new Block({prim, color, isRing}, parts);
+  var isRing = category === 'ring';
+  var b = new Block({spec, color, isRing}, parts);
   if (isRing) {
     ringBlock = b;
+    return;
+  }
+  if (category === 'hidden') {
     return;
   }
   paletteContents.push(b);
@@ -1445,7 +1380,7 @@ class World extends Workspace {
     this.inertiaX = 0;
     this.inertiaY = 0;
     this.scrolling = false;
-    setInterval(this.tick.bind(this), 1 / 60);
+    setInterval(this.tick.bind(this), 1000 / 60);
 
 
     // TODO
