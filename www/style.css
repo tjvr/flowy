@@ -118,6 +118,8 @@ html, body {
   display: inline-block;
 
   /* TODO frames */
+  min-height: 12px;
+  max-height: 256px;
   overflow-x: hidden;
   overflow-y: auto;
 }
@@ -137,6 +139,11 @@ html, body {
 .result-Symbol {
   /*font: small-caps 16px/20px Helvetica Neue, Helvetica, Lucida Grande, Verdana, DejaVu Sans, sans-serif;*/
   font: small-caps 16px/20px Baskerville, Georgia, serif;
+}
+
+.result-Int,
+.result-Float {
+  margin: -2px 4px 2px;
 }
 
 .result-Int,

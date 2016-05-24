@@ -55,7 +55,7 @@ export const specs = [
   ["ring", "%s", []],
   ["hidden", "display %s", []],
 
-  ["ops", "id %s"],
+  ["ops", "literal %s"],
 
   ["math", "%n + %n"],
   ["math", "%n – %n"],
@@ -78,7 +78,6 @@ export const specs = [
   ["bool", "%b or %b"],
   ["bool", "not %b"],
   ["bool", "%b"],
-  // TODO gp-like toggle switches
 
   // ["str", "join %s %s"],
   // ["str", "join words %s"],
@@ -86,9 +85,10 @@ export const specs = [
 
   // ["math", "random %n to %n", [1, 10]],
 
+  ["list", "list %s", ["boo"]],
+  ["list", "list %s %s %s", ["foo", "bar", "baz"]],
+  ["list", "%l concat %l"],
   ["list", "item %n of %l", [1]],
-  // ["list", "list %l"],
-  // ["list", "list %l %l %l"],
   ["list", "range %n to %n", [1, 5]],
 
   ["control", "%u if %b else %u", ['', true]],
@@ -159,18 +159,27 @@ export const functions = {
     return f;
   },
   "UI <- display Bool": x => el('Bool', x ? 'Yes' : 'No'),
-  "UI <- display List": (list, runtime) => {
+  "UI <- display List": function(list) {
     var l = el('List');
     list.forEach(value => {
       var item = el('List-item');
-      item.textContent = ''+value;
-      // TODO async contents
+
+      // TODO what if value is a future
+
+      var prim = this.evaluator.getPrim("display %s", [value]);
+      var result = prim.func(value);
+      item.appendChild(result);
+
       l.appendChild(item);
     });
     return l;
   },
 
-  "Str <- id Str": x => x,
+  "Str <- literal Str": x => x,
+  "Int <- literal Int": x => x,
+  "Frac <- literal Frac": x => x,
+  "Float <- literal Float": x => x,
+
   "Bool <- Str = Str": (a, b) => a === b,
 
   /* Int */
@@ -235,6 +244,15 @@ export const functions = {
 
   /* List */
 
+  "List <- list Str": a => {
+    return [a];
+  },
+  "List <- list Str Str Str": (a, b, c) => {
+    return [a, b, c];
+  },
+  "List <- List concat List": (a, b) => {
+    return a.concat(b);
+  },
   "List <- range Int to Int": (from, to) => {
     var result = [];
     for (var i=from; i<=to; i++) {
@@ -268,6 +286,9 @@ let coercions = {
   "Str <- Int": x => x.toString(),
   "Str <- Frac": x => x.toString(),
   "Str <- Float": x => x.toFixed(2),
+  "Str <- Empty": x => "",
+
+  "List <- Empty": x => [],
 
   "Frac <- Int": x => new Fraction(x, 1),
   "Float <- Int": x => +x.toString(),
@@ -426,6 +447,7 @@ export const typeOf = (value => {
   if (value && value.constructor === BigInteger || (typeof value === 'number' && /^-?[0-9]+$/.test(''+value))) return 'Int';
   if (value && value.constructor === Array) return 'List';
   if (typeof value === 'number') return 'Float';
+  if (value === '') return 'Empty';
   if (typeof value === 'string') return 'Str';
   if (typeof value === 'boolean') return 'Bool';
   if (value && value instanceof Fraction) return 'Frac';

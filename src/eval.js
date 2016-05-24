@@ -107,10 +107,18 @@ export class Evaluator {
     }
 
     var hash = inputs.map(typeOf).join(", ");
-    var prim = byInputs[hash] || byInputs['Uneval, Bool, Uneval']; // TODO
+    var prim = byInputs[hash]; // TODO
     if (!prim) {
       console.log(`No prim for '${name}' inputs [${hash}] matched ${Object.keys(byInputs).join("; ")}`);
+
+      // if (inputs.indexOf('List')) {
+      //   inputs = inputs.map(inp => {
+      //     inp.
+      //   });
+      // }
+
       // TODO auto vectorisation
+
       return {
         output: null,
         func: () => {},
@@ -284,6 +292,8 @@ class Thread {
     this.total = null;
     this.lengthComputable = false;
     this.requests = [];
+
+    this.evaluator = evaluator;
   }
 
   get isTask() { return true; }

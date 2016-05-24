@@ -1769,7 +1769,7 @@ class App {
   wheel(e) {
     // TODO trackpad should scroll vertically; mouse scroll wheel should zoom!
 
-    if (e.target.className.split(/ /g).indexOf('result-label') !== -1) {
+    if (e.target.className === 'result') {
       return;
     }
 
