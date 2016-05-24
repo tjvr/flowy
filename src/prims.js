@@ -71,8 +71,8 @@ export const specs = [
   ["math", "cos %n", [60]],
   ["math", "tan %n", [45]],
 
-  ["ops", "%s = %s"],
-  ["ops", "%s < %s"],
+  ["bool", "%s = %s"],
+  ["bool", "%s < %s"],
 
   ["bool", "%b and %b"],
   ["bool", "%b or %b"],
@@ -80,26 +80,26 @@ export const specs = [
   ["bool", "%b"],
   // TODO gp-like toggle switches
 
-  ["str", "join %s %s"],
-  ["str", "join words %s"],
-  ["str", "split words %s"],
+  // ["str", "join %s %s"],
+  // ["str", "join words %s"],
+  // ["str", "split words %s"],
 
-  ["math", "random %n to %n", [1, 10]],
+  // ["math", "random %n to %n", [1, 10]],
 
   ["list", "item %l of %l"],
-  ["list", "list %l"],
-  ["list", "list %l %l %l"],
+  // ["list", "list %l"],
+  // ["list", "list %l %l %l"],
   ["list", "range %n to %n", [1, 5]],
 
-  ["list", "do %r for each %l"],
-  ["list", "keep %r from %l"],
-  ["list", "combine %l with %r"],
+  // ["list", "do %r for each %l"],
+  // ["list", "keep %r from %l"],
+  // ["list", "combine %l with %r"],
 
-  ["sensing", "error"],
-  ["sensing", "time"],
-  ["sensing", "delay %s by %n secs", ["", 1]],
-  ["sensing", "get %s", ["https://tjvr.org/"]],
-  ["sensing", "select %s from %html"],
+  // ["sensing", "error"],
+  // ["sensing", "time"],
+  // ["sensing", "delay %s by %n secs", ["", 1]],
+  // ["sensing", "get %s", ["https://tjvr.org/"]],
+  // ["sensing", "select %s from %html"],
 
 ];
 
@@ -156,7 +156,7 @@ export const functions = {
     f.appendChild(el('Frac-den', ''+frac.d));
     return f;
   },
-  "UI <- display Bool": x => x.toString(),
+  "UI <- display Bool": x => el('Bool', x ? 'Yes' : 'No'),
   "UI <- display List": list => {
   },
 
@@ -203,6 +203,12 @@ export const functions = {
   /* Decimal */
   // TODO
 
+  /* Bool */
+  "Bool <- Bool and Bool": (a, b) => a && b,
+  "Bool <- Bool or Bool": (a, b) => a || b,
+  "Bool <- not Bool": x => !x,
+  "Bool <- Bool": x => !!x,
+
   /* List */
 
   "List <- range Int to Int": (from, to) => {
@@ -216,18 +222,18 @@ export const functions = {
 
   // "URL <- Str": x => x,
 
-  "WebPage <- get Str": url => {
-    // TODO
-  },
-  "Time Future <- time": () => {
-    // TODO
-  },
-  "A Future <- delay A by Float secs": (value, time) => {
-    // TODO
-  },
-  "B Future List <- do (B <- A) for each (A Future List)": (ring, list) => {
-    return runtime.map(ring, list); // TODO
-  },
+  // "WebPage <- get Str": url => {
+  //   // TODO
+  // },
+  // "Time Future <- time": () => {
+  //   // TODO
+  // },
+  // "A Future <- delay A by Float secs": (value, time) => {
+  //   // TODO
+  // },
+  // "B Future List <- do (B <- A) for each (A Future List)": (ring, list) => {
+  //   return runtime.map(ring, list); // TODO
+  // },
 
 };
 
@@ -238,6 +244,8 @@ let coercions = {
 
   "Frac <- Int": x => new Fraction(x, 1),
   "Float <- Int": x => +x.toString(),
+
+  "Bool <- List": x => !!x.length,
 };
 var coercionsByType = {};
 Object.keys(coercions).forEach(spec => {
@@ -385,6 +393,7 @@ export const typeOf = (value => {
   if (value && value.constructor === BigInteger || (/^-?[0-9]+$/.test(''+value))) return 'Int';
   if (typeof value === 'number') return 'Float';
   if (typeof value === 'string') return 'Str';
+  if (typeof value === 'boolean') return 'Bool';
   if (value === undefined) return '';
   throw "Unknown type: " + value;
 });

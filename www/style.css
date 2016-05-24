@@ -126,6 +126,12 @@ html, body {
   content: "”";
 }
 
+.result-Bool,
+.result-Symbol {
+  /*font: small-caps 16px/20px Helvetica Neue, Helvetica, Lucida Grande, Verdana, DejaVu Sans, sans-serif;*/
+  font: small-caps 16px/20px Baskerville, Georgia, serif;
+}
+
 .result-Int,
 .result-Float,
 .result-Frac-num,

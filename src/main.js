@@ -875,9 +875,10 @@ class Bubble extends Drawable {
   display(value) {
     // TODO ellipsis during progress
     this.elContents.innerHTML = '';
-    if (value) this.elContents.appendChild(value);
+    if (value) this.elContents.appendChild(value.cloneNode(true));
     this.valueWidth = value ? this.elContents.offsetWidth : 0;
     this.valueHeight = value ? this.elContents.offsetHeight : 16;
+    this.layout();
   }
 
   onEmit(value) {
@@ -887,7 +888,6 @@ class Bubble extends Drawable {
     setTimeout(() => {
       this.progress.classList.remove('progress-loading');
     });
-    this.layout();
   }
 
   onProgress(e) {
