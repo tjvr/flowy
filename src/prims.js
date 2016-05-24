@@ -91,6 +91,8 @@ export const specs = [
   // ["list", "list %l %l %l"],
   ["list", "range %n to %n", [1, 5]],
 
+  ["control", "if %b then %u else %u", [true]],
+
   // ["list", "do %r for each %l"],
   // ["list", "keep %r from %l"],
   // ["list", "combine %l with %r"],
@@ -200,7 +202,7 @@ export const functions = {
   "Bool <- Float = Float": (a, b) => a === b,
   "Bool <- Float < Float": (a, b) => a < b,
 
-  "Float <- sqrt Float": Math.sqrt,
+  "Float <- sqrt Float": x => { return Math.sqrt(x); },
   "Float <- sin Float": x => Math.sin(Math.PI / 180 * x),
   "Float <- cos Float": x => Math.sin(Math.PI / 180 * x),
   "Float <- tan Float": x => Math.sin(Math.PI / 180 * x),
@@ -216,6 +218,19 @@ export const functions = {
   "Bool <- Bool or Bool": (a, b) => a || b,
   "Bool <- not Bool": x => !x,
   "Bool <- Bool": x => !!x,
+
+  "Any Future <- if Bool then Uneval else Uneval": function(cond, tv, fv) {
+    var ignore = cond ? fv : tv;
+    var want = cond ? tv : fv;
+    if (ignore) ignore.unsubscribe(this.target);
+    if (want) want.subscribe(this.target);
+    var thread = want.request();
+    this.awaitAll(thread.isTask ? [thread] : [], () => {
+      var result = thread.isTask ? thread.result : thread;
+      this.emit(result);
+      this.isRunning = false;
+    });
+  },
 
   /* List */
 
@@ -400,6 +415,7 @@ Object.keys(functions).forEach(function(spec) {
 export {bySpec};
 
 export const typeOf = (value => {
+  if (value === undefined) return '';
   if (value && value.isTask) {
     if (value.isDone) {
       return typeOf(value.result);
@@ -411,7 +427,8 @@ export const typeOf = (value => {
   if (typeof value === 'number') return 'Float';
   if (typeof value === 'string') return 'Str';
   if (typeof value === 'boolean') return 'Bool';
-  if (value === undefined) return '';
+  if (value && value instanceof Fraction) return 'Frac';
+  if (value.isObservable) return 'Uneval';
   throw "Unknown type: " + value;
 });
 

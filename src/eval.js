@@ -107,8 +107,7 @@ export class Evaluator {
     }
 
     var hash = inputs.map(typeOf).join(", ");
-    if (''+typeOf(inputs[0]) === 'undefined') debugger;
-    var prim = byInputs[hash];
+    var prim = byInputs[hash] || byInputs['Bool, Any, Any']; // TODO
     if (!prim) {
       // TODO type coercion
       console.log(`No prim for '${name}' inputs [${hash}]`);
@@ -153,6 +152,7 @@ export class Observable {
     this._value = value;
     this.subscribers = new Set();
   }
+  get isObservable() { return true; }
 
   assign(value) {
     value = value;
@@ -181,12 +181,17 @@ export class Computed extends Observable {
     super();
     this.block = block;
     this.args = args = args || [];
+    this.reprSubscriber = null;
 
-    var inputs = block.split(" ").filter(x => x[0] === '_');
-    for (var i=0; i<inputs.length; i++) {
-      //if (block.inputs[i].unevaluated) continue;
+    this.inputs = block.split(" ").filter(x => x[0] === '%');
+    /*
+    for (var i=0; i<this.inputs.length; i++) {
+      if (this.inputs[i] === '%u') {
+        continue;
+      }
       if (args[i]) args[i].subscribe(this);
     }
+    */
 
     this._isSink = false;
     this._needed = false;
@@ -210,10 +215,19 @@ export class Computed extends Observable {
     this._needed = value;
     if (this.thread) this.thread.cancel();
     if (value) {
+      this.args.forEach((arg, index) => {
+        if (this.inputs[index] === '%u') return;
+        arg.subscribe(this);
+      });
+
       this.thread = new Thread(this);
       this.thread.start();
     } else {
       this.thread = null;
+
+      this.args.forEach(arg => {
+        arg.unsubscribe(this);
+      });
     }
   }
 
@@ -224,15 +238,18 @@ export class Computed extends Observable {
     var old = this.args[index];
     if (old) old.unsubscribe(this);
     this.args[index] = arg;
-    //if (!this.block.inputs[index].unevaluated) {
-    if (arg) {
+    if (arg && this.needed && !this.inputs[index] !== '%u') {
       arg.subscribe(this);
       this.invalidate();
+    }
+    if (arg && this.block === 'display %s') {
+      arg.reprSubscriber = this;
     }
   }
 
   invalidate() {
     if (this.thread) this.thread.cancel();
+    evaluator.emit(this, null);
     if (this.needed) {
       this.thread = new Thread(this);
       this.thread.start();
@@ -301,31 +318,42 @@ class Thread {
     var compute = () => {
       var prim = this.prim;
       var func = prim.func;
-      if (/Future/.test(prim.output)) {
-        //throw 'ahh'; // TODO
-      } else {
-        var args = inputs.map(task => task.isTask ? task.result : task); // TODO
-        if (prim.coercions) {
-          for (var i=0; i<prim.coercions.length; i++) {
-            var coerce = prim.coercions[i];
-            if (coerce) {
-              args[i] = coerce(args[i]);
-            }
+      var args = inputs.map((obj, index) => {
+        if (!obj.isTask) return obj;
+        if (this.target.inputs[index] === '%u') {
+          debugger;
+          return obj;
+        }
+        return obj.result;
+      });
+      
+      if (prim.coercions) {
+        for (var i=0; i<prim.coercions.length; i++) {
+          var coerce = prim.coercions[i];
+          if (coerce) {
+            args[i] = coerce(args[i]);
           }
         }
-        var result = func.apply(null, args);
+      }
+      var result = func.apply(this, args);
+      if (!/Future/.test(prim.output)) {
         this.emit(result);
         this.isRunning = false;
       }
     };
 
-    this.target.args.forEach(obj => {
-      if (!(obj.needed || obj.constructor === Observable)) throw 'poo';
-    });
+    // this.target.args.forEach(obj => {
+    //   if (!(obj.needed || obj.constructor === Observable)) throw 'poo';
+    // });
 
-    var inputs = this.inputs.map(obj => obj.request());
+    var inputs = this.inputs.map((obj, index) => {
+      if (this.target.inputs[index] === '%u') {
+        return obj;
+      }
+      return obj.request();
+    });
     var tasks = inputs.filter(task => task.isTask); // TODO
-    this.await(next, tasks);
+    this.awaitAll(tasks, next);
   }
 
   schedule(func) {
@@ -339,9 +367,13 @@ class Thread {
     this.result = result;
     this.dispatchEmit(result);
     evaluator.emit(this.target, result);
+    if (this.target.reprSubscriber && !this.target.reprSubscriber.needed) {
+      var repr = this.target.reprSubscriber;
+      new Thread(repr).start();
+    }
   }
 
-  await(func, tasks) {
+  awaitAll(tasks, func) {
     if (!func) throw "noo";
     tasks.forEach(task => {
       if (this.waiting.indexOf(task) === -1) {
@@ -357,10 +389,6 @@ class Thread {
       this.schedule(func);
       return;
     }
-  }
-
-  map(list, func) {
-
   }
 
   signal(task) {

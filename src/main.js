@@ -105,6 +105,7 @@ function onMessage(json) {
   //console.log(`<= ${json.action}`, json);
   switch (json.action) {
     case 'emit':
+      console.log(json.value);
       Node.byId[json.id].emit(json.value);
       return;
     case 'progress':
@@ -712,6 +713,13 @@ class Block extends Drawable {
   get isBlock() { return true; }
   get isDraggable() { return true; }
 
+  get parent() { return this._parent; }
+  set parent(value) {
+    this._parent = value;
+    if (!this.outputs) return;
+    this.updateSinky();
+  }
+
   get color() { return this._color }
   set color(value) {
     this._color = value;
@@ -809,6 +817,7 @@ class Block extends Drawable {
       bubble.curve.parent.remove(bubble.curve);
       bubble.parent.remove(bubble);
       this.removeOutput(bubble);
+      this.updateSinky();
       return;
     }
     bubble.zoom = 1;
@@ -817,6 +826,8 @@ class Block extends Drawable {
     bubble.parent = this;
     this.el.appendChild(bubble.el);
     this.layoutBubble(bubble);
+
+    this.updateSinky();
   }
 
   removeBubble(bubble) {
@@ -826,7 +837,8 @@ class Block extends Drawable {
     this.blob.layoutSelf();
     this.layoutBubble(this.bubble);
     this.el.removeChild(bubble.el);
-    this.updateNeeded();
+
+    this.updateSinky();
   }
 
   reset(arg) {
@@ -1001,7 +1013,12 @@ class Block extends Drawable {
 
   /* * */
 
-  updateNeeded() {
+  updateSinky() {
+    var isSink = this.outputs.filter(bubble => {
+      if (!bubble.parent || !this.parent) return;
+      return !bubble.parent.isBlock || (this.bubbleVisible && bubble.parent === this);
+    }).length;
+    this.repr.setSink(!!isSink);
   }
 
 }
@@ -1033,6 +1050,12 @@ class Bubble extends Drawable {
 
   get isBubble() { return true; }
   get isDraggable() { return true; }
+
+  get parent() { return this._parent; }
+  set parent(value) {
+    this._parent = value;
+    if (this.target) this.target.updateSinky();
+  }
 
   display(value) {
     // TODO ellipsis during progress
@@ -1095,7 +1118,6 @@ class Bubble extends Drawable {
   }
 
   click() {
-    console.log('click result');
   }
 
   moveTo(x, y) {
@@ -1473,8 +1495,9 @@ var colors = {
   shape: '#0e9a6c',
   // .sb-motion { fill: #4a6cd4; }
   // .sb-sound { fill: #bb42c3; }
-  // .sb-events { fill: #c88330; }
-  // .sb-control { fill: #e1a91a; }
+  // events: '#c88330',
+  // control: '#e1a91a',
+  control: '#c88330',
   // .sb-extension { fill: #4b4a60; }
 };
 
@@ -1491,7 +1514,7 @@ specs.forEach(p => {
     if (word === '%r') {
       return ringBlock.copy();
     } else if (word === '%b') {
-      var value = !!(i++ % 2);
+      var value = def.length ? def.shift() : !!(i++ % 2);
       return new Switch(value);
     } else if (/^%/.test(word)) {
       var value = def.shift() || "";
@@ -1873,7 +1896,6 @@ class App {
     g.pressX = g.mouseX = p.clientX;
     g.pressY = g.mouseY = p.clientY;
     g.pressObject = this.objectFromPoint(g.pressX, g.pressY);
-    console.log('pressed', g.pressObject);
     g.shouldDrag = false;
     g.shouldScroll = false;
 
