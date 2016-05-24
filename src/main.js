@@ -438,7 +438,7 @@ class Input extends Drawable {
   set value(value) {
     value = ''+value;
     this._value = value;
-    this.node.setLiteral(value);
+    this.node.setLiteral(literal(value));
     if (this.field.value !== value) {
       this.field.value = value;
     }
@@ -519,6 +519,164 @@ Input.prototype.fieldPadding = 4;
 
 
 
+
+class Switch extends Drawable {
+  constructor(value) {
+    super();
+
+    this.el = el('absolute switch');
+    this.el.appendChild(this.canvas = el('canvas', 'absolute'));
+    this.context = this.canvas.getContext('2d');
+
+    this.knob = new SwitchKnob(this);
+    this.el.appendChild(this.knob.el);
+
+    this.node = Node.input(value);
+    this.value = value;
+  }
+
+  get isSwitch() { return true; }
+
+  copy() {
+    return new Switch(this.value);
+  }
+
+  replaceWith(other) {
+    this.parent.replace(this, other);
+  }
+
+  get isDraggable() {
+    return true;
+  }
+  get dragObject() {
+    return this.parent.dragObject;
+  }
+
+  objectFromPoint(x, y) {
+    return (this.knob.objectFromPoint(x - this.knob.x, y - this.knob.y) || opaqueAt(this.context, x * density, y * density) ? this : null);
+  }
+
+  get value() { return this._value; }
+  set value(value) {
+    if (this._value === value) return;
+    this._value = value;
+    this.node.setLiteral(value);
+    this.knob.moveTo(this._value ? 32 - 20 + 3 : -3, -2);
+    this.color = this._value ? '#64c864' : '#b46464';
+    this.redraw();
+  }
+
+  click() {
+    this.value = !this.value;
+  }
+
+  layoutSelf() {
+    this.width = 32;
+    this.height = 14;
+    this.redraw();
+  }
+
+  layoutChildren() {
+    this.knob.layout();
+    this.layoutSelf();
+  }
+
+  draw() {
+    this.canvas.width = this.width * density;
+    this.canvas.height = this.height * density;
+    this.canvas.style.width = this.width + 'px';
+    this.canvas.style.height = this.height + 'px';
+    this.context.scale(density, density);
+    this.drawOn(this.context);
+  }
+
+  drawOn(context) {
+    context.fillStyle = this.color;
+    bezel(context, this.pathFn, this, true, density);
+  }
+
+  pathFn(context) {
+    var w = this.width;
+    var h = this.height;
+    var r = 8;
+
+    context.moveTo(0, r + .5);
+    context.arc(r, r + .5, r, PI, PI32, false);
+    context.arc(w - r, r + .5, r, PI32, 0, false);
+    context.arc(w - r, h - r - .5, r, 0, PI12, false);
+    context.arc(r, h - r - .5, r, PI12, PI, false);
+  }
+
+  pathShadowOn(context) {
+    this.pathFn(context);
+    context.closePath();
+  }
+
+}
+
+class SwitchKnob extends Drawable {
+  constructor(parent) {
+    super();
+    this.parent = parent;
+
+    this.el = el('absolute switch-knob');
+    this.el.appendChild(this.canvas = el('canvas', 'absolute'));
+    this.context = this.canvas.getContext('2d');
+
+    this.color = '#aaa';
+    this.layoutSelf();
+  }
+
+  objectFromPoint(x, y) {
+    return opaqueAt(this.context, x * density, y * density) ? this : null;
+  }
+
+  get isDraggable() {
+    return true;
+  }
+  get dragObject() {
+    return this.parent.dragObject;
+  }
+
+  click() {
+    this.parent.click();
+  }
+
+  layoutSelf() {
+    this.width = 20;
+    this.height = 20;
+    this.redraw();
+  }
+
+  draw() {
+    this.canvas.width = this.width * density;
+    this.canvas.height = this.height * density;
+    this.canvas.style.width = this.width + 'px';
+    this.canvas.style.height = this.height + 'px';
+    this.context.scale(density, density);
+    this.drawOn(this.context);
+  }
+
+  drawOn(context) {
+    context.fillStyle = this.color;
+    bezel(context, this.pathFn, this, false, density);
+  }
+
+  pathFn(context) {
+    var w = this.width;
+    var h = this.height;
+    var r = 10;
+
+    context.moveTo(0, r + .5);
+    context.arc(r, r + .5, r, PI, PI32, false);
+    context.arc(w - r, r + .5, r, PI32, 0, false);
+    context.arc(w - r, h - r - .5, r, 0, PI12, false);
+    context.arc(r, h - r - .5, r, PI12, PI, false);
+  }
+}
+
+
+
 class Block extends Drawable {
   constructor(info, parts) {
     super();
@@ -538,6 +696,7 @@ class Block extends Drawable {
     for (var i=0; i<parts.length; i++) {
       this.add(parts[i]);
     }
+    this.inputs = this.parts.filter(p => !p.isLabel);
 
     this.color = info.color; //'#7a48c3';
 
@@ -671,10 +830,10 @@ class Block extends Drawable {
   }
 
   reset(arg) {
-    if (arg.parent !== this || !arg.isBlock && !arg.isInput) return this;
+    if (arg.parent !== this || arg.isLabel) return this;
 
     var i = this.args.indexOf(arg);
-    this.replace(arg, new Input(arg.isInput ? arg.value : ''));
+    this.replace(arg, this.inputs[i]);
   };
 
   detach() {
@@ -747,6 +906,9 @@ class Block extends Drawable {
   }
 
   minDistance(part) {
+    if (part.isSwitch) {
+      return 12;
+    }
     if (part.isBubble) {
       return 0;
     }
@@ -761,7 +923,7 @@ class Block extends Drawable {
 
     var lineX = 0;
     var width = 0;
-    var height = 12;
+    var height = 28;
     var xs = [0];
 
     var parts = this.parts;
@@ -909,7 +1071,7 @@ class Bubble extends Drawable {
   detach() {
     if (this.parent.isBlock) {
       if (this.parent.bubble !== this) {
-        this.parent.replace(this, new Input("")); // TODO leave our value behind
+        this.parent.reset(this); // TODO leave our value behind
       }
     }
     return this;
@@ -1295,7 +1457,7 @@ class Workspace {
 /*****************************************************************************/
 
 
-import {specs} from "./prims";
+import {literal, specs} from "./prims";
 
 var colors = {
   ring: '#969696',
@@ -1324,9 +1486,13 @@ specs.forEach(p => {
   var def = (defaults || []).slice();
   var color = colors[category] || '#555';
   var words = spec.split(/ /g);
+  var i = 0;
   var parts = words.map(word => {
     if (word === '%r') {
       return ringBlock.copy();
+    } else if (word === '%b') {
+      var value = !!(i++ % 2);
+      return new Switch(value);
     } else if (/^%/.test(word)) {
       var value = def.shift() || "";
       return new Input(value);
@@ -1902,7 +2068,7 @@ class App {
     if (g.dragScript.isBubble && obj.isBlob && obj.target === g.dragScript.target) {
       gx += g.dragScript.width / 2;
       canDrop = true;
-    } else if (obj.isInput) {
+    } else if (obj.isInput || obj.isSwitch) {
       if (g.dragScript.isBlock) {
         canDrop = g.dragScript.outputs.length === 1 && g.dragScript.bubble.isBubble;
       } else if (g.dragScript.isBubble) {

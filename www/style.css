@@ -104,6 +104,13 @@ html, body {
   z-index: 1;
 }
 
+.switch {
+  z-index: 2;
+}
+.switch-knob {
+  transition: transform 100ms linear;
+}
+
 .result {
   color: #000;
   font: 16px/20px Source Code Pro, Monaco, monospace;

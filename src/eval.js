@@ -150,12 +150,12 @@ export const evaluator = Evaluator.instance = new Evaluator([], []);
 
 export class Observable {
   constructor(value) {
-    this._value = literal(value);
+    this._value = value;
     this.subscribers = new Set();
   }
 
   assign(value) {
-    value = literal(value);
+    value = value;
     this._value = value;
     this.subscribers.forEach(o => o.invalidate());
   }
