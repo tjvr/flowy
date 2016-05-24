@@ -745,31 +745,19 @@ class Block extends Drawable {
   }
 
   minDistance(part) {
+    if (part.isBubble) {
+      return 0;
+    }
     return -2 + part.height/2 | 0;
-    if (this.isBoolean) {
-      return (
-        child.isReporter ? 4 + child.height/4 | 0 :
-        child.isLabel ? 5 + child.height/2 | 0 :
-        child.isBoolean || child.shape === 'boolean' ? 5 :
-        2 + child.height/2 | 0
-      );
-    }
-    if (this.isReporter) {
-      return (
-        (child.isInput && child.isRound) || ((child.isReporter || child.isBoolean) && !child.hasScript) ? 0 :
-        child.isLabel ? 2 + child.height/2 | 0 :
-        -2 + child.height/2 | 0
-      );
-    }
   }
 
   layoutSelf() {
     var px = 4;
 
+    var lineX = 0;
     var width = 0;
-    var innerWidth = 0;
     var height = 12;
-    var xs = [];
+    var xs = [0];
 
     var parts = this.parts;
     var length = parts.length;
@@ -777,25 +765,25 @@ class Block extends Drawable {
       var part = parts[i];
 
       var md = this.minDistance(part);
-      if (md && width < md - px) { // && first line
-        width = md - px;
+      if (md && lineX < md - px) { // && first line
+        lineX = xs[xs.length - 1] = md - px;
       }
-      xs.push(width);
-      width += part.width;
-      innerWidth = Math.max(innerWidth, width + Math.max(0, md - px));
-      width += 4;
+      lineX += part.width;
+      width = Math.max(width, lineX + Math.max(0, md - px));
+      lineX += 4;
+      xs.push(lineX);
 
       var h = part.height + (part.isBubble ? 0 : 4);
       height = Math.max(height, h);
     }
-    innerWidth = Math.max(20, innerWidth + px); // * 2);
-    this.ownWidth = innerWidth;
+    width = Math.max(20, width + px * 2);
+    this.ownWidth = width;
     this.ownHeight = height;
 
     for (var i=0; i<length; i++) {
       var part = parts[i];
       var h = part.height;
-      var x = xs[i];
+      var x = px + xs[i];
       var y = (height - h) / 2;
       if (part.isBubble) y -= 2;
       if (part.isLabel) y += 1;
@@ -883,7 +871,7 @@ class Bubble extends Drawable {
   get isDraggable() { return true; }
 
   display(value) {
-    var repr = ''+value; //display(result);
+    var repr = value ? ''+value : '';
     this.label.text = repr;
     if (this.fraction === 0) this.fraction = 1;
     this.drawProgress();

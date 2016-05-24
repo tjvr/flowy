@@ -98,8 +98,10 @@ class Evaluator {
   getPrim(name, inputs) {
     console.log(bySpec);
     var byInputs = bySpec[name];
-    var hash = inputs.map(typeOf).join(", ");
-    var prim = byInputs[hash];
+    if (byInputs) {
+      var hash = inputs.map(typeOf).join(", ");
+      var prim = byInputs[hash];
+    }
     if (!prim) {
       return {
         output: null,
