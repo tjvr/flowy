@@ -98,9 +98,9 @@ export const specs = [
   // ["list", "combine %l with %r"],
 
   // ["sensing", "error"],
-  // ["sensing", "time"],
+  ["sensing", "time"],
   // ["sensing", "delay %s by %n secs", ["", 1]],
-  // ["sensing", "get %s", ["https://tjvr.org/"]],
+  ["sensing", "get %s", ["https://tjvr.org/"]],
   // ["sensing", "select %s from %html"],
 
 ];
@@ -140,6 +140,7 @@ function el(type, content) {
 
 export const functions = {
 
+  "UI <- display Error": x => el('Error', x.message || x),
   "UI <- display Str": x => el('Str', x),
   "UI <- display Int": x => el('Int', ''+x),
   "UI <- display Float": x => {
@@ -265,14 +266,52 @@ export const functions = {
     return list[index - 1];
   },
 
-  // "URL <- Str": x => x,
+  /* Async tests */
 
-  // "WebPage <- get Str": url => {
-  //   // TODO
-  // },
-  // "Time Future <- time": () => {
-  //   // TODO
-  // },
+  "WebPage Future <- get Str": function(url) {
+    var xhr = new XMLHttpRequest;
+    xhr.open('GET', 'http://crossorigin.me/' + url, true);
+    xhr.onprogress = e => {
+      this.progress(e.loaded, e.total, e.lengthComputable);
+    };
+    xhr.onload = () => {
+      if (xhr.status === 200) {
+        var r = {
+          contentType: xhr.getResponseHeader('content-type'),
+          response: xhr.response,
+        };
+
+        var mime = r.contentType;
+        var blob = r.response;
+        if (/^image\//.test(mime)) {
+          var img = new Image();
+          img.src = URL.createObjectURL(blob);
+          this.emit(img);
+        } else {
+          var reader = new FileReader;
+          reader.onloadend = () => {
+            this.emit(reader.result);
+          };
+          reader.onprogress = function(e) {
+            //future.progress(e.loaded, e.total, e.lengthComputable);
+          };
+          reader.readAsText(blob);
+        }
+      } else {
+        this.emit(new Error('HTTP ' + xhr.status + ': ' + xhr.statusText));
+      }
+    };
+    xhr.onerror = () => {
+      this.emit(new Error('XHR Error'));
+    };
+    xhr.responseType = 'blob';
+    setTimeout(xhr.send.bind(xhr));
+  },
+
+  "Time Future <- time": function() {
+    // TODO
+  },
+
   // "A Future <- delay A by Float secs": (value, time) => {
   //   // TODO
   // },
@@ -452,6 +491,7 @@ export const typeOf = (value => {
   if (typeof value === 'boolean') return 'Bool';
   if (value && value instanceof Fraction) return 'Frac';
   if (value.isObservable) return 'Uneval';
+  if (value && value.constructor === Error) return 'Error';
   throw "Unknown type: " + value;
 });
 

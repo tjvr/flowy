@@ -1769,9 +1769,11 @@ class App {
   wheel(e) {
     // TODO trackpad should scroll vertically; mouse scroll wheel should zoom!
 
-    if (e.target.className === 'result') {
-      return;
-    }
+    var t = e.target;
+    do {
+      if (t.className === 'result') return;
+      t = t.parentNode;
+    } while (t);
 
     var w = this.workspaceFromPoint(e.clientX, e.clientY);
     if (w) {

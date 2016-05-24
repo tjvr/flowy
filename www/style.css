@@ -124,7 +124,13 @@ html, body {
   overflow-y: auto;
 }
 
-.result-Str {
+.result-Error {
+  color: #e40046;
+  margin: 0 4px;
+}
+
+.result-Str,
+.result-Error {
   font: 14px/20px Helvetica Neue, Helvetica, Lucida Grande, Verdana, DejaVu Sans, sans-serif;
 }
 .result-Str:before, .result-Str:after {
@@ -188,10 +194,6 @@ html, body {
 
 .enum-field {
   color: #fff;
-}
-
-.error .result-label {
-  color: #e40046;
 }
 
 .progress {
