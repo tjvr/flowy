@@ -105,7 +105,6 @@ function onMessage(json) {
   //console.log(`<= ${json.action}`, json);
   switch (json.action) {
     case 'emit':
-      console.log(json.value);
       Node.byId[json.id].emit(json.value);
       return;
     case 'progress':
@@ -1067,6 +1066,7 @@ class Bubble extends Drawable {
   }
 
   onEmit(value) {
+    // TODO if value === null , mark invalid
     this.display(value);
     if (this.fraction === 0) this.fraction = 1;
     this.drawProgress();

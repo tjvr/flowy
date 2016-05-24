@@ -157,20 +157,25 @@ export class Observable {
   assign(value) {
     value = value;
     this._value = value;
-    this.subscribers.forEach(o => o.invalidate());
+    var seen = {};
+    this.subscribers.forEach(s => s[0].invalidate(new Set()));
   }
 
   request() {
     return this._value;
   }
 
-  subscribe(obj) {
-    this.subscribers.add(obj);
+  subscribe(obj, index) {
+    this.subscribers.add([obj, index]);
+    this.update();
   }
 
-  unsubscribe(obj) {
-    this.subscribers.delete(obj);
+  unsubscribe(obj, index) {
+    this.subscribers.delete([obj, index]);
+    this.update();
   }
+
+  update() {}
 
 }
 
@@ -184,14 +189,6 @@ export class Computed extends Observable {
     this.reprSubscriber = null;
 
     this.inputs = block.split(" ").filter(x => x[0] === '%');
-    /*
-    for (var i=0; i<this.inputs.length; i++) {
-      if (this.inputs[i] === '%u') {
-        continue;
-      }
-      if (args[i]) args[i].subscribe(this);
-    }
-    */
 
     this._isSink = false;
     this._needed = false;
@@ -217,7 +214,7 @@ export class Computed extends Observable {
     if (value) {
       this.args.forEach((arg, index) => {
         if (this.inputs[index] === '%u') return;
-        arg.subscribe(this);
+        arg.subscribe(this, index);
       });
 
       this.thread = new Thread(this);
@@ -225,8 +222,8 @@ export class Computed extends Observable {
     } else {
       this.thread = null;
 
-      this.args.forEach(arg => {
-        arg.unsubscribe(this);
+      this.args.forEach((arg, index) => {
+        arg.unsubscribe(this, index);
       });
     }
   }
@@ -239,15 +236,17 @@ export class Computed extends Observable {
     if (old) old.unsubscribe(this);
     this.args[index] = arg;
     if (arg && this.needed && !this.inputs[index] !== '%u') {
-      arg.subscribe(this);
-      this.invalidate();
+      arg.subscribe(this, index);
+      this.invalidate(new Set());
     }
     if (arg && this.block === 'display %s') {
       arg.reprSubscriber = this;
     }
   }
 
-  invalidate() {
+  invalidate(seen) {
+    //if (seen.has(this)) return;
+    seen.add(this);
     if (this.thread) this.thread.cancel();
     evaluator.emit(this, null);
     if (this.needed) {
@@ -256,22 +255,12 @@ export class Computed extends Observable {
     } else {
       this.thread = null;
     }
-    this.subscribers.forEach(o => o.invalidate());
+    this.subscribers.forEach(s => s[0].invalidate(seen));
   }
 
   request() {
     if (!this.thread) throw "oh dear";
     return this.thread;
-  }
-
-  subscribe(obj) {
-    this.subscribers.add(obj);
-    this.update();
-  }
-
-  unsubscribe(obj) {
-    this.subscribers.delete(obj);
-    this.update();
   }
 
 }

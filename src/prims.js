@@ -91,7 +91,7 @@ export const specs = [
   // ["list", "list %l %l %l"],
   ["list", "range %n to %n", [1, 5]],
 
-  ["control", "if %b then %u else %u", [true]],
+  ["control", "%u if %b else %u", ['', true]],
 
   // ["list", "do %r for each %l"],
   // ["list", "keep %r from %l"],
@@ -219,7 +219,7 @@ export const functions = {
   "Bool <- not Bool": x => !x,
   "Bool <- Bool": x => !!x,
 
-  "Any Future <- if Bool then Uneval else Uneval": function(cond, tv, fv) {
+  "Any Future <- Uneval if Bool else Uneval": function(tv, cond, fv) {
     var ignore = cond ? fv : tv;
     var want = cond ? tv : fv;
     if (ignore) ignore.unsubscribe(this.target);
