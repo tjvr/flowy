@@ -91,8 +91,11 @@ function bezel(context, path, thisArg, inset, scale) {
 
 /*****************************************************************************/
 
-import {evaluator} from "./eval"
-window.evaluator = evaluator;
+// import {evaluator} from "./eval"
+// window.evaluator = evaluator;
+
+import {evaluator, Observable, Computed} from "./eval";
+window.obs = {evaluator, Observable, Computed};
 
 evaluator.sendMessage = onMessage;
 

@@ -1,7 +1,7 @@
 
 import {bySpec, typeOf, literal} from "./prims";
 
-class Evaluator {
+export class Evaluator {
   constructor(nodes, links) {
     this.nodes = {};
     nodes.forEach(json => this.add(Node.fromJSON(json)));
@@ -13,7 +13,7 @@ class Evaluator {
     });
     setInterval(this.tick.bind(this), 1000 / 60);
 
-    this._queue = [];
+    this.queue = [];
   }
 
   static fromJSON(json) {
@@ -32,9 +32,10 @@ class Evaluator {
     return {nodes, links};
   }
 
-  add(node) {
-    if (this.nodes.hasOwnProperty(node.id)) throw "oops";
-    this.nodes[node.id] = node;
+  add(node, id) {
+    if (this.nodes.hasOwnProperty(id)) throw "oops";
+    this.nodes[id] = node;
+    node.id = id;
   }
 
   get(nodeId) {
@@ -49,23 +50,23 @@ class Evaluator {
     switch (json.action) {
       case 'link':
         var link = this.linkFromJSON(json);
-        link.to.addInput(link.index, link.from);
+        link.to.replaceArg(link.index, link.from);
         return;
       case 'unlink':
         var link = this.linkFromJSON(json);
-        link.to.removeInput(link.index);
+        link.to.replaceArg(link.index);
         return;
       case 'setLiteral':
         var node = this.get(json.id);
-        node.setLiteral(json.literal);
+        node.assign(json.literal);
         return;
       case 'setSink':
         var node = this.get(json.id);
-        node.setSink(json.isSink);
+        node.isSink = json.isSink;
         return;
       case 'create':
-        var node = Node.fromJSON(json);
-        this.add(node);
+        var node = json.hasOwnProperty('literal') ? new Observable(json.literal) : new Computed(json.name);
+        this.add(node, json.id);
         return;
       case 'destroy':
         var node = this.get(json.id);
@@ -103,6 +104,7 @@ class Evaluator {
       var prim = byInputs[hash];
     }
     if (!prim) {
+      console.log(`No prim for '${name}' inputs [${hash}]`);
       return {
         output: null,
         func: () => {},
@@ -112,25 +114,25 @@ class Evaluator {
     return prim;
   }
 
-  queue(task) {
-    if (this._queue.indexOf(task) === -1) {
-      this._queue.push(task);
+  schedule(func) {
+    if (this.queue.indexOf(func) === -1) {
+      this.queue.push(func);
     }
   }
 
-  unqueue(task) {
-    var index = this._queue.indexOf(task);
+  unschedule(func) {
+    var index = this.queue.indexOf(func);
     if (index !== -1) {
-      this._queue.splice(index, 1);
+      this.queue.splice(index, 1);
     }
   }
 
   tick() {
-    var queue = this._queue.slice();
-    this._queue = [];
+    var queue = this.queue.slice();
+    this.queue = [];
     for (var i=0; i<queue.length; i++) {
-      var task = queue[i];
-      task.func();
+      var func = queue[i];
+      func();
     }
   }
 
@@ -139,140 +141,121 @@ export const evaluator = Evaluator.instance = new Evaluator([], []);
 
 /*****************************************************************************/
 
-class Node {
-  constructor(id, name, literal, isSink) {
-    this.id = id == null ? ++Node.highestId : id;
-    this.name = name;
-    this.isLiteral = literal !== null && literal !== undefined;
-    this.isSink = isSink || false;
-    this.inputs = [];
-    this.outputs = [];
-
-    this.invalid = false;
-    this.needed = this.isSink || this.isLiteral;
-    this.requestors = [];
-    this.task = this.isLiteral ? literal : new Task(this);
+export class Observable {
+  constructor(value) {
+    this._value = value;
+    this.subscribers = new Set();
   }
 
-  static fromJSON(json) {
-    return new Node(json.id, json.name, json.literal, json.isSink);
+  assign(value) {
+    value = literal(value);
+    this._value = value;
+    this.subscribers.forEach(o => o.invalidate());
   }
 
-  toJSON() {
-    return {id: this.id, name: this.name, literal: this.isLiteral ? this.task : null, isSink: this.isSink};
+  request() {
+    return this._value;
   }
 
-  destroy() {
-    this.inputs.forEach(node => this.removeInput(this.inputs.indexOf(node)));
-    this.outputs.forEach(node => node.removeInput(node.inputs.indexOf(this)));
+  subscribe(obj) {
+    this.subscribers.add(obj);
   }
 
-  /* * */
-
-  addOutput(node) {
-    if (this.outputs.indexOf(node) !== -1) return;
-    this.outputs.push(node);
-  }
-
-  removeOutput(node) {
-    var index = this.outputs.indexOf(node);
-    if (index === -1) return;
-    this.outputs.splice(index, 1);
-  }
-
-  addInput(index, node) {
-    this.removeInput(index);
-    this.inputs[index] = node;
-    node.addOutput(this);
-    if (this.needed) {
-      node.request(this);
-    }
-    this.invalidate();
-  }
-
-  removeInput(index) {
-    var oldNode = this.inputs[index];
-    if (oldNode) {
-      oldNode.removeOutput(this);
-      oldNode.cancelRequest(this);
-    }
-    delete this.inputs[index];
-    this.invalidate();
-  }
-
-  setLiteral(value) {
-    if (this.literal === value) return;
-    if (!this.isLiteral) throw "Not a literal";
-    this.task = literal(value); //, this.types);
-    this.invalidateChildren();
-  }
-
-  setSink(isSink) {
-    if (this.isSink === isSink) return;
-    this.isSink = isSink;
-    if (isSink) {
-      this.setNeeded(true);
-    } else if (this.requestors.length === 0) {
-      this.setNeeded(false);
-    }
-  }
-
-  /* * */
-
-  invalidate() {
-    if (this.isLiteral) throw "ahh";
-    if (!this.invalid) {
-      console.log('invalidate', this);
-      this.invalid = true;
-      this.task.stop();
-      this.task = new Task(this);
-    }
-    this.invalidateChildren();
-    if (this.needed) {
-      this.task.start();
-    }
-  }
-
-  invalidateChildren() {
-    this.outputs.forEach(node => node.invalidate());
-  }
-
-  request(node) {
-    if (this.requestors.indexOf(node) !== -1) return;
-    this.requestors.push(node);
-    this.setNeeded(true);
-  }
-
-  cancelRequest(node) {
-    var index = this.requestors.indexOf(node);
-    if (index === -1) return;
-    this.requestors.splice(index, 1);
-    if (this.requestors.length === 0 && !this.isSink && !this.isLiteral) {
-      this.setNeeded(false);
-    }
-  }
-
-  setNeeded(needed) {
-    if (this.needed === needed) return;
-    this.needed = needed;
-    if (this.isLiteral) return;
-    if (needed) {
-      this.inputs.forEach(node => node.request(this));
-      this.task.start();
-    } else {
-      this.inputs.forEach(node => node.cancelRequest(this));
-      this.task.stop();
-    }
+  unsubscribe(obj) {
+    this.subscribers.delete(obj);
   }
 
 }
-Node.highestId = 1;
 
 /*****************************************************************************/
 
-class Task {
-  constructor(node) {
-    this.node = node;
+export class Computed extends Observable {
+  constructor(block, args) {
+    super();
+    this.block = block;
+    this.args = args = args || [];
+
+    var inputs = block.split(" ").filter(x => x[0] === '_');
+    for (var i=0; i<inputs.length; i++) {
+      //if (block.inputs[i].unevaluated) continue;
+      if (args[i]) args[i].subscribe(this);
+    }
+
+    this._isSink = false;
+    this._needed = false;
+    this.thread = null;
+  }
+
+  get isSink() { return this._isSink; }
+  set isSink(value) {
+    if (this._isSink === value) return;
+    this._isSink = value;
+    this.update();
+  }
+
+  update() {
+    this.needed = this._isSink || !!this.subscribers.size;
+  }
+
+  get needed() { return this._needed; }
+  set needed(value) {
+    if (this._needed === value) return;
+    this._needed = value;
+    if (this.thread) this.thread.cancel();
+    if (value) {
+      this.thread = new Thread(this);
+    } else {
+      this.thread = null;
+    }
+  }
+
+  assign(value) { throw "Computeds can't be assigned"; }
+  _assign(value) { super.assign(value); }
+
+  replaceArg(index, arg) {
+    var old = this.args[index];
+    if (old) old.unsubscribe(this);
+    this.args[index] = arg;
+    //if (!this.block.inputs[index].unevaluated) {
+    if (arg) {
+      arg.subscribe(this);
+      this.invalidate();
+    }
+  }
+
+  invalidate() {
+    if (this.thread) this.thread.cancel();
+    if (this.needed) {
+      this.thread = new Thread(this);
+      this.thread.start();
+    } else {
+      this.thread = null;
+    }
+    this.subscribers.forEach(o => o.invalidate());
+  }
+
+  request() {
+    if (!this.thread) throw "oh dear";
+    return this.thread;
+  }
+
+  subscribe(obj) {
+    this.subscribers.add(obj);
+    this.update();
+  }
+
+  unsubscribe(obj) {
+    this.subscribers.delete(obj);
+    this.update();
+  }
+
+}
+
+/*****************************************************************************/
+
+class Thread {
+  constructor(computed) {
+    this.target = computed;
     this.inputs = [];
 
     this.prim = null;
@@ -281,7 +264,6 @@ class Task {
     this.isDone = false;
     this.isStopped = false;
     this.waiting = [];
-    this.func = null;
     this.result = null;
 
     this.loaded = 0;
@@ -301,14 +283,12 @@ class Task {
     if (this.isStopped) throw "Can't resume stopped task";
     this.isRunning = true;
 
-    var name = this.node.name;
+    var name = this.target.block;
     console.log('start', name);
 
     var next = () => {
-      this.node.task.invalid = false;
       this.prim = evaluator.getPrim(name, inputs);
-      this.func = compute;
-      evaluator.queue(this);
+      this.schedule(compute);
     };
 
     var compute = () => {
@@ -324,18 +304,18 @@ class Task {
       }
     };
 
-    this.node.inputs.forEach(node => {
-      if (!node.needed) throw 'poo';
+    this.target.args.forEach(obj => {
+      if (!(obj.needed || obj.constructor === Observable)) throw 'poo';
     });
 
-    var inputs = this.node.inputs.map(node => node.task);
+    var inputs = this.target.args.map(obj => obj.request());
     var tasks = inputs.filter(task => task.isTask); // TODO
     this.await(next, tasks);
   }
 
-  think() {
-    this.node.invalid = false;
-    this.func(this);
+  schedule(func) {
+    this.func = func;
+    evaluator.schedule(func);
   }
 
   emit(result) {
@@ -343,41 +323,41 @@ class Task {
     this.isDone = true;
     this.result = result;
     this.dispatchEmit(result);
-    evaluator.emit(this.node, result);
+    evaluator.emit(this.target, result);
   }
 
   await(func, tasks) {
     if (!func) throw "noo";
-    this.func = func;
-    if (!tasks.length) {
-      evaluator.queue(this);
-      return;
-    }
     tasks.forEach(task => {
       if (this.waiting.indexOf(task) === -1) {
         this.requests.push(task);
-        this.waiting.push(task);
+        if (!task.isDone) this.waiting.push(task);
         task.addEventListener('emit', this.signal.bind(this, task));
         task.addEventListener('progress', this.update.bind(this));
         this.update();
       }
     });
+    this.func = func;
+    if (!this.waiting.length) {
+      this.schedule(func);
+      return;
+    }
   }
 
   signal(task) {
     var index = this.waiting.indexOf(task);
     if (index === -1) return;
     this.waiting.splice(index, 1);
-    evaluator.queue(this);
+    evaluator.schedule(this.func);
   }
 
-  stop() {
+  cancel() {
     this.waiting.forEach(task => {
       task.removeEventListener(this);
     });
     this.isRunning = false;
     this.isStopped = true;
-    evaluator.unqueue(this);
+    evaluator.unschedule(this.func);
     // TODO
   }
 
@@ -391,7 +371,7 @@ class Task {
       total: total,
       lengthComputable: lengthComputable
     });
-    evaluator.progress(this.node, loaded, total);
+    evaluator.progress(this.target, loaded, total);
   }
 
   update() {
@@ -437,9 +417,29 @@ class Task {
   }
 
 }
-
 import {addEvents} from "./events";
-addEvents(Task, 'emit', 'progress');
+addEvents(Thread, 'emit', 'progress');
 
 /*****************************************************************************/
+
+var compile = function(obj) {
+
+  var source = "";
+  var seen = new Set();
+  var deps = [];
+
+  var thing = function(obj) {
+    seen.add(obj);
+    for (var i=0; i<obj.inputs.length; i++) {
+      if (obj[i].subscribers.length === 1) {
+        thing(obj);
+      } else if (seen.has(obj)) {
+        continue;
+      }
+      deps.push(obj);
+    }
+  };
+
+};
+
 
