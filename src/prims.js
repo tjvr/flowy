@@ -86,7 +86,7 @@ export const specs = [
 
   // ["math", "random %n to %n", [1, 10]],
 
-  ["list", "item %l of %l"],
+  ["list", "item %n of %l", [1]],
   // ["list", "list %l"],
   // ["list", "list %l %l %l"],
   ["list", "range %n to %n", [1, 5]],
@@ -157,7 +157,15 @@ export const functions = {
     return f;
   },
   "UI <- display Bool": x => el('Bool', x ? 'Yes' : 'No'),
-  "UI <- display List": list => {
+  "UI <- display List": (list, runtime) => {
+    var l = el('List');
+    list.forEach(value => {
+      var item = el('List-item');
+      item.textContent = ''+value;
+      // TODO async contents
+      l.appendChild(item);
+    });
+    return l;
   },
 
   "Str <- id Str": x => x,
@@ -219,6 +227,9 @@ export const functions = {
     return result;
   },
 
+  "Any <- item Int of List": (index, list) => {
+    return list[index - 1];
+  },
 
   // "URL <- Str": x => x,
 
@@ -389,8 +400,14 @@ Object.keys(functions).forEach(function(spec) {
 export {bySpec};
 
 export const typeOf = (value => {
-  if (value && value.isTask) return value.prim ? `${value.prim.output}` : 'Future';
+  if (value && value.isTask) {
+    if (value.isDone) {
+      return typeOf(value.result);
+    }
+    return value.prim ? `${value.prim.output}` : 'Future';
+  }
   if (value && value.constructor === BigInteger || (/^-?[0-9]+$/.test(''+value))) return 'Int';
+  if (value && value.constructor === Array) return 'List';
   if (typeof value === 'number') return 'Float';
   if (typeof value === 'string') return 'Str';
   if (typeof value === 'boolean') return 'Bool';

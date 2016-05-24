@@ -264,7 +264,7 @@ export class Computed extends Observable {
 class Thread {
   constructor(computed) {
     this.target = computed;
-    this.inputs = [];
+    this.inputs = computed.args;
 
     this.prim = null;
 
@@ -323,7 +323,7 @@ class Thread {
       if (!(obj.needed || obj.constructor === Observable)) throw 'poo';
     });
 
-    var inputs = this.target.args.map(obj => obj.request());
+    var inputs = this.inputs.map(obj => obj.request());
     var tasks = inputs.filter(task => task.isTask); // TODO
     this.await(next, tasks);
   }
@@ -357,6 +357,10 @@ class Thread {
       this.schedule(func);
       return;
     }
+  }
+
+  map(list, func) {
+
   }
 
   signal(task) {
