@@ -104,15 +104,45 @@ html, body {
   z-index: 1;
 }
 
-.result-label {
+.result {
   color: #000;
   font: 16px/20px Source Code Pro, Monaco, monospace;
-  letter-spacing: -1px;
-  overflow-y: scroll;
   white-space: pre;
+  display: inline-block;
 
   /* TODO frames */
-  overflow-y: scroll;
+  overflow-x: hidden;
+  overflow-y: auto;
+}
+
+.result-Str {
+  font: 14px/20px Helvetica Neue, Helvetica, Lucida Grande, Verdana, DejaVu Sans, sans-serif;
+}
+.result-Str:before, .result-Str:after {
+  font: bold 16px/20px Baskerville, Georgia, serif;
+  content: "“";
+}
+.result-Str:after {
+  content: "”";
+}
+
+.result-Int,
+.result-Float,
+.result-Frac-num,
+.result-Frac-den {
+  font: 14px/20px Source Code Pro, Monaco, monospace;
+}
+
+.result-Frac {
+  margin: 0 4px;
+}
+.result-Frac-num,
+.result-Frac-den {
+  padding: 0 4px;
+}
+.result-Frac-bar {
+  background: #000;
+  height: 2px;
 }
 
 .field {

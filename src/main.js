@@ -674,7 +674,7 @@ class Block extends Drawable {
     if (arg.parent !== this || !arg.isBlock && !arg.isInput) return this;
 
     var i = this.args.indexOf(arg);
-    this.replace(arg, new Input(arg.isInput ? arg.value : arg.displayValue));
+    this.replace(arg, new Input(arg.isInput ? arg.value : ''));
   };
 
   detach() {
@@ -749,6 +749,9 @@ class Block extends Drawable {
   minDistance(part) {
     if (part.isBubble) {
       return 0;
+    }
+    if (part.isBlock) {
+      return 6;
     }
     return -2 + part.height/2 | 0;
   }
@@ -852,20 +855,17 @@ class Bubble extends Drawable {
     this.context = this.canvas.getContext('2d');
 
     this.el.appendChild(this.progress = el('progress absolute'));
-    // this.progress.style.left = `${Bubble.radius}px`;
-    // this.progress.style.top = `${Bubble.tipSize}px`;
+    this.el.appendChild(this.elContents = el('result'));
 
     this.target = target;
     this.curve = null;
-    this.label = new Label("", 'result-label');
     this.value = target.value;
-    this.el.appendChild(this.label.el);
 
     if (target.workspace) target.workspace.add(this);
 
     this.node = target.node;
     this.display(this.target.repr.value);
-    this.target.repr.onEmit(this.display.bind(this));
+    this.target.repr.onEmit(this.onEmit.bind(this));
     this.target.repr.onProgress(this.onProgress.bind(this));
   }
 
@@ -873,8 +873,15 @@ class Bubble extends Drawable {
   get isDraggable() { return true; }
 
   display(value) {
-    var repr = value ? ''+value : '';
-    this.label.text = repr;
+    // TODO ellipsis during progress
+    this.elContents.innerHTML = '';
+    if (value) this.elContents.appendChild(value);
+    this.valueWidth = value ? this.elContents.offsetWidth : 0;
+    this.valueHeight = value ? this.elContents.offsetHeight : 16;
+  }
+
+  onEmit(value) {
+    this.display(value);
     if (this.fraction === 0) this.fraction = 1;
     this.drawProgress();
     setTimeout(() => {
@@ -945,20 +952,14 @@ class Bubble extends Drawable {
     var px = Bubble.paddingX;
     var py = Bubble.paddingY;
 
-    // TODO layout custom dom things
-    var metrics = Bubble.measure(this.label.text);
-
-    var w = Math.min(512, metrics.width);
-    var h = Math.min(256, metrics.height);
-    this.label.el.style.width = `${w}px`;
-    this.label.el.style.height = `${h}px`;
-
+    var w = this.valueWidth;
+    var h = this.valueHeight;
     this.width = Math.max(Bubble.minWidth, w + 2 * px);
     var t = Bubble.tipSize // Math.min(, this.width / 2);
     this.height = h + 2 * py + t;
     var x = (this.width - w) / 2;
     var y = t + py + 1;
-    this.label.moveTo(x, y);
+    this.elContents.style.transform = `translate(${x}px, ${y}px)`;
 
     this.moved();
     this.redraw();
@@ -977,8 +978,8 @@ class Bubble extends Drawable {
     context.lineTo(w12, 1);
     context.lineTo(w12 + t, t + .5);
     context.arc(w - r - 1, t + r + .5, r, PI32, 0, false);
-    context.arc(w - r - 1, h - r - .5, r, 0, PI12, false);
-    context.arc(r + 1, h - r - .5, r, PI12, PI, false);
+    context.arc(w - r - 1, h - r - 1, r, 0, PI12, false);
+    context.arc(r + 1, h - r - 1, r, PI12, PI, false);
   }
 
   draw() {

@@ -64,6 +64,7 @@ export const specs = [
   ["math", "%n rem %n"],
   ["math", "%n ^ %n", ["", 2]],
   ["math", "round %n"],
+  ["math", "float %n"],
 
   ["math", "sqrt %n", [10]],
   ["math", "sin %n", [30]],
@@ -128,10 +129,40 @@ class Imp {
   }
 }
 
+function el(type, content) {
+  var el = document.createElement('div');
+  el.className = 'result-' + type;
+  if (content) el.textContent = content+'\u200b';
+  return el;
+}
+
 export const functions = {
+
+  "UI <- display Str": x => el('Str', x),
+  "UI <- display Int": x => el('Int', ''+x),
+  "UI <- display Float": x => {
+    var r = ''+x;
+    var index = r.indexOf('.');
+    if (index === -1) {
+      r += '.';
+    } else if (index !== -1 && !/e/.test(r)) {
+    }
+    return el('Float', r);
+  },
+  "UI <- display Frac": frac => {
+    var f = el('Frac');
+    f.appendChild(el('Frac-num', ''+frac.n));
+    f.appendChild(el('Frac-bar'));
+    f.appendChild(el('Frac-den', ''+frac.d));
+    return f;
+  },
+  "UI <- display Bool": x => x.toString(),
+  "UI <- display List": list => {
+  },
 
   "Str <- id Str": x => x,
 
+  /* Int */
   "Int <- Int + Int": BigInteger.add,
   "Int <- Int – Int": BigInteger.subtract,
   "Int <- Int × Int": BigInteger.multiply,
@@ -140,21 +171,24 @@ export const functions = {
   "Bool <- Int = Int": (a, b) => BigInteger.compareTo(a, b) === 0,
   "Bool <- Int < Int": (a, b) => BigInteger.compareTo(a, b) === -1,
   "Frac <- Int / Int": (a, b) => new Fraction(a, b),
+  "Float <- float Int": x => +x.toString(),
 
+  /* Frac */
   "Frac <- Frac + Frac": (a, b) => a.add(b),
   "Frac <- Frac – Frac": (a, b) => a.sub(b),
   "Frac <- Frac × Frac": (a, b) => a.mul(b),
   "Frac <- Frac / Frac": (a, b) => a.div(b),
-  "Float <- Frac": x => x.n / x.d,
+  "Float <- float Frac": x => x.n / x.d,
+  "Int <- round Frac": x => BigInteger.parseInt(''+Math.round(x.n / x.d)), // TODO
 
-  // TODO Decimal
-
+  /* Float */
   "Float <- Float + Float": (a, b) => a + b,
   "Float <- Float – Float": (a, b) => a - b,
   "Float <- Float × Float": (a, b) => a * b,
   "Float <- Float / Float": (a, b) => a / b,
   "Float <- Float rem Float": (a, b) => (((a % b) + b) % b),
   "Int <- round Float": x => BigInteger.parseInt(''+Math.round(x)),
+  "Float <- float Float": x => x,
   "Bool <- Float = Float": (a, b) => a === b,
   "Bool <- Float < Float": (a, b) => a < b,
 
@@ -163,9 +197,22 @@ export const functions = {
   "Float <- cos Float": x => Math.sin(Math.PI / 180 * x),
   "Float <- tan Float": x => Math.sin(Math.PI / 180 * x),
 
-  // TODO Complex
+  /* Complex */
+  // TODO
 
-  "UI <- display Str": x => x.toString(),
+  /* Decimal */
+  // TODO
+
+  /* List */
+
+  "List <- range Int to Int": (from, to) => {
+    var result = [];
+    for (var i=from; i<=to; i++) {
+      result.push(i);
+    }
+    return result;
+  },
+
 
   // "URL <- Str": x => x,
 
@@ -188,9 +235,7 @@ let coercions = {
   "Str <- Int": x => x.toString(),
   "Str <- Frac": x => x.toString(),
   "Str <- Float": x => x.toFixed(2),
-  "Str <- Bool": x => x ? 'Yes' : 'No',
 
-  //"Int <- Float": x => +x.toString(),
   "Frac <- Int": x => new Fraction(x, 1),
   "Float <- Int": x => +x.toString(),
 };
