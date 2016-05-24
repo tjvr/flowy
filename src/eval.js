@@ -107,10 +107,10 @@ export class Evaluator {
     }
 
     var hash = inputs.map(typeOf).join(", ");
-    var prim = byInputs[hash] || byInputs['Bool, Any, Any']; // TODO
+    var prim = byInputs[hash] || byInputs['Uneval, Bool, Uneval']; // TODO
     if (!prim) {
-      // TODO type coercion
-      console.log(`No prim for '${name}' inputs [${hash}]`);
+      console.log(`No prim for '${name}' inputs [${hash}] matched ${Object.keys(byInputs).join("; ")}`);
+      // TODO auto vectorisation
       return {
         output: null,
         func: () => {},
@@ -310,7 +310,6 @@ class Thread {
       var args = inputs.map((obj, index) => {
         if (!obj.isTask) return obj;
         if (this.target.inputs[index] === '%u') {
-          debugger;
           return obj;
         }
         return obj.result;
@@ -325,15 +324,12 @@ class Thread {
         }
       }
       var result = func.apply(this, args);
+      //console.log(func, args, result);
       if (!/Future/.test(prim.output)) {
         this.emit(result);
         this.isRunning = false;
       }
     };
-
-    // this.target.args.forEach(obj => {
-    //   if (!(obj.needed || obj.constructor === Observable)) throw 'poo';
-    // });
 
     var inputs = this.inputs.map((obj, index) => {
       if (this.target.inputs[index] === '%u') {

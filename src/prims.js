@@ -171,6 +171,7 @@ export const functions = {
   },
 
   "Str <- id Str": x => x,
+  "Bool <- Str = Str": (a, b) => a === b,
 
   /* Int */
   "Int <- Int + Int": BigInteger.add,
@@ -422,7 +423,7 @@ export const typeOf = (value => {
     }
     return value.prim ? `${value.prim.output}` : 'Future';
   }
-  if (value && value.constructor === BigInteger || (/^-?[0-9]+$/.test(''+value))) return 'Int';
+  if (value && value.constructor === BigInteger || (typeof value === 'number' && /^-?[0-9]+$/.test(''+value))) return 'Int';
   if (value && value.constructor === Array) return 'List';
   if (typeof value === 'number') return 'Float';
   if (typeof value === 'string') return 'Str';
