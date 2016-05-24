@@ -79,9 +79,10 @@ export const specs = [
   ["bool", "not %b"],
   ["bool", "%b"],
 
-  // ["str", "join %s %s"],
-  // ["str", "join words %s"],
-  // ["str", "split words %s"],
+  ["str", "join %s %s"],
+  ["str", "join words %s"],
+  ["str", "split words %s"],
+  //["str", "split lines %s"],
 
   // ["math", "random %n to %n", [1, 10]],
 
@@ -101,6 +102,7 @@ export const specs = [
   ["sensing", "time"],
   // ["sensing", "delay %s by %n secs", ["", 1]],
   ["sensing", "get %s", ["https://tjvr.org/"]],
+  ["sensing", "get %s", ["http://i.imgur.com/svIp9cx.jpg?1"]],
   // ["sensing", "select %s from %html"],
 
 ];
@@ -176,17 +178,10 @@ export const functions = {
     return l;
   },
   "UI <- display Image": image => {
-    var wrap = el('Image');
-    wrap.appendChild(image);
-    return wrap;
+    var image = image.cloneNode();
+    image.className = 'result-Image';
+    return image;
   },
-
-  "Str <- literal Str": x => x,
-  "Int <- literal Int": x => x,
-  "Frac <- literal Frac": x => x,
-  "Float <- literal Float": x => x,
-
-  "Bool <- Str = Str": (a, b) => a === b,
 
   /* Int */
   "Int <- Int + Int": BigInteger.add,
@@ -247,6 +242,18 @@ export const functions = {
       this.isRunning = false;
     });
   },
+
+  /* Str */
+  "Str <- literal Str": x => x,
+  "Int <- literal Int": x => x,
+  "Frac <- literal Frac": x => x,
+  "Float <- literal Float": x => x,
+
+  "Bool <- Str = Str": (a, b) => a === b,
+  "Str <- join Str Str": (a, b) => a + b,
+  "Str <- join words List": x => x.join(" "),
+  "Str List <- split words Str": x => x.trim().split(/\s+/g),
+  //"Str List <- split lines Str": x => x.split(/\r|\n|\r\n/g),
 
   /* List */
 
@@ -336,15 +343,22 @@ let coercions = {
 
   "List <- Empty": x => [],
 
+  "List <- Int": x => [x],
+  "List <- Frac": x => [x],
+  "List <- Float": x => [x],
+  "List <- Bool": x => [x],
+  "List <- Str": x => [x],
+  "List <- Image": x => [x],
+
   "Frac <- Int": x => new Fraction(x, 1),
   "Float <- Int": x => +x.toString(),
 
   "Bool <- List": x => !!x.length,
 
   "Any <- Int": x => x,
-  "Any <- Bool": x => x,
   "Any <- Frac": x => x,
   "Any <- Float": x => x,
+  "Any <- Bool": x => x,
   "Any <- Empty": x => x,
   "Any <- Str": x => x,
   "Any <- Image": x => x,
