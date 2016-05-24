@@ -171,6 +171,15 @@ html, body {
   height: 2px;
 }
 
+.result-Image {
+  margin: 8px;
+}
+.result-Image img {
+  max-width: 256px;
+  max-height: 234px;
+}
+
+
 .field {
   color: #505050;
   font: 14px/20px Noto Sans, Lucida Grande, Verdana, Arial, DejaVu Sans, sans-serif;

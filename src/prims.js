@@ -175,6 +175,11 @@ export const functions = {
     });
     return l;
   },
+  "UI <- display Image": image => {
+    var wrap = el('Image');
+    wrap.appendChild(image);
+    return wrap;
+  },
 
   "Str <- literal Str": x => x,
   "Int <- literal Int": x => x,
@@ -245,10 +250,10 @@ export const functions = {
 
   /* List */
 
-  "List <- list Str": a => {
+  "List <- list Any": a => {
     return [a];
   },
-  "List <- list Str Str Str": (a, b, c) => {
+  "List <- list Any Any Any": (a, b, c) => {
     return [a, b, c];
   },
   "List <- List concat List": (a, b) => {
@@ -287,7 +292,7 @@ export const functions = {
           var img = new Image();
           img.src = URL.createObjectURL(blob);
           this.emit(img);
-        } else {
+        } else if (/^text\//.test(mime)) {
           var reader = new FileReader;
           reader.onloadend = () => {
             this.emit(reader.result);
@@ -296,6 +301,8 @@ export const functions = {
             //future.progress(e.loaded, e.total, e.lengthComputable);
           };
           reader.readAsText(blob);
+        } else {
+          this.emit(new Error(`Unknown content type: ${mime}`));
         }
       } else {
         this.emit(new Error('HTTP ' + xhr.status + ': ' + xhr.statusText));
@@ -333,6 +340,14 @@ let coercions = {
   "Float <- Int": x => +x.toString(),
 
   "Bool <- List": x => !!x.length,
+
+  "Any <- Int": x => x,
+  "Any <- Bool": x => x,
+  "Any <- Frac": x => x,
+  "Any <- Float": x => x,
+  "Any <- Empty": x => x,
+  "Any <- Str": x => x,
+  "Any <- Image": x => x,
 };
 var coercionsByType = {};
 Object.keys(coercions).forEach(spec => {
@@ -492,6 +507,7 @@ export const typeOf = (value => {
   if (value && value instanceof Fraction) return 'Frac';
   if (value.isObservable) return 'Uneval';
   if (value && value.constructor === Error) return 'Error';
+  if (value && value.constructor === Image) return 'Image';
   throw "Unknown type: " + value;
 });
 
