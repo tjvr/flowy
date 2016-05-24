@@ -305,6 +305,14 @@ class Thread {
         //throw 'ahh'; // TODO
       } else {
         var args = inputs.map(task => task.isTask ? task.result : task); // TODO
+        if (prim.coercions) {
+          for (var i=0; i<prim.coercions.length; i++) {
+            var coerce = prim.coercions[i];
+            if (coerce) {
+              args[i] = coerce(args[i]);
+            }
+          }
+        }
         var result = func.apply(null, args);
         this.emit(result);
         this.isRunning = false;

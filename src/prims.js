@@ -1,6 +1,11 @@
 
+function assert(x) {
+  if (!x) throw "Assertion failed!";
+}
+
 import {BigInteger} from "js-big-integer";
 import Fraction from "fraction.js";
+window.BigInteger = BigInteger;
 
 var literals = [
   ["Int", /^-?[0-9]+$/, BigInteger.parseInt],
@@ -127,7 +132,6 @@ export const functions = {
 
   "Str <- id Str": x => x,
 
-  //"Int <- Float": x => +x.toString(),
   "Int <- Int + Int": BigInteger.add,
   "Int <- Int – Int": BigInteger.subtract,
   "Int <- Int × Int": BigInteger.multiply,
@@ -136,26 +140,23 @@ export const functions = {
   "Bool <- Int = Int": (a, b) => BigInteger.compareTo(a, b) === 0,
   "Bool <- Int < Int": (a, b) => BigInteger.compareTo(a, b) === -1,
   "Frac <- Int / Int": (a, b) => new Fraction(a, b),
-  "Str <- display Int": x => x.toString(),
 
-  //"Frac <- Int": x => new Fraction(x, 1),
   "Frac <- Frac + Frac": (a, b) => a.add(b),
   "Frac <- Frac – Frac": (a, b) => a.sub(b),
   "Frac <- Frac × Frac": (a, b) => a.mul(b),
   "Frac <- Frac / Frac": (a, b) => a.div(b),
   "Float <- Frac": x => x.n / x.d,
-  "Str <- display Frac": x => x.toString(),
 
   // TODO Decimal
 
-  //"Float <- Int": x => +x.toString(),
   "Float <- Float + Float": (a, b) => a + b,
   "Float <- Float – Float": (a, b) => a - b,
   "Float <- Float × Float": (a, b) => a * b,
   "Float <- Float / Float": (a, b) => a / b,
   "Float <- Float rem Float": (a, b) => (((a % b) + b) % b),
   "Int <- round Float": x => BigInteger.parseInt(''+Math.round(x)),
-  "Str <- display Float": x => x.toFixed(2),
+  "Bool <- Float = Float": (a, b) => a === b,
+  "Bool <- Float < Float": (a, b) => a < b,
 
   "Float <- sqrt Float": Math.sqrt,
   "Float <- sin Float": x => Math.sin(Math.PI / 180 * x),
@@ -164,7 +165,7 @@ export const functions = {
 
   // TODO Complex
 
-  "Str <- display Str": x => x.toString(),
+  "UI <- display Str": x => x.toString(),
 
   // "URL <- Str": x => x,
 
@@ -183,13 +184,25 @@ export const functions = {
 
 };
 
-var inputShapes = {
-  Int: '%n',
-  Frac: '%n',
-  Float: '%n',
-  Str: '%s',
-  List: '%l',
+let coercions = {
+  "Str <- Int": x => x.toString(),
+  "Str <- Frac": x => x.toString(),
+  "Str <- Float": x => x.toFixed(2),
+  "Str <- Bool": x => x ? 'Yes' : 'No',
+
+  //"Int <- Float": x => +x.toString(),
+  "Frac <- Int": x => new Fraction(x, 1),
+  "Float <- Int": x => +x.toString(),
 };
+var coercionsByType = {};
+Object.keys(coercions).forEach(spec => {
+  var info = parseSpec(spec);
+  assert(info.inputs.length === 1);
+  let inp = info.inputs[0];
+  let out = info.output;
+  var byInput = coercionsByType[out] = coercionsByType[out] || [];
+  byInput.push([inp, coercions[spec]]);
+});
 
 function parseSpec(spec) {
   var words = spec.split(/([A-Za-z]+|[()]|<-)|\s+/g).filter(x => !!x);
@@ -197,10 +210,6 @@ function parseSpec(spec) {
   var i = 0;
   function next() { tok = words[++i]; }
   function peek() { return words[i + 1]; }
-
-  function assert(x) {
-    if (!x) throw "Assertion failed!";
-  }
 
   var isType = (tok => /^[A-Z_]/.test(tok));
 
@@ -273,14 +282,55 @@ function parseSpec(spec) {
 
 var bySpec = {};
 
+function coercify(inputs) {
+  if (inputs.length === 0) {
+    return [{inputs: [], coercions: []}];
+  };
+  inputs = inputs.slice();
+  var last = inputs.pop();
+  var others = coercify(inputs);
+  var results = [];
+  others.forEach(x => {
+    let {inputs, coercions} = x;
+
+    results.push({
+      inputs: inputs.concat([last]),
+      coercions: coercions.concat([null]),
+    });
+
+    var byInput = coercionsByType[last] || [];
+    byInput.forEach(c => {
+      let [input, coercion] = c;
+      results.push({
+        inputs: inputs.concat([input]),
+        coercions: coercions.concat([coercion]),
+      });
+    });
+  });
+  return results;
+}
+
 Object.keys(functions).forEach(function(spec) {
   var info = parseSpec(spec);
   var byInputs = bySpec[info.spec] = bySpec[info.spec] || {};
-  byInputs[info.inputs.join(", ")] = {
-    inputs: info.inputs,
-    output: info.output,
-    func: functions[spec],
-  };
+
+  coercify(info.inputs).forEach((c, index) => {
+    let {inputs, coercions} = c;
+    if (index === 0) {
+      coercions.forEach(c => assert(c === null));
+    }
+    var hash = inputs.join(", ");
+    if (byInputs[hash] && index > 0) {
+      return;
+    }
+    byInputs[hash] = {
+      inputs: inputs,
+      output: info.output,
+      func: functions[spec],
+      coercions: coercions,
+    };
+  });
+
 });
 
 export {bySpec};

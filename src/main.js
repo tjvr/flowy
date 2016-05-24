@@ -439,7 +439,9 @@ class Input extends Drawable {
     value = ''+value;
     this._value = value;
     this.node.setLiteral(value);
-    this.field.value = value;
+    if (this.field.value !== value) {
+      this.field.value = value;
+    }
     this.layout();
   }
 
