@@ -245,7 +245,7 @@ export class Computed extends Observable {
   }
 
   invalidate(seen) {
-    //if (seen.has(this)) return;
+    if (seen.has(this)) return;
     seen.add(this);
     if (this.thread) this.thread.cancel();
     evaluator.emit(this, null);
