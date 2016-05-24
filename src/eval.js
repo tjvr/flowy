@@ -97,13 +97,20 @@ export class Evaluator {
   /* * */
 
   getPrim(name, inputs) {
-    console.log(bySpec);
     var byInputs = bySpec[name];
-    if (byInputs) {
-      var hash = inputs.map(typeOf).join(", ");
-      var prim = byInputs[hash];
+    if (!byInputs) {
+      console.log(`No prims for '${name}'`);
+      return {
+        output: null,
+        func: () => {},
+      };
     }
+
+    var hash = inputs.map(typeOf).join(", ");
+    if (''+typeOf(inputs[0]) === 'undefined') debugger;
+    var prim = byInputs[hash];
     if (!prim) {
+      // TODO type coercion
       console.log(`No prim for '${name}' inputs [${hash}]`);
       return {
         output: null,
@@ -143,7 +150,7 @@ export const evaluator = Evaluator.instance = new Evaluator([], []);
 
 export class Observable {
   constructor(value) {
-    this._value = value;
+    this._value = literal(value);
     this.subscribers = new Set();
   }
 
@@ -204,6 +211,7 @@ export class Computed extends Observable {
     if (this.thread) this.thread.cancel();
     if (value) {
       this.thread = new Thread(this);
+      this.thread.start();
     } else {
       this.thread = null;
     }
@@ -284,7 +292,6 @@ class Thread {
     this.isRunning = true;
 
     var name = this.target.block;
-    console.log('start', name);
 
     var next = () => {
       this.prim = evaluator.getPrim(name, inputs);
@@ -295,7 +302,7 @@ class Thread {
       var prim = this.prim;
       var func = prim.func;
       if (/Future/.test(prim.output)) {
-        throw 'ahh'; // TODO
+        //throw 'ahh'; // TODO
       } else {
         var args = inputs.map(task => task.isTask ? task.result : task); // TODO
         var result = func.apply(null, args);

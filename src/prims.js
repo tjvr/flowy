@@ -23,6 +23,7 @@ literals.forEach(l => {
 
 
 export const literal = (value, types) => {
+  value = value === undefined ? '' : ''+value;
   //for (var i=0; i<types.length; i++) {
   //  var type = types[i];
   //  var lits = literalsByType[type];
@@ -30,6 +31,7 @@ export const literal = (value, types) => {
   for (var j=0; j<lits.length; j++) {
     let [type, pat, func] = lits[j];
     if (pat.test(value)) {
+      // TODO detect BigInteger
       return func(value);
     }
   }
@@ -45,56 +47,63 @@ export const specs = [
   // TODO variadic
   // TODO optional arguments
 
-  ["ring", "_", []],
-  ["hidden", "display _", []],
+  ["ring", "%s", []],
+  ["hidden", "display %s", []],
 
-  ["ops", "id _"],
+  ["ops", "id %s"],
 
-  ["math", "_ + _"],
-  ["math", "_ – _"],
-  ["math", "_ × _"],
-  ["math", "_ / _"],
-  ["math", "_ rem _"],
-  ["math", "_ ^ _", ["", 2]],
-  ["math", "round _"],
+  ["math", "%n + %n"],
+  ["math", "%n – %n"],
+  ["math", "%n × %n"],
+  ["math", "%n / %n"],
+  ["math", "%n rem %n"],
+  ["math", "%n ^ %n", ["", 2]],
+  ["math", "round %n"],
 
-  ["math", "sqrt of _", [10]],
-  ["math", "sin of _", [30]],
-  ["math", "cos of _", [60]],
-  ["math", "tan of _", [45]],
+  ["math", "sqrt %n", [10]],
+  ["math", "sin %n", [30]],
+  ["math", "cos %n", [60]],
+  ["math", "tan %n", [45]],
 
-  ["ops", "_ = _"],
-  ["ops", "_ < _"],
+  ["ops", "%s = %s"],
+  ["ops", "%s < %s"],
 
-  ["bool", "_ and _"],
-  ["bool", "_ or _"],
-  ["bool", "not _"],
-  ["bool", "true"],
-  ["bool", "false"],
+  ["bool", "%b and %b"],
+  ["bool", "%b or %b"],
+  ["bool", "not %b"],
+  ["bool", "%b"],
   // TODO gp-like toggle switches
 
-  ["str", "join _ _"],
-  ["str", "join words _"],
-  ["str", "split words _"],
+  ["str", "join %s %s"],
+  ["str", "join words %s"],
+  ["str", "split words %s"],
 
-  ["math", "random _ to _", [1, 10]],
+  ["math", "random %n to %n", [1, 10]],
 
-  ["list", "item _ of _"],
-  ["list", "list _"],
-  ["list", "list _ _ _"],
-  ["list", "range _1 to _5"],
+  ["list", "item %l of %l"],
+  ["list", "list %l"],
+  ["list", "list %l %l %l"],
+  ["list", "range %n to %n", [1, 5]],
 
-  ["list", "do _ring for each _"],
-  ["list", "keep _ring from _"],
-  ["list", "combine _ with _ring"],
+  ["list", "do %r for each %l"],
+  ["list", "keep %r from %l"],
+  ["list", "combine %l with %r"],
 
   ["sensing", "error"],
   ["sensing", "time"],
-  ["sensing", "delay _ by _ secs"],
-  ["sensing", "get _"],
-  ["sensing", "select _ from _"],
+  ["sensing", "delay %s by %n secs", ["", 1]],
+  ["sensing", "get %s", ["https://tjvr.org/"]],
+  ["sensing", "select %s from %html"],
 
 ];
+
+var byHash = {};
+specs.forEach(p => {
+  let [category, spec, defaults] = p;
+  var hash = spec.split(" ").map(word => /^%/.test(word) ? "_" : word).join(" ");
+  byHash[hash] = spec;
+});
+
 
 class Input {
 }
@@ -122,7 +131,7 @@ export const functions = {
   "Int <- Int + Int": BigInteger.add,
   "Int <- Int – Int": BigInteger.subtract,
   "Int <- Int × Int": BigInteger.multiply,
-  "Int <- Int mod Int": BigInteger.remainder,
+  "Int <- Int rem Int": BigInteger.remainder,
   "Int <- round Int": x => x,
   "Bool <- Int = Int": (a, b) => BigInteger.compareTo(a, b) === 0,
   "Bool <- Int < Int": (a, b) => BigInteger.compareTo(a, b) === -1,
@@ -144,9 +153,9 @@ export const functions = {
   "Float <- Float – Float": (a, b) => a - b,
   "Float <- Float × Float": (a, b) => a * b,
   "Float <- Float / Float": (a, b) => a / b,
-  "Float <- Float mod Float": (a, b) => (((a % b) + b) % b),
-  "Int <- round Float": x => BigInteger.pasreInt(''+Math.round(x)),
-  "Str <- display Float": x => ''+x,
+  "Float <- Float rem Float": (a, b) => (((a % b) + b) % b),
+  "Int <- round Float": x => BigInteger.parseInt(''+Math.round(x)),
+  "Str <- display Float": x => x.toFixed(2),
 
   "Float <- sqrt Float": Math.sqrt,
   "Float <- sin Float": x => Math.sin(Math.PI / 180 * x),
@@ -159,7 +168,7 @@ export const functions = {
 
   // "URL <- Str": x => x,
 
-  "WebPage Future <- get URL": url => {
+  "WebPage <- get Str": url => {
     // TODO
   },
   "Time Future <- time": () => {
@@ -172,6 +181,14 @@ export const functions = {
     return runtime.map(ring, list); // TODO
   },
 
+};
+
+var inputShapes = {
+  Int: '%n',
+  Frac: '%n',
+  Float: '%n',
+  Str: '%s',
+  List: '%l',
 };
 
 function parseSpec(spec) {
@@ -212,8 +229,11 @@ function parseSpec(spec) {
       }
     }
 
+    var hash = words.join(" ")
+    var spec = byHash[hash];
+    if (!spec) throw hash;
     return {
-      spec: words.join(" "),
+      spec: spec,
       inputs: inputTypes,
       output: outputType,
     }
@@ -267,9 +287,10 @@ export {bySpec};
 
 export const typeOf = (value => {
   if (value && value.isTask) return value.prim ? `${value.prim.output}` : 'Future';
-  if (value && value.constructor === BigInteger) return 'Int';
+  if (value && value.constructor === BigInteger || (/^-?[0-9]+$/.test(''+value))) return 'Int';
   if (typeof value === 'number') return 'Float';
   if (typeof value === 'string') return 'Str';
+  if (value === undefined) return '';
   throw "Unknown type: " + value;
 });
 

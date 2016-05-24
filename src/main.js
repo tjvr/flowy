@@ -91,21 +91,18 @@ function bezel(context, path, thisArg, inset, scale) {
 
 /*****************************************************************************/
 
-// import {evaluator} from "./eval"
-// window.evaluator = evaluator;
-
 import {evaluator, Observable, Computed} from "./eval";
 window.obs = {evaluator, Observable, Computed};
 
 evaluator.sendMessage = onMessage;
 
 function sendMessage(json) {
-  console.log(`=> ${json.action}`, json);
+  //console.log(`=> ${json.action}`, json);
   evaluator.onMessage(json);
 }
 
 function onMessage(json) {
-  console.log(`<= ${json.action}`, json);
+  //console.log(`<= ${json.action}`, json);
   switch (json.action) {
     case 'emit':
       Node.byId[json.id].emit(json.value);
@@ -148,7 +145,7 @@ class Node {
     return node;
   }
   static repr(node) {
-    var name = "display _";
+    var name = "display %s";
     var repr = new Node(null, name, null, false);
     sendMessage({action: 'create', id: repr.id, name: name, isSink: false});
     repr.addInput(0, node);
@@ -1321,14 +1318,15 @@ var ringBlock;
 var paletteContents = [];
 specs.forEach(p => {
   let [category, spec, defaults] = p;
+  var def = (defaults || []).slice();
   var color = colors[category] || '#555';
   var words = spec.split(/ /g);
   var parts = words.map(word => {
-    if (word === '_ring') {
+    if (word === '%r') {
       return ringBlock.copy();
-    } else if (/^_/.test(word)) {
-      var value = word.slice(1);
-      return new Input(value)
+    } else if (/^%/.test(word)) {
+      var value = def.shift() || "";
+      return new Input(value);
     } else {
       return new Label(word);
     }
@@ -1782,7 +1780,7 @@ class App {
       e.preventDefault();
     } else if (!g.pressed) {
       var obj = this.objectFromPoint(g.mouseX, g.mouseY);
-      if (!obj.setHover) obj = null;
+      if (!obj || !obj.setHover) obj = null;
       if (obj !== g.hoverScript) {
         if (g.hoverScript) g.hoverScript.setHover(false);
         g.hoverScript = obj;
