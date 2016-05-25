@@ -350,6 +350,15 @@ class Thread {
   }
 
   static fake(prim, args) {
+    if (prim.coercions) {
+      for (var i=0; i<prim.coercions.length; i++) {
+        var coerce = prim.coercions[i];
+        if (coerce) {
+          args[i] = coerce(args[i]);
+        }
+      }
+    }
+    
     var thread = new Thread(null);
     var func = prim.func;
     thread.schedule(function() {

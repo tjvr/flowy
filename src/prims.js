@@ -82,6 +82,7 @@ export const specs = [
   ["str", "join %s %s"],
   ["str", "join words %s"],
   ["str", "split words %s"],
+  ["str", "split %s by %s"],
   //["str", "split lines %s"],
 
   // ["math", "random %n to %n", [1, 10]],
@@ -172,20 +173,21 @@ export const functions = {
         value.onEmit(result => {
           item.innerHTML = '';
           var prim = this.evaluator.getPrim("display %s", [result]);
-          var result = prim.func(result);
+          var result = prim.func.call(this, result);
           item.appendChild(result);
           this.emit(l);
         });
       } else {
         value = value.isTask ? value.result : value;
         var prim = this.evaluator.getPrim("display %s", [value]);
-        var result = prim.func(value);
+        var result = prim.func.call(this, value);
         item.appendChild(result);
       }
 
       l.appendChild(item);
     });
     this.emit(l);
+    return l;
   },
   "UI <- display Image": image => {
     var image = image.cloneNode();
@@ -239,6 +241,7 @@ export const functions = {
   "Bool <- Bool or Bool": (a, b) => a || b,
   "Bool <- not Bool": x => !x,
   "Bool <- Bool": x => !!x,
+  "Bool <- Bool = Bool": (a, b) => a === b,
 
   "Any Future <- Uneval if Bool else Uneval": function(tv, cond, fv) {
     var ignore = cond ? fv : tv;
@@ -263,6 +266,7 @@ export const functions = {
   "Str <- join Str Str": (a, b) => a + b,
   "Str <- join words List": x => x.join(" "),
   "Str List <- split words Str": x => x.trim().split(/\s+/g),
+  "Str List <- split Str by Str": (x, y) => x.split(y),
   //"Str List <- split lines Str": x => x.split(/\r|\n|\r\n/g),
 
   /* List */
