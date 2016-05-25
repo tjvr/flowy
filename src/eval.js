@@ -1,4 +1,8 @@
 
+function assert(x) {
+  if (!x) throw "Assertion failed!";
+}
+
 import {bySpec, typeOf, literal} from "./prims";
 
 export class Evaluator {
@@ -106,18 +110,15 @@ export class Evaluator {
       };
     }
 
-    var hash = inputs.map(typeOf).join(", ");
+    var inputTypes = inputs.map(typeOf);
+    var hash = inputTypes.join(", ");
     var prim = byInputs[hash]; // TODO
     if (!prim) {
       console.log(`No prim for '${name}' inputs [${hash}] matched ${Object.keys(byInputs).join("; ")}`);
 
-      // if (inputs.indexOf('List')) {
-      //   inputs = inputs.map(inp => {
-      //     inp.
-      //   });
-      // }
-
-      // TODO auto vectorisation
+      // auto vectorisation
+      var prim = autoVectorise(byInputs, inputs, inputTypes);
+      if (prim) return prim;
 
       return {
         output: null,
@@ -152,6 +153,53 @@ export class Evaluator {
 
 }
 export const evaluator = Evaluator.instance = new Evaluator([], []);
+
+function autoVectorise(byInputs, inputs, inputTypes) {
+  var vectorise = [];
+  inputs.forEach((arg, index) => {
+    if (inputTypes[index] === 'List') {
+      assert(arg.isTask && arg.isDone);
+      inputTypes[index] = typeOf(arg.result[0]);
+      vectorise.push(index);
+    }
+  });
+  if (!vectorise.length) return;
+  var hash = inputTypes.join(", ");
+  var prim = byInputs[hash]; // TODO
+  console.log(inputTypes);
+
+  if (prim) {
+    return {
+      output: "List Future",
+      func: function(...args) {
+        var arrays = vectorise.map(index => args[index]);
+        var len;
+        for (var i=0; i<arrays.length; i++) {
+          var arr = arrays[i];
+          if (len === undefined) {
+            len = arr.length;
+          } else {
+            if (len !== arr.length) {
+              this.emit(new Error("Lists must be same length"));
+              return;
+            }
+          }
+        }
+
+        var threads = [];
+        for (var i=0; i<len; i++) {
+          for (var j=0; j<vectorise.length; j++) {
+            var index = vectorise[j];
+            args[index] = arrays[j][i];
+          }
+          threads.push(Thread.fake(prim, args.slice()));
+        }
+        this.awaitAll(threads, () => {});
+        this.emit(threads);
+      },
+    }
+  }
+}
 
 /*****************************************************************************/
 
@@ -278,7 +326,7 @@ export class Computed extends Observable {
 class Thread {
   constructor(computed) {
     this.target = computed;
-    this.inputs = computed.args;
+    this.inputs = computed ? computed.args : null;
 
     this.prim = null;
 
@@ -294,6 +342,20 @@ class Thread {
     this.requests = [];
 
     this.evaluator = evaluator;
+  }
+
+  static fake(prim, args) {
+    var thread = new Thread(null);
+    var func = prim.func;
+    thread.schedule(function() {
+      var result = func.apply(this, args);
+      //console.log(func, args, result);
+      if (!/Future/.test(prim.output)) {
+        this.emit(result);
+        this.isRunning = false;
+      }
+    }.bind(thread));
+    return thread;
   }
 
   get isTask() { return true; }
@@ -324,7 +386,7 @@ class Thread {
         }
         return obj.result;
       });
-      
+
       if (prim.coercions) {
         for (var i=0; i<prim.coercions.length; i++) {
           var coerce = prim.coercions[i];
@@ -361,10 +423,12 @@ class Thread {
     this.isDone = true;
     this.result = result;
     this.dispatchEmit(result);
-    evaluator.emit(this.target, result);
-    if (this.target.reprSubscriber && !this.target.reprSubscriber.needed) {
-      var repr = this.target.reprSubscriber;
-      new Thread(repr).start();
+    if (this.target) {
+      evaluator.emit(this.target, result);
+      if (this.target.reprSubscriber && !this.target.reprSubscriber.needed) {
+        var repr = this.target.reprSubscriber;
+        new Thread(repr).start();
+      }
     }
   }
 
@@ -413,7 +477,9 @@ class Thread {
       total: total,
       lengthComputable: lengthComputable
     });
-    evaluator.progress(this.target, loaded, total);
+    if (this.target) {
+      evaluator.progress(this.target, loaded, total);
+    }
   }
 
   update() {

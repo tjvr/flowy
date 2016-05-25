@@ -162,20 +162,30 @@ export const functions = {
     return f;
   },
   "UI <- display Bool": x => el('Bool', x ? 'Yes' : 'No'),
-  "UI <- display List": function(list) {
+  "UI Future <- display List": function(list) {
     var l = el('List');
     list.forEach(value => {
       var item = el('List-item');
 
-      // TODO what if value is a future
-
-      var prim = this.evaluator.getPrim("display %s", [value]);
-      var result = prim.func(value);
-      item.appendChild(result);
+      if (value.isTask && !value.isDone) {
+        item.textContent = "...";
+        value.onEmit(result => {
+          item.innerHTML = '';
+          var prim = this.evaluator.getPrim("display %s", [result]);
+          var result = prim.func(result);
+          item.appendChild(result);
+          this.emit(l);
+        });
+      } else {
+        value = value.isTask ? value.result : value;
+        var prim = this.evaluator.getPrim("display %s", [value]);
+        var result = prim.func(value);
+        item.appendChild(result);
+      }
 
       l.appendChild(item);
     });
-    return l;
+    this.emit(l);
   },
   "UI <- display Image": image => {
     var image = image.cloneNode();
@@ -297,8 +307,10 @@ export const functions = {
         var blob = r.response;
         if (/^image\//.test(mime)) {
           var img = new Image();
+          img.addEventListener('load', e => {
+            this.emit(img);
+          });
           img.src = URL.createObjectURL(blob);
-          this.emit(img);
         } else if (/^text\//.test(mime)) {
           var reader = new FileReader;
           reader.onloadend = () => {
