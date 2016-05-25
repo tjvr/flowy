@@ -366,6 +366,8 @@ let coercions = {
   "Str <- Float": x => x.toFixed(2),
   "Str <- Empty": x => "",
 
+  "Float <- Str": x => +x,
+
   "List <- Empty": x => [],
 
   "List <- Int": x => [x],
@@ -546,7 +548,7 @@ export const typeOf = (value => {
   if (value && value instanceof Fraction) return 'Frac';
   if (value.isObservable) return 'Uneval';
   if (value && value.constructor === Error) return 'Error';
-  if (value && value.constructor === Image) return 'Image';
+  if (value && value instanceof Image) return 'Image';
   throw "Unknown type: " + value;
 });
 
