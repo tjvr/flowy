@@ -311,7 +311,7 @@ export const functions = {
             this.emit(img);
           });
           img.src = URL.createObjectURL(blob);
-        } else if (/^text\//.test(mime)) {
+        } else if (/^text\//.test(mime) || mime === 'application/json') {
           var reader = new FileReader;
           reader.onloadend = () => {
             this.emit(reader.result);
@@ -335,7 +335,16 @@ export const functions = {
   },
 
   "Time Future <- time": function() {
-    // TODO
+    var update = () => {
+      if (this.isStopped) {
+        clearInterval(interval);
+        return;
+      }
+      this.emit(''+new Date());
+      this.target.invalidateChildren();
+    };
+    var interval = setInterval(update, 1000);
+    update();
   },
 
   // "A Future <- delay A by Float secs": (value, time) => {

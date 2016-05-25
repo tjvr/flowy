@@ -1066,7 +1066,11 @@ class Bubble extends Drawable {
   }
 
   onEmit(value) {
-    // TODO if value === null , mark invalid
+    if (value === null) {
+      this.elContents.classList.add('result-invalid');
+      return;
+    }
+    this.elContents.classList.remove('result-invalid');
     this.display(value);
     if (this.fraction === 0) this.fraction = 1;
     this.drawProgress();

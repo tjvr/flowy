@@ -122,6 +122,11 @@ html, body {
   max-height: 256px;
   overflow-x: hidden;
   overflow-y: auto;
+
+  transition: opacity 100ms linear;
+}
+.result-invalid {
+  opacity: 0.5;
 }
 
 .result-Error {

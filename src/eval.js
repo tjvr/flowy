@@ -314,6 +314,11 @@ export class Computed extends Observable {
     this.subscribers.forEach(s => s[0].invalidate(seen));
   }
 
+  invalidateChildren() {
+    var seen = new Set();
+    this.subscribers.forEach(s => s[0].invalidate(seen));
+  }
+
   request() {
     if (!this.thread) throw "oh dear";
     return this.thread;
