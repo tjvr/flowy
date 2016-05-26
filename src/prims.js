@@ -102,7 +102,7 @@ export const specs = [
   // TODO
   // ["record", "record with %s"],
   // ["record", "update %s with"],
-  // ["record", "%s of %s"],
+  ["record", "%s of %s"],
 
   /* List */
 
@@ -459,6 +459,11 @@ export const functions = {
 
   "Any <- item Int of List": (index, list) => {
     return list[index - 1];
+  },
+
+  /* Record */
+  "Any <- Text of Record": (name, record) => {
+    return record.values[name];
   },
 
   /* Color */
