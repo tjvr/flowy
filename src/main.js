@@ -389,6 +389,8 @@ class Label extends Drawable {
     this.height = metrics.height * 1.2 | 0;
     this.layout();
   }
+  
+  objectFromPoint(x, y) { return null; }
 
   copy() {
     return new Label(this.text);
@@ -469,7 +471,7 @@ class Input extends Drawable {
 
   objectFromPoint(x, y) {
     return opaqueAt(this.context, x * density, y * density) ? this : null;
-  };
+  }
 
   draw() {
     this.canvas.width = this.width * density;
@@ -677,6 +679,100 @@ class SwitchKnob extends Drawable {
 
 
 
+class Arrow extends Drawable {
+  constructor(icon, action) {
+    super();
+    this.icon = icon;
+    this.pathFn = icon === '▶' ? this.pathRightArrow 
+                : icon === '◀' ? this.pathLeftArrow : assert(false);
+    this.action = action;
+
+    this.el = el('absolute');
+    this.el.appendChild(this.canvas = el('canvas', 'absolute'));
+    this.context = this.canvas.getContext('2d');
+
+    this.layoutSelf();
+  }
+
+  get isArrow() { return true; }
+
+  objectFromPoint(x, y) {
+    var px = 6;
+    var py = 4;
+    var touchExtent = {width: this.width + px * 2, height: this.height + py * 2};
+    if (containsPoint(touchExtent, x + px, y + py)) {
+      return this;
+    }
+  }
+
+  setHover(hover) {
+    this.color = hover ? '#5B57C5' : '#111';
+  }
+
+  get color() { return this._color; }
+  set color(value) {
+    this._color = value;
+    this.redraw();
+  }
+
+  get isDraggable() {
+    return true;
+  }
+  get dragObject() {
+    return this.parent.dragObject;
+  }
+  copy() {
+    return new Arrow(this.icon, this.action);
+  }
+
+  click() {
+    this.action.call(this.parent);
+  }
+
+  layoutSelf() {
+    this.width = 12;
+    this.height = 12;
+    this.redraw();
+  }
+
+  draw() {
+    this.canvas.width = this.width * density;
+    this.canvas.height = this.height * density;
+    this.canvas.style.width = this.width + 'px';
+    this.canvas.style.height = this.height + 'px';
+    this.context.scale(density, density);
+    this.drawOn(this.context);
+  }
+
+  drawOn(context) {
+    context.fillStyle = this.color;
+    this.pathFn(context);
+    context.closePath();
+    context.fill();
+  }
+
+  pathLeftArrow(context) {
+    var w = this.width;
+    var x = (this.width - 6) / 2 | 0;
+    var h = this.height;
+    context.moveTo(w - x, 0);
+    context.lineTo(x, 6);
+    context.lineTo(w - x, h);
+  }
+
+  pathRightArrow(context) {
+    var w = this.width;
+    var x = (this.width - 6) / 2 | 0;
+    var h = this.height;
+    context.moveTo(x, 0);
+    context.lineTo(w - x, 6);
+    context.lineTo(x, h);
+  }
+
+
+}
+
+
 class Block extends Drawable {
   constructor(info, parts) {
     super();
@@ -726,19 +822,23 @@ class Block extends Drawable {
   }
 
   add(part) {
+    this.insert(part, this.parts.length);
+  }
+
+  insert(part, index) {
     assert(part !== this);
     if (part.parent) part.parent.remove(part);
     part.parent = this;
     part.zoom = 1;
-    this.parts.push(part);
+    this.parts.splice(index, 0, part);
     if (this.parent) part.layoutChildren(); // TODO
     this.layout();
     this.el.appendChild(part.el);
 
-    var array = part.isLabel ? this.labels : this.args;
-    array.push(part);
+    var array = part.isLabel || part.isArrow ? this.labels : this.args;
+    array.push(part); // TODO
 
-    if (!part.isLabel) {
+    if (!part.isLabel && !part.isArrow) {
       var index = array.length - 1;
       this.node.addInput(index, part.node);
     }
@@ -781,13 +881,14 @@ class Block extends Drawable {
     part.parent = null;
     var index = this.parts.indexOf(part);
     this.parts.splice(index, 1);
+    this.layout();
     this.el.removeChild(part.el);
 
-    var array = part.isLabel ? this.labels : this.args;
+    var array = part.isLabel || part.isArrow ? this.labels : this.args;
     var index = array.indexOf(part);
     array.splice(index, 1);
 
-    this.node.removeInput(index, newPart.node);
+    this.node.removeInput(index);
     // TODO shift up others??
   }
 
@@ -886,8 +987,8 @@ class Block extends Drawable {
       var o = this.bubble.objectFromPoint(x - this.bubble.x, y - this.bubble.y)
       if (o) return o;
     }
-    for (var i = this.args.length; i--;) {
-      var arg = this.args[i];
+    for (var i = this.parts.length; i--;) {
+      var arg = this.parts[i];
       var o = arg.objectFromPoint(x - arg.x, y - arg.y);
       if (o) return o;
     }
@@ -1514,12 +1615,18 @@ specs.forEach(p => {
   var color = colors[category] || '#555';
   var words = spec.split(/ /g);
   var i = 0;
-  var parts = words.map(word => {
+  var add;
+  var parts = words.map((word, index) => {
     if (word === '%r') {
       return ringBlock.copy();
     } else if (word === '%b') {
       var value = def.length ? def.shift() : !!(i++ % 2);
       return new Switch(value);
+    } else if (word === '%exp') {
+      add = function() {
+        return new Input(def[this.parts.length - index] || "");
+      }
+      return new Input(def.shift() || "");
     } else if (/^%/.test(word)) {
       var value = def.shift() || "";
       return new Input(value);
@@ -1527,6 +1634,14 @@ specs.forEach(p => {
       return new Label(word);
     }
   });
+  if (add) {
+    parts.push(new Arrow("◀", function() {
+      this.remove(this.parts[this.parts.length - 3]);
+    }));
+    parts.push(new Arrow("▶", function() {
+      this.insert(add.call(this), this.parts.length - 2);
+    }));
+  }
   var isRing = category === 'ring';
   var b = new Block({spec, color, isRing}, parts);
   if (isRing) {

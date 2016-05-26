@@ -134,15 +134,15 @@ html, body {
   margin: 0 4px;
 }
 
-.result-Str,
+.result-Text,
 .result-Error {
   font: 14px/20px Helvetica Neue, Helvetica, Lucida Grande, Verdana, DejaVu Sans, sans-serif;
 }
-.result-Str:before, .result-Str:after {
+.result-Text:before, .result-Text:after {
   font: bold 16px/20px Baskerville, Georgia, serif;
   content: "“";
 }
-.result-Str:after {
+.result-Text:after {
   content: "”";
 }
 

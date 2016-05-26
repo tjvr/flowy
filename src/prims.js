@@ -16,7 +16,7 @@ var literals = [
   ["Float", /^(?:0|[1-9][0-9]*)?\.[0-9]+$/,   parseFloat], // [123].123
   ["Float", /^(?:0|[1-9][0-9]*)\.[0-9]*$/,    parseFloat], // 123.[123]
 
-  // ["Str", /^/, x => x],
+  // ["Text", /^/, x => x],
 ];
 
 var literalsByType = {};
@@ -57,6 +57,8 @@ export const specs = [
 
   ["ops", "literal %s"],
 
+  /* Math */
+
   ["math", "%n + %n"],
   ["math", "%n – %n"],
   ["math", "%n × %n"],
@@ -71,6 +73,18 @@ export const specs = [
   ["math", "cos %n", [60]],
   ["math", "tan %n", [45]],
 
+  // ["math", "random %n to %n", [1, 10]],
+
+  /* Text */
+
+  ["str", "join %s %s"],
+  ["str", "join words %s"],
+  ["str", "split words %s"],
+  ["str", "split %s by %s"],
+  //["str", "split lines %s"],
+
+  /* Conditions */
+
   ["bool", "%s = %s"],
   ["bool", "%s < %s"],
 
@@ -79,32 +93,34 @@ export const specs = [
   ["bool", "not %b"],
   ["bool", "%b"],
 
-  ["str", "join %s %s"],
-  ["str", "join words %s"],
-  ["str", "split words %s"],
-  ["str", "split %s by %s"],
-  //["str", "split lines %s"],
+  ["control", "%u if %b else %u", ['', true]],
 
-  // ["math", "random %n to %n", [1, 10]],
+  /* List */
 
-  ["list", "list %s", ["boo"]],
-  ["list", "list %s %s %s", ["foo", "bar", "baz"]],
+  ["list", "list %exp", ["foo", "bar", "baz"]],
   ["list", "%l concat %l"],
   ["list", "item %n of %l", [1]],
   ["list", "range %n to %n", [1, 5]],
-
-  ["control", "%u if %b else %u", ['', true]],
 
   // ["list", "do %r for each %l"],
   // ["list", "keep %r from %l"],
   // ["list", "combine %l with %r"],
 
-  // ["sensing", "error"],
-  ["sensing", "time"],
-  // ["sensing", "delay %s by %n secs", ["", 1]],
+  /* Record */
+
+  /* Web */
+
   ["sensing", "get %s", ["https://tjvr.org/"]],
   ["sensing", "get %s", ["http://i.imgur.com/svIp9cx.jpg?1"]],
+
   // ["sensing", "select %s from %html"],
+
+  /* Time */
+
+  ["sensing", "time"],
+
+  // ["sensing", "error"],
+  // ["sensing", "delay %s by %n secs", ["", 1]],
 
 ];
 
@@ -144,7 +160,7 @@ function el(type, content) {
 export const functions = {
 
   "UI <- display Error": x => el('Error', x.message || x),
-  "UI <- display Str": x => el('Str', x),
+  "UI <- display Text": x => el('Text', x),
   "UI <- display Int": x => el('Int', ''+x),
   "UI <- display Float": x => {
     var r = ''+x;
@@ -256,26 +272,23 @@ export const functions = {
     });
   },
 
-  /* Str */
-  "Str <- literal Str": x => x,
+  /* Text */
+  "Text <- literal Text": x => x,
   "Int <- literal Int": x => x,
   "Frac <- literal Frac": x => x,
   "Float <- literal Float": x => x,
 
-  "Bool <- Str = Str": (a, b) => a === b,
-  "Str <- join Str Str": (a, b) => a + b,
-  "Str <- join words List": x => x.join(" "),
-  "Str List <- split words Str": x => x.trim().split(/\s+/g),
-  "Str List <- split Str by Str": (x, y) => x.split(y),
-  //"Str List <- split lines Str": x => x.split(/\r|\n|\r\n/g),
+  "Bool <- Text = Text": (a, b) => a === b,
+  "Text <- join Text Text": (a, b) => a + b,
+  "Text <- join words List": x => x.join(" "),
+  "Text List <- split words Text": x => x.trim().split(/\s+/g),
+  "Text List <- split Text by Text": (x, y) => x.split(y),
+  //"Text List <- split lines Text": x => x.split(/\r|\n|\r\n/g),
 
   /* List */
 
-  "List <- list Any": a => {
+  "List <- list (Any *)": a => {
     return [a];
-  },
-  "List <- list Any Any Any": (a, b, c) => {
-    return [a, b, c];
   },
   "List <- List concat List": (a, b) => {
     return a.concat(b);
@@ -294,7 +307,7 @@ export const functions = {
 
   /* Async tests */
 
-  "WebPage Future <- get Str": function(url) {
+  "WebPage Future <- get Text": function(url) {
     var xhr = new XMLHttpRequest;
     xhr.open('GET', 'http://crossorigin.me/' + url, true);
     xhr.onprogress = e => {
@@ -361,12 +374,12 @@ export const functions = {
 };
 
 let coercions = {
-  "Str <- Int": x => x.toString(),
-  "Str <- Frac": x => x.toString(),
-  "Str <- Float": x => x.toFixed(2),
-  "Str <- Empty": x => "",
+  "Text <- Int": x => x.toString(),
+  "Text <- Frac": x => x.toString(),
+  "Text <- Float": x => x.toFixed(2),
+  "Text <- Empty": x => "",
 
-  "Float <- Str": x => +x,
+  "Float <- Text": x => +x,
 
   "List <- Empty": x => [],
 
@@ -374,7 +387,7 @@ let coercions = {
   "List <- Frac": x => [x],
   "List <- Float": x => [x],
   "List <- Bool": x => [x],
-  "List <- Str": x => [x],
+  "List <- Text": x => [x],
   "List <- Image": x => [x],
 
   "Frac <- Int": x => new Fraction(x, 1),
@@ -387,7 +400,7 @@ let coercions = {
   "Any <- Float": x => x,
   "Any <- Bool": x => x,
   "Any <- Empty": x => x,
-  "Any <- Str": x => x,
+  "Any <- Text": x => x,
   "Any <- Image": x => x,
 };
 var coercionsByType = {};
@@ -461,6 +474,10 @@ function parseSpec(spec) {
           var type = pType();
           assert(type);
           words.push(type);
+          break;
+        } else if (tok === '*') {
+          words.push('*');
+          next();
           break;
         }
         var type = pType();
@@ -543,7 +560,7 @@ export const typeOf = (value => {
   if (value && value.constructor === Array) return 'List';
   if (typeof value === 'number') return 'Float';
   if (value === '') return 'Empty';
-  if (typeof value === 'string') return 'Str';
+  if (typeof value === 'string') return 'Text';
   if (typeof value === 'boolean') return 'Bool';
   if (value && value instanceof Fraction) return 'Frac';
   if (value.isObservable) return 'Uneval';
