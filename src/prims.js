@@ -77,23 +77,21 @@ export const specs = [
 
   /* Text */
 
-  ["str", "join %s %s"],
-  ["str", "join words %s"],
-  ["str", "split words %s"],
-  ["str", "split %s by %s"],
-  //["str", "split lines %s"],
+  ["text", "join %s %s"],
+  ["text", "join words %s"],
+  ["text", "split words %s"],
+  ["text", "split %s by %s"],
+  //["text", "split lines %s"],
 
   /* Conditions */
 
   ["bool", "%s = %s"],
   ["bool", "%s < %s"],
-
   ["bool", "%b and %b"],
   ["bool", "%b or %b"],
   ["bool", "not %b"],
   ["bool", "%b"],
-
-  ["control", "%u if %b else %u", ['', true]],
+  ["bool", "%u if %b else %u", ['', true]],
 
   /* List */
 
@@ -107,6 +105,16 @@ export const specs = [
   // ["list", "combine %l with %r"],
 
   /* Record */
+
+  // ["record", "record with %s"],
+  // ["record", "update %s with"],
+  // ["record", "%s of %s"],
+
+  /* Color */
+
+  // ["color", "r %s g %s b %s", [0, 127, 255]],
+  // ["color", "h %s s %s v %s", [0, 127, 255]],
+  // ["color", "hex # %s", ['f9ecdc']],
 
   /* Web */
 
@@ -178,7 +186,10 @@ export const functions = {
     f.appendChild(el('Frac-den', ''+frac.d));
     return f;
   },
-  "UI <- display Bool": x => el('Bool', x ? 'Yes' : 'No'),
+  "UI <- display Bool": x => {
+    var val = x ? 'Yes' : 'No';
+    return el(`Bool result-Bool-${val}`, val);
+  },
   "UI Future <- display List": function(list) {
     var l = el('List');
     list.forEach(value => {

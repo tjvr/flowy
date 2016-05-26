@@ -690,6 +690,7 @@ class Arrow extends Drawable {
     this.el = el('absolute');
     this.el.appendChild(this.canvas = el('canvas', 'absolute'));
     this.context = this.canvas.getContext('2d');
+    this.setHover(false);
 
     this.layoutSelf();
   }
@@ -706,7 +707,7 @@ class Arrow extends Drawable {
   }
 
   setHover(hover) {
-    this.color = hover ? '#5B57C5' : '#111';
+    this.color = hover ? '#5B57C5' : '#333';
   }
 
   get color() { return this._color; }
@@ -1032,7 +1033,8 @@ class Block extends Drawable {
 
   minDistance(part) {
     if (part.isSwitch) {
-      return 12;
+      //return 12;
+      return 16;
     }
     if (part.isBubble) {
       return 0;
@@ -1601,22 +1603,27 @@ import {literal, specs} from "./prims";
 
 var colors = {
   ring: '#969696',
+
   math: '#5cb712',
-  ops: '#5cb712',
-  str: '#5cb712',
-  sensing: '#2ca5e2',
+  text: '#0e9a6c',
+  bool: '#e1a91a',
   list: '#cc5b22',
+  color: '#8a55d7',
+  record: '#c88330',
+
+  sensing: '#2ca5e2',
+
   variable: '#ee7d16',
   custom: '#632d99',
   arg: '#5947b1',
-  image: '#8a55d7',
-  shape: '#0e9a6c',
+  //image: '#8a55d7',
+  //shape: '#0e9a6c',
   // .sb-motion { fill: #4a6cd4; }
   // .sb-sound { fill: #bb42c3; }
   // events: '#c88330',
   // control: '#e1a91a',
-  control: '#c88330',
   // .sb-extension { fill: #4b4a60; }
+  //
 };
 
 var ringBlock;
@@ -1639,9 +1646,9 @@ specs.forEach(p => {
       add = function() {
         return new Input(def[this.parts.length - index] || "");
       }
-      return new Input(def.shift() || "");
+      return new Input(def.length ? def.shift() : "");
     } else if (/^%/.test(word)) {
-      var value = def.shift() || "";
+      var value = def.length ? def.shift() : "";
       return new Input(value);
     } else {
       return new Label(word);

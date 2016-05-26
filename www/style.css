@@ -123,10 +123,11 @@ html, body {
   overflow-x: hidden;
   overflow-y: auto;
 
-  transition: opacity 100ms linear;
+  transition: opacity 100ms linear, background 100ms linear;
 }
 .result-invalid {
-  opacity: 0.5;
+  opacity: 0.8;
+  background: #888;
 }
 
 .result-Error {
@@ -151,6 +152,8 @@ html, body {
   /*font: small-caps 16px/20px Helvetica Neue, Helvetica, Lucida Grande, Verdana, DejaVu Sans, sans-serif;*/
   font: small-caps 16px/20px Baskerville, Georgia, serif;
 }
+.result-Bool-Yes { color: #2a792a; }
+.result-Bool-No { color: #914646; }
 
 .result-Int,
 .result-Float {
@@ -225,7 +228,7 @@ html, body {
 
 .progress {
   left: 6px;
-  top: 6px;
+  top: 7px;
   height: 2px;
   background: #468;
   opacity: 0;
