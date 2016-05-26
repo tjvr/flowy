@@ -126,8 +126,8 @@ html, body {
   transition: opacity 100ms linear, background 100ms linear;
 }
 .result-invalid {
-  opacity: 0.8;
-  background: #888;
+  opacity: 0.6;
+  background: rgba(255,255,127,0.5);
 }
 
 .result-Error {
@@ -192,14 +192,24 @@ html, body {
   text-indent: 0;
 }
 
-.result-Image {
-  margin: 8px;
-  display: inline-block;
-  max-width: 256px;
-  max-height: 234px;
-  vertical-align: middle;
+.result-Color {
+  width: 24px;
+  height: 24px;
+  margin: 2px 2px 4px;
+  border: 1px solid #888;
 }
 
+.result-Image {
+  margin: 8px;
+  max-width: 256px;
+  max-height: 234px;
+}
+
+.result-Color,
+.result-Image {
+  display: inline-block;
+  vertical-align: middle;
+}
 
 .field {
   color: #505050;

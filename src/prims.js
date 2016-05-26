@@ -5,6 +5,8 @@ function assert(x) {
 
 import {BigInteger} from "js-big-integer";
 import Fraction from "fraction.js";
+import tinycolor from  "tinycolor2";
+
 window.BigInteger = BigInteger;
 
 var literals = [
@@ -57,6 +59,34 @@ export const specs = [
 
   ["ops", "literal %s"],
 
+  /* Record */
+
+  // TODO
+  // ["record", "record with %s"],
+  // ["record", "update %s with"],
+  // ["record", "%s of %s"],
+
+  /* List */
+
+  ["list", "list %s %s %s", ["foo", "bar", "baz"]],
+  ["list", "list %exp", ["foo", "bar", "baz"]],
+  ["list", "%l concat %l"],
+  ["list", "item %n of %l", [1]],
+  ["list", "range %n to %n", [1, 5]],
+
+  // ["list", "do %r for each %l"],
+  // ["list", "keep %r from %l"],
+  // ["list", "combine %l with %r"],
+  // TODO
+
+  /* Text */
+
+  ["text", "join %s %s"],
+  ["text", "join words %s"],
+  ["text", "split words %s"],
+  ["text", "split %s by %s"],
+  //["text", "split lines %s"],
+
   /* Math */
 
   ["math", "%n + %n"],
@@ -75,14 +105,6 @@ export const specs = [
 
   // ["math", "random %n to %n", [1, 10]],
 
-  /* Text */
-
-  ["text", "join %s %s"],
-  ["text", "join words %s"],
-  ["text", "split words %s"],
-  ["text", "split %s by %s"],
-  //["text", "split lines %s"],
-
   /* Conditions */
 
   ["bool", "%s = %s"],
@@ -93,28 +115,27 @@ export const specs = [
   ["bool", "%b"],
   ["bool", "%u if %b else %u", ['', true]],
 
-  /* List */
-
-  ["list", "list %exp", ["foo", "bar", "baz"]],
-  ["list", "%l concat %l"],
-  ["list", "item %n of %l", [1]],
-  ["list", "range %n to %n", [1, 5]],
-
-  // ["list", "do %r for each %l"],
-  // ["list", "keep %r from %l"],
-  // ["list", "combine %l with %r"],
-
-  /* Record */
-
-  // ["record", "record with %s"],
-  // ["record", "update %s with"],
-  // ["record", "%s of %s"],
-
   /* Color */
 
-  // ["color", "r %s g %s b %s", [0, 127, 255]],
-  // ["color", "h %s s %s v %s", [0, 127, 255]],
-  // ["color", "hex # %s", ['f9ecdc']],
+  //["color", "color %c", []], // TODO color picker
+  ["color", "color %s", ["blue"]],
+  ["color", "color %s", ["#0cb6f7"]],
+  ["color", "mix %c with %n %% of %c", ['', 50, '']],
+  // ["color", "r %n g %n b %n", [0, 127, 255]],
+  // ["color", "h %n s %n v %n", [0, 127, 255]],
+  ["color", "brightness of %c", []],
+  ["color", "luminance of %c", []],
+
+  ["color", "%c to hex"],
+  ["color", "%c to rgb"],
+  ["color", "%c to hsv"],
+  ["color", "spin %c by %n"],
+  ["color", "analogous %c"],
+  ["color", "triad %c"],
+  ["color", "monochromatic %c"],
+  ["color", "complement %c"],
+
+  /* Image */
 
   /* Web */
 
@@ -135,7 +156,7 @@ export const specs = [
 var byHash = {};
 specs.forEach(p => {
   let [category, spec, defaults] = p;
-  var hash = spec.split(" ").map(word => /^%/.test(word) ? "_" : word).join(" ");
+  var hash = spec.split(" ").map(word => word === '%%' ? "%" : /^%/.test(word) ? "_" : word).join(" ");
   byHash[hash] = spec;
 });
 
@@ -221,6 +242,12 @@ export const functions = {
     image.className = 'result-Image';
     return image;
   },
+  "UI <- display Color": color => {
+    var square = el('Color');
+    square.style.background = color.toHexString();
+    return square;
+  },
+
 
   /* Int */
   "Int <- Int + Int": BigInteger.add,
@@ -298,8 +325,9 @@ export const functions = {
 
   /* List */
 
-  "List <- list (Any *)": a => {
-    return [a];
+  //"List <- list (Any *)": a => {
+  "List <- list Any Any Any": (a, b, c) => {
+    return [a, b, c];
   },
   "List <- List concat List": (a, b) => {
     return a.concat(b);
@@ -315,6 +343,33 @@ export const functions = {
   "Any <- item Int of List": (index, list) => {
     return list[index - 1];
   },
+
+  /* Color */
+  "Bool <- Color = Color": tinycolor.equals,
+  //"Color <- color Color": x => x,
+  "Color <- color Text": x => {
+    var color = tinycolor(x);
+    if (!color.isValid()) return;
+    return color;
+  },
+  "Color <- mix Color with Float % of Color": (a, mix, b) => tinycolor.mix(a, b, mix),
+  //"Color <- r Int g Int b Int": (r, g, b) => {
+  //  return tinycolor({r, g, b});
+  //},
+  //"Color <- h Int s Int v Int": (h, s, v) => {
+  //  return tinycolor({h, s, v});
+  //},
+  "Float <- brightness of Color": x => x.getBrightness(),
+  "Float <- luminance of Color": x => x.getLuminance(),
+  "Record <- Color to hex": x => x.toHexString(),
+  "Record <- Color to rgb": x => x.toRgb(),
+  "Record <- Color to hsv": x => x.toHsv(),
+  "Color <- spin Color by Int": (color, amount) => color.spin(amount),
+  "List <- analogous Color": x => x.analogous(),
+  "List <- triad Color": x => x.triad(),
+  "List <- monochromatic Color": x => x.monochromatic(),
+  "Color <- complement Color": x => x.complement(),
+
 
   /* Async tests */
 
@@ -576,6 +631,7 @@ export const typeOf = (value => {
   if (value && value instanceof Fraction) return 'Frac';
   if (value.isObservable) return 'Uneval';
   if (value && value.constructor === Error) return 'Error';
+  if (value && value instanceof tinycolor) return 'Color';
   if (value && value instanceof Image) return 'Image';
   throw "Unknown type: " + value;
 });

@@ -1647,6 +1647,8 @@ specs.forEach(p => {
         return new Input(def[this.parts.length - index] || "");
       }
       return new Input(def.length ? def.shift() : "");
+    } else if (word === '%%') {
+      return new Label("%");
     } else if (/^%/.test(word)) {
       var value = def.length ? def.shift() : "";
       return new Input(value);
