@@ -358,6 +358,9 @@ class Thread {
         }
       }
     }
+
+    // TODO may need to await args!
+    // for container types -- eg List
     
     var thread = new Thread(null);
     var func = prim.func;

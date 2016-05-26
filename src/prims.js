@@ -9,6 +9,24 @@ import tinycolor from  "tinycolor2";
 
 window.BigInteger = BigInteger;
 
+class Record {
+  constructor(schema, values) {
+    this.schema = schema;
+    this.values = values;
+  }
+}
+
+class Schema {
+  constructor(name, symbols) {
+    this.name = name;
+    this.symbols = symbols;
+    this.symbolSet = new Set(symbols);
+    // TODO validation function
+  }
+}
+var Time = new Schema('Time', ['hour', 'mins', 'secs']);
+var Date_ = new Schema('Date', ['year', 'month', 'day']);
+
 class Uncertain {
   constructor(mean, stddev) {
     this.m = +mean;
@@ -101,10 +119,11 @@ export const specs = [
 
   /* Text */
 
-  ["text", "join %s %s"],
-  ["text", "join words %s"],
-  ["text", "split words %s"],
-  ["text", "split %s by %s"],
+  ["text", "join %s %s", ["Hello ", "world"]],
+  //["text", "join words %s"],
+  ["text", "join %l with %s", ["", " "]],
+  //["text", "split words %s"],
+  ["text", "split %s by %s", ["", " "]],
   //["text", "split lines %s"],
 
   /* Math */
@@ -171,6 +190,7 @@ export const specs = [
   /* Time */
 
   ["sensing", "time"],
+  ["sensing", "date"],
 
   // ["sensing", "error"],
   // ["sensing", "delay %s by %n secs", ["", 1]],
@@ -221,7 +241,9 @@ export const functions = {
     if (index === -1) {
       r += '.';
     } else if (index !== -1 && !/e/.test(r)) {
-      r = r.slice(index + 2);
+      if (r.length - index > 3) {
+        r = x.toFixed(3);
+      }
     }
     return el('Float', r);
   },
@@ -235,6 +257,38 @@ export const functions = {
   "UI <- display Bool": x => {
     var val = x ? 'Yes' : 'No';
     return el(`Bool result-Bool-${val}`, val);
+  },
+  "UI Future <- display Record": function(record) {
+    var schema = record.schema;
+    var symbols = schema ? schema.symbols : Object.keys(record.values);
+    var r = el('Record');
+    symbols.forEach(symbol => {
+      var value = record.values[symbol];
+      var field = el('Record-field');
+      field.appendChild(el('Record-name', ''+symbol));
+      var item = el('Record-value');
+
+      if (value.isTask && !value.isDone) {
+        item.textContent = "...";
+        value.onEmit(result => {
+          item.innerHTML = '';
+          var prim = this.evaluator.getPrim("display %s", [result]);
+          var result = prim.func.call(this, result);
+          item.appendChild(result);
+          this.emit(l);
+        });
+      } else {
+        value = value.isTask ? value.result : value;
+        var prim = this.evaluator.getPrim("display %s", [value]);
+        var result = prim.func.call(this, value);
+        item.appendChild(result);
+      }
+
+      field.appendChild(item);
+      r.appendChild(field);
+    });
+    this.emit(r);
+    return r;
   },
   "UI Future <- display List": function(list) {
     var l = el('List');
@@ -380,9 +434,10 @@ export const functions = {
 
   "Bool <- Text = Text": (a, b) => a === b,
   "Text <- join Text Text": (a, b) => a + b,
-  "Text <- join words List": x => x.join(" "),
-  "Text List <- split words Text": x => x.trim().split(/\s+/g),
+  "Text <- join List with Text": (l, x) => l.join(x),
+  // "Text <- join words List": x => x.join(" "),
   "Text List <- split Text by Text": (x, y) => x.split(y),
+  // "Text List <- split words Text": x => x.trim().split(/\s+/g),
   //"Text List <- split lines Text": x => x.split(/\r|\n|\r\n/g),
 
   /* List */
@@ -485,12 +540,36 @@ export const functions = {
         clearInterval(interval);
         return;
       }
-      this.emit(''+new Date());
+      var d = new Date();
+      this.emit(new Record(Time, {
+        hour: d.getHours(),
+        mins: d.getMinutes(),
+        secs: d.getSeconds(),
+      }));
       this.target.invalidateChildren();
     };
     var interval = setInterval(update, 1000);
     update();
   },
+
+  "Date Future <- date": function() {
+    var update = () => {
+      if (this.isStopped) {
+        clearInterval(interval);
+        return;
+      }
+      var d = new Date();
+      this.emit(new Record(Date_, {
+        year: d.getFullYear(),
+        month: d.getMonth(),
+        day: d.getDate(),
+      }));
+      this.target.invalidateChildren();
+    };
+    var interval = setInterval(update, 1000);
+    update();
+  },
+
 
   // "A Future <- delay A by Float secs": (value, time) => {
   //   // TODO
@@ -511,13 +590,13 @@ let coercions = {
 
   "List <- Empty": x => [],
 
-  "List <- Int": x => [x],
-  "List <- Frac": x => [x],
-  "List <- Float": x => [x],
-  "List <- Bool": x => [x],
-  "List <- Text": x => [x],
-  "List <- Image": x => [x],
-  "List <- Uncertain": x => [x],
+  // "List <- Int": x => [x],
+  // "List <- Frac": x => [x],
+  // "List <- Float": x => [x],
+  // "List <- Bool": x => [x],
+  // "List <- Text": x => [x],
+  // "List <- Image": x => [x],
+  // "List <- Uncertain": x => [x],
 
   "Frac <- Int": x => new Fraction(x, 1),
   "Float <- Int": x => +x.toString(),
@@ -532,11 +611,29 @@ let coercions = {
   "Any <- Text": x => x,
   "Any <- Image": x => x,
   "Any <- Uncertain": x => x,
+  "Any <- Record": x => x,
+  "Any <- Time": x => x,
+  "Any <- Date": x => x,
+
+  "List <- Record": recordToList,
+  "List <- Time": recordToList,
+  "List <- Date": recordToList,
+
+  "Record <- Time": x => x,
+  "Record <- Date": x => x,
 
   "Uncertain <- Int": x => new Uncertain(x.toString()),
   "Uncertain <- Frac": x => new Uncertain(x.n / x.d),
   "Uncertain <- Float": x => new Uncertain(x),
 };
+function recordToList(record) {
+  var schema = record.schema;
+  var values = record.values;
+  var symbols = schema ? schema.symbols : Object.keys(values);
+  return symbols.map(name => values[name]);
+};
+
+
 var coercionsByType = {};
 Object.keys(coercions).forEach(spec => {
   var info = parseSpec(spec);
@@ -663,9 +760,6 @@ Object.keys(functions).forEach(function(spec) {
 
   coercify(info.inputs).forEach((c, index) => {
     let {inputs, coercions} = c;
-    if (index === 0) {
-      coercions.forEach(c => assert(c === null));
-    }
     var hash = inputs.join(", ");
     if (byInputs[hash] && index > 0) {
       return;
@@ -684,24 +778,35 @@ export {bySpec};
 
 export const typeOf = (value => {
   if (value === undefined) return '';
-  if (value && value.isTask) {
-    if (value.isDone) {
-      return typeOf(value.result);
-    }
-    return value.prim ? `${value.prim.output}` : 'Future';
+  if (value === null) return '';
+  switch (typeof value) {
+    case 'number':
+      if (/^-?[0-9]+$/.test(''+value)) return 'Int';
+      return 'Float';
+    case 'string':
+      if (value === '') return 'Empty';
+      return 'Text';
+    case 'boolean':
+      return 'Bool';
+    case 'object':
+      if (value.isObservable) return 'Uneval'; // TODO
+      if (value.isTask) { // TODO
+        if (value.isDone) {
+          return typeOf(value.result);
+        }
+        return value.prim ? `${value.prim.output}` : 'Future';
+      }
+      switch (value.constructor) {
+        case Error: return 'Error';
+        case BigInteger: return 'Int';
+        case Array: return 'List';
+        case tinycolor: return 'Color';
+        case Image: return 'Image';
+        case Uncertain: return 'Uncertain';
+        case Record: return value.schema ? value.schema.name : 'Record';
+      }
+      if (value instanceof Fraction) return 'Frac'; // TODO
   }
-  if (value && value.constructor === BigInteger || (typeof value === 'number' && /^-?[0-9]+$/.test(''+value))) return 'Int';
-  if (value && value.constructor === Array) return 'List';
-  if (typeof value === 'number') return 'Float';
-  if (value === '') return 'Empty';
-  if (typeof value === 'string') return 'Text';
-  if (typeof value === 'boolean') return 'Bool';
-  if (value && value instanceof Fraction) return 'Frac';
-  if (value.isObservable) return 'Uneval';
-  if (value && value.constructor === Error) return 'Error';
-  if (value && value instanceof tinycolor) return 'Color';
-  if (value && value instanceof Image) return 'Image';
-  if (value && value.constructor === Uncertain) return 'Uncertain';
   throw "Unknown type: " + value;
 });
 

@@ -196,6 +196,8 @@ html, body {
 
 .result-List {
   margin-left: 2px;
+  display: inline-block;
+  vertical-align: text-top;
 }
 .result-List-item {
   list-style-position: inside;
@@ -205,6 +207,27 @@ html, body {
   padding: 0;
   margin: 0;
   text-indent: 0;
+}
+
+.result-Record {
+  margin: 0 2px;
+  display: inline-block;
+  vertical-align: text-top;
+}
+.result-Record-field {
+  display: block;
+}
+.result-Record-name {
+  font: bold 14px/20px Helvetica Neue, Helvetica, Lucida Grande, Verdana, DejaVu Sans, sans-serif;
+  font: small-caps bold 14px/20px Baskerville, Georgia, serif;
+  text-transform: capitalize;
+  display: inline-block;
+}
+.result-Record-name:after {
+  content: ":";
+}
+.result-Record-value {
+  display: inline-block;
 }
 
 .result-Color {
