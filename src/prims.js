@@ -9,6 +9,26 @@ import tinycolor from  "tinycolor2";
 
 window.BigInteger = BigInteger;
 
+class Uncertain {
+  constructor(mean, stddev) {
+    this.m = +mean;
+    this.s = +stddev || 0;
+  }
+
+  static add(a, b) {
+    return new Uncertain(a.m + b.m, Math.sqrt(a.s * a.s + b.s * b.s));
+  }
+
+  static mul(x, y) {
+    var a = y.m * x.s;
+    var b = x.m * y.s;
+    return new Uncertain(x.m * y.m, Math.sqrt(a * a + b * b)); // TODO
+  }
+
+}
+
+
+
 var literals = [
   ["Int", /^-?[0-9]+$/, BigInteger.parseInt],
 
@@ -97,6 +117,10 @@ export const specs = [
   ["math", "%n ^ %n", ["", 2]],
   ["math", "round %n"],
   ["math", "float %n"],
+
+  ["math", "%n ± %n"],
+  ["math", "mean %n"],
+  ["math", "stddev %n"],
 
   ["math", "sqrt %n", [10]],
   ["math", "sin %n", [30]],
@@ -197,6 +221,7 @@ export const functions = {
     if (index === -1) {
       r += '.';
     } else if (index !== -1 && !/e/.test(r)) {
+      r = r.slice(index + 2);
     }
     return el('Float', r);
   },
@@ -247,7 +272,13 @@ export const functions = {
     square.style.background = color.toHexString();
     return square;
   },
-
+  "UI <- display Uncertain": uncertain => {
+    var f = el('Uncertain');
+    f.appendChild(el('Uncertain-mean', ''+uncertain.m));
+    f.appendChild(el('Uncertain-sym', "±"));
+    f.appendChild(el('Uncertain-stddev', ''+uncertain.s));
+    return f;
+  },
 
   /* Int */
   "Int <- Int + Int": BigInteger.add,
@@ -289,6 +320,37 @@ export const functions = {
 
   /* Decimal */
   // TODO
+
+  /* Uncertain */
+  "Uncertain <- Float ± Float": (mean, stddev) => new Uncertain(mean, stddev),
+  "Int <- round Uncertain": x => x.m | 0,
+  "Float <- float Uncertain": x => x.m,
+  "Bool <- Uncertain = Uncertain": (a, b) => a.m === b.m && a.s === b.s,
+
+  "Uncertain <- mean List": list => {
+    if (!list.length) return;
+    var s = 0;
+    var s2 = 0;
+    var n = list.length;
+    var u;
+    for (var i=n; i--; ) {
+      var x = list[i];
+      if (x && x.constructor === Uncertain) {
+        u = u || 0;
+        // TODO average over uncertainties??
+        x = x.m;
+      }
+      s += x;
+      s2 += x * x;
+    }
+    var mean = s / n;
+    var variance = (s2 / (n - 1)) - mean * mean;
+    return new Uncertain(mean, Math.sqrt(variance));
+  },
+  "Float <- mean Uncertain": x => x.m,
+  "Float <- stddev Uncertain": x => x.s,
+  "Uncertain <- Uncertain + Uncertain": Uncertain.add,
+  "Uncertain <- Uncertain × Uncertain": Uncertain.mul,
 
   /* Bool */
   "Bool <- Bool and Bool": (a, b) => a && b,
@@ -455,6 +517,7 @@ let coercions = {
   "List <- Bool": x => [x],
   "List <- Text": x => [x],
   "List <- Image": x => [x],
+  "List <- Uncertain": x => [x],
 
   "Frac <- Int": x => new Fraction(x, 1),
   "Float <- Int": x => +x.toString(),
@@ -468,6 +531,11 @@ let coercions = {
   "Any <- Empty": x => x,
   "Any <- Text": x => x,
   "Any <- Image": x => x,
+  "Any <- Uncertain": x => x,
+
+  "Uncertain <- Int": x => new Uncertain(x.toString()),
+  "Uncertain <- Frac": x => new Uncertain(x.n / x.d),
+  "Uncertain <- Float": x => new Uncertain(x),
 };
 var coercionsByType = {};
 Object.keys(coercions).forEach(spec => {
@@ -633,6 +701,7 @@ export const typeOf = (value => {
   if (value && value.constructor === Error) return 'Error';
   if (value && value instanceof tinycolor) return 'Color';
   if (value && value instanceof Image) return 'Image';
+  if (value && value.constructor === Uncertain) return 'Uncertain';
   throw "Unknown type: " + value;
 });
 

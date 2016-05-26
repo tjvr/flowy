@@ -163,7 +163,9 @@ html, body {
 .result-Int,
 .result-Float,
 .result-Frac-num,
-.result-Frac-den {
+.result-Frac-den,
+.result-Uncertain-mean,
+.result-Uncertain-stddev {
   font: 14px/20px Source Code Pro, Monaco, monospace;
 }
 
@@ -178,6 +180,19 @@ html, body {
   background: #000;
   height: 2px;
 }
+
+.result-Uncertain {
+  margin: 0 2px 2px;
+}
+.result-Uncertain-mean,
+.result-Uncertain-sym,
+.result-Uncertain-stddev {
+  display: inline;
+}
+.result-Uncertain-sym {
+  margin: 0 4px;
+}
+
 
 .result-List {
   margin-left: 2px;
