@@ -683,8 +683,8 @@ class Arrow extends Drawable {
   constructor(icon, action) {
     super();
     this.icon = icon;
-    this.pathFn = icon === '▶' ? this.pathRightArrow 
-                : icon === '◀' ? this.pathLeftArrow : assert(false);
+    this.pathFn = icon === '▶' ? this.pathAddInput 
+                : icon === '◀' ? this.pathDelInput : assert(false);
     this.action = action;
 
     this.el = el('absolute');
@@ -697,9 +697,9 @@ class Arrow extends Drawable {
   get isArrow() { return true; }
 
   objectFromPoint(x, y) {
-    var px = 6;
+    var px = 4;
     var py = 4;
-    var touchExtent = {width: this.width + px * 2, height: this.height + py * 2};
+    var touchExtent = {width: this.width + px * 3, height: this.height + py * 3};
     if (containsPoint(touchExtent, x + px, y + py)) {
       return this;
     }
@@ -730,8 +730,8 @@ class Arrow extends Drawable {
   }
 
   layoutSelf() {
-    this.width = 12;
-    this.height = 12;
+    this.width = 14;
+    this.height = 14;
     this.redraw();
   }
 
@@ -745,30 +745,43 @@ class Arrow extends Drawable {
   }
 
   drawOn(context) {
-    context.fillStyle = this.color;
+    context.strokeStyle = this.color;
+    context.lineWidth = 0.5 * density;
     this.pathFn(context);
     context.closePath();
-    context.fill();
+    context.stroke();
   }
 
-  pathLeftArrow(context) {
+  pathCircle(context) {
     var w = this.width;
-    var x = (this.width - 6) / 2 | 0;
     var h = this.height;
-    context.moveTo(w - x, 0);
-    context.lineTo(x, 6);
-    context.lineTo(w - x, h);
+    var r = h / 2;
+    context.moveTo(0, r + 1);
+    context.arc(r, r + 1, r, PI, PI32, false);
+    context.arc(w - r, r + 1, r, PI32, 0, false);
+    context.arc(w - r, h - r - 1, r, 0, PI12, false);
+    context.arc(r, h - r - 1, r, PI12, PI, false);
   }
 
-  pathRightArrow(context) {
+  pathDelInput(context) {
     var w = this.width;
-    var x = (this.width - 6) / 2 | 0;
     var h = this.height;
-    context.moveTo(x, 0);
-    context.lineTo(w - x, 6);
-    context.lineTo(x, h);
+    var t = 1.5 * density;
+    this.pathCircle(context);
+    context.moveTo(t, h / 2);
+    context.lineTo(w - t, h / 2);
   }
 
+  pathAddInput(context) {
+    var w = this.width;
+    var h = this.height;
+    var t = 1.5 * density;
+    this.pathCircle(context);
+    context.moveTo(t, h / 2);
+    context.lineTo(w - t, h / 2);
+    context.moveTo(w / 2, t);
+    context.lineTo(w / 2, h - t);
+  }
 
 }
 
