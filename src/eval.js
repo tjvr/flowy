@@ -114,6 +114,10 @@ export class Evaluator {
     var hash = inputTypes.join(", ");
     var prim = byInputs[hash]; // TODO
     if (!prim) {
+      if (byInputs['Variadic']) {
+        return byInputs['Variadic'];
+      }
+
       console.log(`No prim for '${name}' inputs [${hash}] matched ${Object.keys(byInputs).join("; ")}`);
 
       // auto vectorisation
@@ -290,9 +294,15 @@ export class Computed extends Observable {
   replaceArg(index, arg) {
     var old = this.args[index];
     if (old) old.unsubscribe(this);
-    this.args[index] = arg;
+    if (arg === undefined && index === this.args.length - 1) {
+      this.args.pop();
+    } else {
+      this.args[index] = arg;
+    }
     if (arg && this.needed && !this.inputs[index] !== '%u') {
       arg.subscribe(this, index);
+    }
+    if (this.needed) {
       this.invalidate(new Set());
     }
     if (arg && this.block === 'display %s') {
@@ -408,7 +418,7 @@ class Thread {
       var prim = this.prim;
       var func = prim.func;
       var args = inputs.map((obj, index) => {
-        if (!obj.isTask) return obj;
+        if (!obj || !obj.isTask) return obj;
         if (this.target.inputs[index] === '%u') {
           return obj;
         }
@@ -432,12 +442,13 @@ class Thread {
     };
 
     var inputs = this.inputs.map((obj, index) => {
+      if (!obj) return obj;
       if (this.target.inputs[index] === '%u') {
         return obj;
       }
       return obj.request();
     });
-    var tasks = inputs.filter(task => task.isTask); // TODO
+    var tasks = inputs.filter(task => task && task.isTask); // TODO
     this.awaitAll(tasks, next);
   }
 

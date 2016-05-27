@@ -975,7 +975,9 @@ class Block extends Drawable {
   }
 
   copy() {
-    return new Block(this.info, this.parts.map(c => c.copy()));
+    var b = new Block(this.info, this.parts.map(c => c.copy()));
+    b.count = this.count;
+    return b;
   }
 
   replaceWith(other) {
@@ -1656,16 +1658,28 @@ specs.forEach(p => {
       return new Label(word);
     }
   });
+
+  var isRing = category === 'ring';
+  var b = new Block({spec, color, isRing}, parts);
+
   if (add) {
-    parts.push(new Arrow("◀", function() {
+    b.count = 1;
+    var delInput = new Arrow("◀", function() {
+      this.count--;
       this.remove(this.parts[this.parts.length - 3]);
-    }));
-    parts.push(new Arrow("▶", function() {
+      if (this.count === 1) {
+        this.remove(this.parts[this.parts.length - 2]);
+      }
+    });
+    b.add(new Arrow("▶", function() {
+      this.count++;
+      if (this.count === 2) {
+        this.insert(delInput, this.parts.length - 1);
+      }
       this.insert(add.call(this), this.parts.length - 2);
     }));
   }
-  var isRing = category === 'ring';
-  var b = new Block({spec, color, isRing}, parts);
+
   if (isRing) {
     ringBlock = b;
     return;

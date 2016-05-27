@@ -133,7 +133,7 @@ export const specs = [
   ["math", "%n × %n"],
   ["math", "%n / %n"],
   ["math", "%n rem %n"],
-  ["math", "%n ^ %n", ["", 2]],
+  ["math", "%n ^ %n", ["", 2]], // TODO pow
   ["math", "round %n"],
   ["math", "float %n"],
 
@@ -444,9 +444,8 @@ export const functions = {
 
   /* List */
 
-  //"List <- list (Any *)": a => {
-  "List <- list Any Any Any": (a, b, c) => {
-    return [a, b, c];
+  "List <- list Variadic": (...rest) => {
+    return rest;
   },
   "List <- List concat List": (a, b) => {
     return a.concat(b);
