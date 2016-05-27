@@ -1682,6 +1682,10 @@ specs.forEach(p => {
     });
     var delInput = new Arrow("◀", function() {
       if (this === b) return;
+      for (var i=0; i<addSize; i++) {
+        var arg = this.parts[this.parts.length - 3 - i];
+        if (!arg.isInput) return;
+      }
       this.count--;
       for (var i=0; i<addSize; i++) {
         this.remove(this.parts[this.parts.length - 3]);
