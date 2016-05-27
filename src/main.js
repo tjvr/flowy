@@ -463,12 +463,11 @@ class Input extends Drawable {
         this.pathFn = this.pathCircle;
         break;
       case 'Symbol':
+      case 'Menu':
+        this.pathFn = this.pathSquare;
         this.pathFn = this.pathTag;
         break;
       case 'Color':
-        this.pathFn = this.pathSquare;
-        break;
-      case 'Menu':
         this.pathFn = this.pathSquare;
         break;
       default:
