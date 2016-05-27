@@ -458,17 +458,25 @@ class Input extends Drawable {
   set shape(value) {
     this._shape = value;
     this.color = '#fff';
+    this.pathIcon = null;
     switch (value) {
       case 'Num':
         this.pathFn = this.pathCircle;
         break;
-      case 'Symbol':
       case 'Menu':
-        this.pathFn = this.pathSquare;
-        this.pathFn = this.pathTag;
-        break;
       case 'Color':
         this.pathFn = this.pathSquare;
+        break;
+      case 'Symbol':
+        this.pathFn = this.pathTag;
+        break;
+      case 'List':
+        this.pathFn = this.pathObj;
+        this.pathIcon = this.pathListIcon;
+        break;
+      case 'Record':
+        this.pathFn = this.pathObj;
+        this.pathIcon = this.pathRecordIcon;
         break;
       default:
         this.pathFn = this.pathRounded;
@@ -517,6 +525,15 @@ class Input extends Drawable {
   drawOn(context) {
     context.fillStyle = this.color;
     bezel(context, this.pathFn, this, true, density);
+
+    if (this.pathIcon) {
+      context.save();
+      context.fillStyle = 'rgba(255, 255, 255, 0.7)';
+      this.pathIcon(context);
+      context.closePath();
+      context.fill();
+      context.restore();
+    }
   }
 
   pathRounded(context, r) {
@@ -534,16 +551,12 @@ class Input extends Drawable {
     this.pathRounded(context, this.height / 2);
   }
 
+  pathObj(context) {
+    this.pathRounded(context, density * 2);
+  };
+
   pathSquare(context) {
     this.pathRounded(context, density);
-    return;
-
-    var w = this.width;
-    var h = this.height;
-    context.moveTo(0, 0);
-    context.lineTo(w, 0);
-    context.lineTo(w, h);
-    context.lineTo(0, h);
   }
 
   pathTag(context) {
@@ -557,14 +570,48 @@ class Input extends Drawable {
     context.lineTo(0, h);
   }
 
+  pathRecordIcon(context) {
+    var s = 22 / 16;
+    context.translate(0, 1);
+    context.scale(s, s);
+
+    for (var y=0; y<=7; y+=7) {
+      context.moveTo(1, y + 3);
+      context.lineTo(4, y + 3);
+      context.lineTo(4, y + 1.5);
+      context.lineTo(7, y + 4);
+      context.lineTo(4, y + 6.5);
+      context.lineTo(4, y + 5);
+      context.lineTo(1, y + 5);
+
+      context.moveTo(9, y + 2);
+      context.lineTo(12.5, y + 2);
+      context.lineTo(15, y + 2);
+      context.lineTo(15, y + 6);
+      context.lineTo(9, y + 6);
+    }
+  }
+
+  pathListIcon(context) {
+    var s = 22 / 16;
+    context.scale(s, s);
+
+    for (var y=4; y<=12; y += 4) {
+      context.moveTo(2, 3);
+      context.arc(3.5, y, 1.5, 0, 2 * Math.PI);
+
+      context.rect(6.5, y - 1, 8, 2);
+    }
+  }
+
   layoutSelf() {
     var isColor = false;
-    if (this.shape === 'Menu') {
+    if (this.shape === 'Menu' || this.shape === 'Record' || this.shape === 'List') {
       var can = document.createElement('canvas');
       var c = can.getContext('2d');
       c.fillStyle = this.parent.color;
       c.fillRect(0, 0, 1, 1);
-      c.fillStyle = 'rgba(0,0,0, .1)';
+      c.fillStyle = 'rgba(0,0,0, .15)';
       c.fillRect(0, 0, 1, 1);
       var d = c.getImageData(0, 0, 1, 1).data;
       var s = (d[0] * 0x10000 + d[1] * 0x100 + d[2]).toString(16);
@@ -1143,7 +1190,7 @@ class Block extends Drawable {
       return 6;
     }
     if (part.shape === 'Symbol') {
-      return 0;
+      return 8;
     }
     return -2 + part.height/2 | 0;
   }
@@ -1771,6 +1818,7 @@ specs.forEach(p => {
         '%l': 'List',
         '%c': 'Color',
         '%m': 'Menu',
+        '%q': 'Symbol',
       }[word]));
     } else {
       parts.push(new Label(word));

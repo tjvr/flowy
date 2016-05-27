@@ -115,7 +115,7 @@ export const specs = [
   ["record", "record with %fields"],
   ["record", "update %o with %fields"], // TODO remove??
   ["record", "merge %o with %o"],
-  ["record", "%m of %o", ["name"]],
+  ["record", "%q of %o", ["name"]],
 
   /* List */
 
@@ -154,7 +154,7 @@ export const specs = [
   ["math", "mean %n"],
   ["math", "stddev %n"],
 
-  // TODO menu inputs
+  // TODO menus
   ["math", "sqrt of %n", [10]],
   ["math", "sin of %n", [30]],
   ["math", "cos of %n", [60]],
@@ -174,9 +174,9 @@ export const specs = [
 
   /* Color */
 
-  ["color", "%c", []], // TODO color picker
+  ["color", "%c", []],
   ["color", "color %s", ["blue"]],
-  ["color", "color %s", ["#0cb6f7"]],
+  // ["color", "color %s", ["#0cb6f7"]],
   ["color", "mix %c with %n %% of %c", ['', 50, '']],
   // ["color", "r %n g %n b %n", [0, 127, 255]],
   // ["color", "h %n s %n v %n", [0, 127, 255]],
@@ -187,6 +187,7 @@ export const specs = [
   ["color", "%c to rgb"],
   ["color", "%c to hsv"],
   ["color", "spin %c by %n"],
+  // TODO menus
   ["color", "analogous colors %c"],
   ["color", "triad colors %c"],
   ["color", "monochromatic colors %c"],
@@ -508,7 +509,6 @@ export const functions = {
     return src.update(dest.values);
   },
   "Any <- Text of Record": (name, record) => {
-    // TODO await if Task
     if (!(record instanceof Record)) return;
     return record.values[name];
   },
@@ -539,12 +539,12 @@ export const functions = {
     return tinycolor({r: 255 - r, g: 255 - g, b: 255 - b});
   },
 
-  // TODO menu inputs
+  // TODO menus
   "Record <- Color to hex": x => x.toHexString(),
   "Record <- Color to rgb": x => x.toRgb(),
   "Record <- Color to hsv": x => x.toHsv(),
 
-  // TODO menu inputs
+  // TODO menus
   "List <- analogous colors Color": x => x.analogous(),
   "List <- triad colors Color": x => x.triad(),
   "List <- monochromatic colors Color": x => x.monochromatic(),

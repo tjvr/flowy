@@ -205,7 +205,7 @@ html, body {
 .result-Record {
   margin: 0 2px;
   display: inline-block;
-  vertical-align: text-top;
+  vertical-align: top;
 }
 .result-Record-title {
   display: block;
