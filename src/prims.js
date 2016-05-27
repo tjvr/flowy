@@ -312,7 +312,7 @@ export const functions = {
     list.forEach(value => {
       var item = el('List-item');
 
-      if (value.isTask && !value.isDone) {
+      if (value && value.isTask && !value.isDone) {
         item.textContent = "...";
         value.onEmit(result => {
           item.innerHTML = '';
@@ -322,7 +322,7 @@ export const functions = {
           this.emit(l);
         });
       } else {
-        value = value.isTask ? value.result : value;
+        value = value && value.isTask ? value.result : value;
         var prim = this.evaluator.getPrim("display %s", [value]);
         var result = prim.func.call(this, value);
         if (result) item.appendChild(result);
@@ -501,6 +501,7 @@ export const functions = {
     return src.update(dest.values);
   },
   "Any <- Text of Record": (name, record) => {
+    if (!(record instanceof Record)) return;
     return record.values[name];
   },
 
