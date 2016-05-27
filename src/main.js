@@ -1304,37 +1304,27 @@ class Block extends Drawable {
 
 
 
-class Bubble extends Drawable {
-  constructor(target) {
+class Source extends Drawable {
+  constructor(value) {
     super();
 
-    this.el = el('absolute bubble');
+    this.el = el('absolute source');
     this.el.appendChild(this.canvas = el('canvas', 'absolute'));
     this.context = this.canvas.getContext('2d');
 
     this.el.appendChild(this.progress = el('progress absolute'));
     this.el.appendChild(this.elContents = el('result'));
 
-    this.target = target;
-    this.curve = null;
-    this.value = target.value;
+    this.node = Node.input(value);
+    this.repr = Node.repr(this.node);
+    this.repr.setSink(true);
 
-    if (target.workspace) target.workspace.add(this);
-
-    this.node = target.node;
-    this.display(this.target.repr.value);
-    this.target.repr.onEmit(this.onEmit.bind(this));
-    this.target.repr.onProgress(this.onProgress.bind(this));
+    this.display(this.repr.value);
+    this.repr.onEmit(this.onEmit.bind(this));
+    this.repr.onProgress(this.onProgress.bind(this));
   }
 
-  get isBubble() { return true; }
   get isDraggable() { return true; }
-
-  get parent() { return this._parent; }
-  set parent(value) {
-    this._parent = value;
-    if (this.target) this.target.updateSinky();
-  }
 
   display(value) {
     // TODO ellipsis during progress
@@ -1377,7 +1367,139 @@ class Bubble extends Drawable {
 
   detach() {
     if (this.isDoubleTap()) {
-      // return this.copyValue(); // TODO
+      return this.copy();
+    }
+    if (this.parent.isBlock) {
+      this.parent.reset(this);
+    }
+    return this;
+  }
+
+  copy() {
+    return new Source(this.node.value);
+  }
+
+  /*
+  replaceWith(other) {
+    assert(this.isInside);
+    var obj = this.parent;
+    obj.replace(this, other);
+    if (other === this.target) {
+      assert(this.target.bubble.isBlob);
+      other.addBubble(this);
+      other.layoutChildren();
+    }
+  }
+  */
+
+  click() {
+    super.click();
+  }
+
+  layoutSelf() {
+    var px = Bubble.paddingX;
+    var py = Bubble.paddingY;
+
+    var w = this.valueWidth;
+    var h = this.valueHeight;
+    this.width = Math.max(Bubble.minWidth, w + 2 * px);
+    var t = 0; //Bubble.tipSize // Math.min(, this.width / 2);
+    this.height = h + 2 * py + t;
+    var x = (this.width - w) / 2;
+    var y = t + py + 1;
+    this.elContents.style.transform = `translate(${x}px, ${y}px)`;
+
+    this.moved();
+    this.redraw();
+  }
+
+  pathBubble(context) {
+    var t = 0; //Bubble.tipSize;
+    var w = this.width;
+    var h = this.height;
+    var r = Bubble.radius;
+    var w12 = this.width / 2;
+
+    context.moveTo(1, t + r + .5);
+    context.arc(r + 1, t + r + .5, r, PI, PI32, false);
+    context.lineTo(w12 - t, t + .5);
+    context.lineTo(w12, 1);
+    context.lineTo(w12 + t, t + .5);
+    context.arc(w - r - 1, t + r + .5, r, PI32, 0, false);
+    context.arc(w - r - 1, h - r - 1, r, 0, PI12, false);
+    context.arc(r + 1, h - r - 1, r, PI12, PI, false);
+  }
+
+  draw() {
+    this.canvas.width = this.width * density;
+    this.canvas.height = this.height * density;
+    this.canvas.style.width = this.width + 'px';
+    this.canvas.style.height = this.height + 'px';
+    this.context.scale(density, density);
+    this.drawOn(this.context);
+
+    this.drawProgress();
+  }
+
+  drawProgress() {
+    var f = this.fraction; //  0.1 + (this.fraction * 0.9);
+    var pw = this.width - 2 * Bubble.radius;
+    this.progress.style.width = `${f * pw}px`;
+  }
+
+  drawOn(context) {
+    this.pathBubble(context);
+    context.closePath();
+    context.fillStyle = this.invalid ? '#aaa' : '#fff';
+    context.fill();
+    context.strokeStyle = '#555';
+    context.lineWidth = density;
+    context.stroke();
+  }
+
+  pathShadowOn(context) {
+    this.pathBubble(context);
+    context.closePath();
+  }
+  
+}
+
+
+
+class Bubble extends Source {
+  constructor(target) {
+    super();
+
+    this.el = el('absolute bubble');
+    this.el.appendChild(this.canvas = el('canvas', 'absolute'));
+    this.context = this.canvas.getContext('2d');
+
+    this.el.appendChild(this.progress = el('progress absolute'));
+    this.el.appendChild(this.elContents = el('result'));
+
+    this.target = target;
+    this.curve = null;
+
+    if (target.workspace) target.workspace.add(this);
+
+    this.node = target.node;
+    this.display(this.target.repr.value);
+    this.target.repr.onEmit(this.onEmit.bind(this));
+    this.target.repr.onProgress(this.onProgress.bind(this));
+  }
+
+  get isBubble() { return true; }
+  get isDraggable() { return true; }
+
+  get parent() { return this._parent; }
+  set parent(value) {
+    this._parent = value;
+    if (this.target) this.target.updateSinky();
+  }
+
+  detach() {
+    if (this.isDoubleTap()) {
+      return new Source(this.node.value);
     }
     if (this.parent.isBlock) {
       if (this.parent.bubble !== this) {
@@ -1454,41 +1576,10 @@ class Bubble extends Drawable {
     context.arc(r + 1, h - r - 1, r, PI12, PI, false);
   }
 
-  draw() {
-    this.canvas.width = this.width * density;
-    this.canvas.height = this.height * density;
-    this.canvas.style.width = this.width + 'px';
-    this.canvas.style.height = this.height + 'px';
-    this.context.scale(density, density);
-    this.drawOn(this.context);
-
-    this.drawProgress();
-  }
-
-  drawProgress() {
-    var f = this.fraction; //  0.1 + (this.fraction * 0.9);
-    var pw = this.width - 2 * Bubble.radius;
-    this.progress.style.width = `${f * pw}px`;
-  }
-
   get isInside() {
     return this.parent.isBlock && this.parent.bubble !== this;
   }
 
-  drawOn(context) {
-    this.pathBubble(context);
-    context.closePath();
-    context.fillStyle = this.invalid ? '#aaa' : '#fff';
-    context.fill();
-    context.strokeStyle = '#555';
-    context.lineWidth = density;
-    context.stroke();
-  }
-
-  pathShadowOn(context) {
-    this.pathBubble(context);
-    context.closePath();
-  }
 }
 Bubble.measure = createMetrics('result-label');
 
@@ -1497,6 +1588,7 @@ Bubble.radius = 6;
 Bubble.paddingX = 4;
 Bubble.paddingY = 2;
 Bubble.minWidth = 32; //26;
+
 
 
 class Blob extends Drawable {
