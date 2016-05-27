@@ -14,6 +14,18 @@ class Record {
     this.schema = schema;
     this.values = values;
   }
+
+  update(newValues) {
+    assert(!this.schema);
+    var values = {};
+    Object.keys(this.values).forEach(name => {
+      values[name] = this.values[name];
+    });
+    Object.keys(newValues).forEach(name => {
+      values[name] = newValues[name];
+    });
+    return new Record(values);
+  }
 }
 
 class Schema {
@@ -100,9 +112,9 @@ export const specs = [
   /* Record */
 
   // TODO
-  // ["record", "record with %s"],
-  // ["record", "update %s with"],
-  ["record", "%s of %s"],
+  ["record", "record with %fields"],
+  ["record", "update %o with %fields"],
+  ["record", "%s of %o"],
 
   /* List */
 
@@ -269,7 +281,7 @@ export const functions = {
       field.appendChild(el('Record-name', ''+symbol));
       var item = el('Record-value');
 
-      if (value.isTask && !value.isDone) {
+      if (value && value.isTask && !value.isDone) {
         item.textContent = "...";
         value.onEmit(result => {
           item.innerHTML = '';
@@ -279,7 +291,7 @@ export const functions = {
           this.emit(l);
         });
       } else {
-        value = value.isTask ? value.result : value;
+        value = value && value.isTask ? value.result : value;
         var prim = this.evaluator.getPrim("display %s", [value]);
         var result = prim.func.call(this, value);
         if (result) item.appendChild(result);
@@ -462,6 +474,22 @@ export const functions = {
   },
 
   /* Record */
+  "Any <- record with Variadic": (...pairs) => {
+    var values = {};
+    for (var i=0; i<pairs.length; i += 2) {
+      var name = pairs[i], value = pairs[i + 1];
+      values[name] = value;
+    }
+    return new Record(null, values);
+  },
+  "Any <- update Record with Variadic": (record, ...pairs) => {
+    var values = {};
+    for (var i=0; i<pairs.length; i += 2) {
+      var name = pairs[i], value = pairs[i + 1];
+      values[name] = value;
+    }
+    return record.update(values);
+  },
   "Any <- Text of Record": (name, record) => {
     return record.values[name];
   },

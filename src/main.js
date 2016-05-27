@@ -1638,24 +1638,35 @@ specs.forEach(p => {
   var words = spec.split(/ /g);
   var i = 0;
   var add;
-  var parts = words.map((word, index) => {
+  var addSize;
+  var parts = [];
+  words.forEach((word, index) => {
     if (word === '%r') {
-      return ringBlock.copy();
+      parts.push(ringBlock.copy());
     } else if (word === '%b') {
       var value = def.length ? def.shift() : !!(i++ % 2);
-      return new Switch(value);
+      parts.push(new Switch(value));
+    } else if (word === '%fields') {
+      add = function() {
+        return [
+          new Input("name"),
+          new Input(""),
+        ];
+      }
+      addSize = 2;
     } else if (word === '%exp') {
       add = function() {
-        return new Input(def[this.parts.length - index - 3] || "");
+        return [new Input(def[this.parts.length - index - 3] || "")];
       }
-      return new Input(def.length ? def.shift() : "");
+      addSize = 1;
+      parts.push(new Input(def.length ? def.shift() : ""));
     } else if (word === '%%') {
-      return new Label("%");
+      parts.push(new Label("%"));
     } else if (/^%/.test(word)) {
       var value = def.length ? def.shift() : "";
-      return new Input(value);
+      parts.push(new Input(value));
     } else {
-      return new Label(word);
+      parts.push(new Label(word));
     }
   });
 
@@ -1669,7 +1680,9 @@ specs.forEach(p => {
     });
     var delInput = new Arrow("◀", function() {
       this.count--;
-      this.remove(this.parts[this.parts.length - 3]);
+      for (var i=0; i<addSize; i++) {
+        this.remove(this.parts[this.parts.length - 3]);
+      }
       if (this.count === 1) {
         this.remove(this.parts[this.parts.length - 2]);
       }
@@ -1680,7 +1693,9 @@ specs.forEach(p => {
       if (this.count === 2) {
         this.insert(delInput, this.parts.length - 1);
       }
-      this.insert(add.call(this), this.parts.length - 2);
+      add.call(this).forEach(obj => {
+        this.insert(obj, this.parts.length - 2);
+      });
     }));
   }
 
