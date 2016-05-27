@@ -147,13 +147,6 @@ html, body {
   content: "”";
 }
 
-.result-Bool,
-.result-Symbol {
-  /*font: small-caps 16px/20px Helvetica Neue, Helvetica, Lucida Grande, Verdana, DejaVu Sans, sans-serif;*/
-  font: small-caps 16px/20px Baskerville, Georgia, serif;
-}
-.result-Bool-Yes { color: #2a792a; }
-.result-Bool-No { color: #914646; }
 
 .result-Int,
 .result-Float {
@@ -217,10 +210,10 @@ html, body {
 .result-Record-field {
   display: block;
 }
-.result-Record-name {
-  font: bold 14px/20px Helvetica Neue, Helvetica, Lucida Grande, Verdana, DejaVu Sans, sans-serif;
-  font: small-caps bold 14px/20px Baskerville, Georgia, serif;
-  text-transform: capitalize;
+.result-Record-name,
+.result-Bool {
+  font: bold 12px/20px Helvetica Neue, Helvetica, Lucida Grande, Verdana, DejaVu Sans, sans-serif;
+  color: #555;
   display: inline-block;
 }
 .result-Record-name:after {
@@ -229,6 +222,13 @@ html, body {
 .result-Record-value {
   display: inline-block;
 }
+
+.result-Bool {
+  margin-bottom: 2px;
+}
+.result-Bool-yes { color: #2a792a; }
+.result-Bool-no { color: #914646; }
+
 
 .result-Color {
   width: 24px;

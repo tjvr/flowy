@@ -256,7 +256,7 @@ export const functions = {
     return f;
   },
   "UI <- display Bool": x => {
-    var val = x ? 'Yes' : 'No';
+    var val = x ? 'yes' : 'no';
     return el(`Bool result-Bool-${val}`, val);
   },
   "UI Future <- display Record": function(record) {
