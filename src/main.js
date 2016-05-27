@@ -409,7 +409,7 @@ Label.measure = createMetrics('label');
 
 
 class Input extends Drawable {
-  constructor(value) {
+  constructor(value, shape) {
     super();
 
     this.el = el('absolute');
@@ -417,6 +417,16 @@ class Input extends Drawable {
     this.context = this.canvas.getContext('2d');
 
     this.el.appendChild(this.field = el('input', 'absolute field text-field'));
+
+    this.shape = shape;
+    this.pathFn = {
+      Num: this.pathCircle,
+      Symbol: this.pathTag,
+    }[shape] || this.pathRounded;
+    this.pathIcon = {
+      // List: this.pathListIcon,
+      // Record: this.pathRecordIcon,
+    }[shape] || null;
 
     this.field.addEventListener('input', this.change.bind(this));
     this.field.addEventListener('keydown', this.keyDown.bind(this));
@@ -457,7 +467,7 @@ class Input extends Drawable {
   }
 
   copy() {
-    return new Input(this._value);
+    return new Input(this._value, this.shape);
   }
 
   replaceWith(other) {
@@ -487,11 +497,10 @@ class Input extends Drawable {
     bezel(context, this.pathFn, this, true, density);
   }
 
-  pathFn(context) {
+  pathRounded(context, r) {
     var w = this.width;
     var h = this.height;
-    var r = 6;
-
+    var r = r !== undefined ? r : 6;
     context.moveTo(0, r + .5);
     context.arc(r, r + .5, r, PI, PI32, false);
     context.arc(w - r, r + .5, r, PI32, 0, false);
@@ -499,12 +508,36 @@ class Input extends Drawable {
     context.arc(r, h - r - .5, r, PI12, PI, false);
   }
 
+  pathCircle(context) {
+    this.pathRounded(context, this.height / 2);
+  }
+
+  pathTag(context) {
+    var w = this.width;
+    var h = this.height;
+    var r = h / 2;
+    context.moveTo(0, 0);
+    context.lineTo(w - r, 0);
+    context.lineTo(w, r);
+    context.lineTo(w - r, h);
+    context.lineTo(0, h);
+  }
+
   layoutSelf() {
     var metrics = Input.measure(this.field.value);
-    this.width = Math.max(this.minWidth, metrics.width) + this.fieldPadding * 2;
     this.height = metrics.height + 3;
-    this.field.style.width = this.width + 'px';
-    this.field.style.height = this.height + 'px';
+
+    var pl = 0;
+    var pr = 0;
+    if (this.pathFn === this.pathTag) {
+      pr = this.height / 2 - 4;
+    }
+
+    var w = Math.max(this.minWidth, metrics.width) + this.fieldPadding * 2;
+    this.width = Math.max(this.height, w + pl + pr);
+    this.field.style.width = `${w}px`;
+    this.field.style.height = `${this.height}px`;
+    this.field.style.left = `${pl}px`;
     this.redraw();
   }
 
@@ -1043,6 +1076,9 @@ class Block extends Drawable {
     }
     if (part.isBlock) {
       return 6;
+    }
+    if (part.shape === 'Symbol') {
+      return 0;
     }
     return -2 + part.height/2 | 0;
   }
@@ -1649,22 +1685,27 @@ specs.forEach(p => {
     } else if (word === '%fields') {
       add = function() {
         return [
-          new Input("name"),
-          new Input(""),
+          new Input("name", 'Symbol'),
+          new Input("", 'Text'),
         ];
       }
       addSize = 2;
     } else if (word === '%exp') {
       add = function() {
-        return [new Input(def[this.parts.length - index - 3] || "")];
+        return [new Input(def[this.parts.length - index - 3] || "", 'Text')];
       }
       addSize = 1;
-      parts.push(new Input(def.length ? def.shift() : ""));
+      parts.push(new Input(def.length ? def.shift() : "", 'Text'));
     } else if (word === '%%') {
       parts.push(new Label("%"));
     } else if (/^%/.test(word)) {
       var value = def.length ? def.shift() : "";
-      parts.push(new Input(value));
+      parts.push(new Input(value, {
+        '%n': 'Num',
+        '%o': 'Record',
+        '%l': 'List',
+        '%c': 'Color',
+      }[word]));
     } else {
       parts.push(new Label(word));
     }
@@ -1676,7 +1717,7 @@ specs.forEach(p => {
   if (add) {
     b.count = 1 + def.length;
     def.forEach(value => {
-      var obj = new Input(value);
+      var obj = new Input(value, 'Text');
       b.add(obj);
       b.inputs.push(obj);
     });
@@ -1753,41 +1794,6 @@ class World extends Workspace {
     this.inertiaY = 0;
     this.scrolling = false;
     setInterval(this.tick.bind(this), 1000 / 60);
-
-
-    // TODO
-    /*
-    this.add(new Block({}, [
-      new Label("bob"),
-      new Block({}, [
-        new Label("cow"),
-      ]),
-      new Label("fred"),
-    ]));
-
-    var o;
-    this.add(o = new Block({}, [
-      new Label("go"),
-      new Input("123"),
-      new Label("house"),
-      new Input("party"),
-    ]));
-    o.moveTo(0, 50);
-
-    this.add(o = new Block({}, [
-      new Label("quxx"),
-      new Block({}, [
-        new Label("wilfred"),
-        new Input("man"),
-        new Label("has"),
-        new Block({}, [
-          new Label("burb"),
-        ]),
-      ]),
-    ]));
-    o.moveTo(100, 20);
-    */
-
   }
 
   get isWorld() { return true; }

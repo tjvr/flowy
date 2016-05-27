@@ -173,7 +173,7 @@ export const specs = [
 
   /* Color */
 
-  //["color", "color %c", []], // TODO color picker
+  ["color", "color %c", []], // TODO color picker
   ["color", "color %s", ["blue"]],
   ["color", "color %s", ["#0cb6f7"]],
   ["color", "mix %c with %n %% of %c", ['', 50, '']],
