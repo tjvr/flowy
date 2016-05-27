@@ -251,6 +251,7 @@ class Drawable {
     this.parent = null;
     this.dirty = true;
     this.graphicsDirty = true;
+    this.lastTap = 0;
 
     this._zoom = 1;
   }
@@ -368,7 +369,13 @@ class Drawable {
     return null;
   }
 
-  click() {}
+  click() {
+    this.lastTap = +new Date();
+  }
+  isDoubleTap() {
+    return +new Date() - this.lastTap < 400;
+  }
+  
 
   setHover(hover) {}
 }
@@ -501,6 +508,7 @@ class Input extends Drawable {
   }
 
   click() {
+    super.click();
     if (this.shape === 'Color') {
       this.field.focus();
       return;
@@ -712,6 +720,7 @@ class Switch extends Drawable {
   }
 
   click() {
+    super.click();
     this.value = !this.value;
   }
 
@@ -784,6 +793,7 @@ class SwitchKnob extends Drawable {
   }
 
   click() {
+    super.click();
     this.parent.click();
   }
 
@@ -870,6 +880,7 @@ class Arrow extends Drawable {
   }
 
   click() {
+    super.click();
     this.action.call(this.parent);
   }
 
@@ -1106,6 +1117,9 @@ class Block extends Drawable {
   };
 
   detach() {
+    if (this.isDoubleTap()) {
+      return this.copy();
+    }
     if (this.workspace.isPalette) {
       var block = this.copy();
       block.repr.setSink(true);
@@ -1362,6 +1376,9 @@ class Bubble extends Drawable {
   }
 
   detach() {
+    if (this.isDoubleTap()) {
+      // return this.copyValue(); // TODO
+    }
     if (this.parent.isBlock) {
       if (this.parent.bubble !== this) {
         this.parent.reset(this); // TODO leave our value behind
@@ -1388,6 +1405,7 @@ class Bubble extends Drawable {
   }
 
   click() {
+    super.click();
   }
 
   moveTo(x, y) {
