@@ -1,4 +1,6 @@
 
+import tinycolor from  "tinycolor2";
+
 function assert(x) {
   if (!x) throw "Assertion failed!";
 }
@@ -389,7 +391,7 @@ class Label extends Drawable {
     this.height = metrics.height * 1.2 | 0;
     this.layout();
   }
-  
+
   objectFromPoint(x, y) { return null; }
 
   copy() {
@@ -419,14 +421,6 @@ class Input extends Drawable {
     this.el.appendChild(this.field = el('input', 'absolute field text-field'));
 
     this.shape = shape;
-    this.pathFn = {
-      Num: this.pathCircle,
-      Symbol: this.pathTag,
-    }[shape] || this.pathRounded;
-    this.pathIcon = {
-      // List: this.pathListIcon,
-      // Record: this.pathRecordIcon,
-    }[shape] || null;
 
     this.field.addEventListener('input', this.change.bind(this));
     this.field.addEventListener('keydown', this.keyDown.bind(this));
@@ -444,17 +438,42 @@ class Input extends Drawable {
     return this.parent.dragObject;
   }
 
-  get value() {
-    return this._value;
-  }
+  get value() { return this._value; }
   set value(value) {
     value = ''+value;
     this._value = value;
-    this.node.setLiteral(literal(value));
     if (this.field.value !== value) {
       this.field.value = value;
     }
+    if (this.shape === 'Color') {
+      value = tinycolor(value);
+    } else {
+      value = literal(value);
+    }
+    this.node.setLiteral(value);
     this.layout();
+  }
+
+  get shape() { return this._shape; }
+  set shape(value) {
+    this._shape = value;
+    this.color = '#fff';
+    switch (value) {
+      case 'Num':
+        this.pathFn = this.pathCircle;
+        break;
+      case 'Symbol':
+        this.pathFn = this.pathTag;
+        break;
+      case 'Color':
+        this.pathFn = this.pathSquare;
+        break;
+      case 'Menu':
+        this.pathFn = this.pathSquare;
+        break;
+      default:
+        this.pathFn = this.pathRounded;
+    }
   }
 
   change(e) {
@@ -475,6 +494,10 @@ class Input extends Drawable {
   }
 
   click() {
+    if (this.shape === 'Color') {
+      this.field.focus();
+      return;
+    }
     this.field.select();
     this.field.setSelectionRange(0, this.field.value.length);
   }
@@ -493,7 +516,7 @@ class Input extends Drawable {
   }
 
   drawOn(context) {
-    context.fillStyle = '#f7f7f7';
+    context.fillStyle = this.color;
     bezel(context, this.pathFn, this, true, density);
   }
 
@@ -512,6 +535,18 @@ class Input extends Drawable {
     this.pathRounded(context, this.height / 2);
   }
 
+  pathSquare(context) {
+    this.pathRounded(context, density);
+    return;
+
+    var w = this.width;
+    var h = this.height;
+    context.moveTo(0, 0);
+    context.lineTo(w, 0);
+    context.lineTo(w, h);
+    context.lineTo(0, h);
+  }
+
   pathTag(context) {
     var w = this.width;
     var h = this.height;
@@ -524,7 +559,26 @@ class Input extends Drawable {
   }
 
   layoutSelf() {
-    var metrics = Input.measure(this.field.value);
+    var isColor = false;
+    if (this.shape === 'Menu') {
+      var can = document.createElement('canvas');
+      var c = can.getContext('2d');
+      c.fillStyle = this.parent.color;
+      c.fillRect(0, 0, 1, 1);
+      c.fillStyle = 'rgba(0,0,0, .1)';
+      c.fillRect(0, 0, 1, 1);
+      var d = c.getImageData(0, 0, 1, 1).data;
+      var s = (d[0] * 0x10000 + d[1] * 0x100 + d[2]).toString(16);
+      this.color = '#' + '000000'.slice(s.length) + s;
+    } else if (this.shape === 'Color') {
+      this.color = this.value;
+      isColor = true;
+    } else {
+      this.color = '#f7f7f7';
+    }
+
+    var metrics = isColor ? { width: 12, height: 20 }
+                          : Input.measure(this.field.value);
     this.height = metrics.height + 3;
 
     var pl = 0;
@@ -533,11 +587,21 @@ class Input extends Drawable {
       pr = this.height / 2 - 4;
     }
 
-    var w = Math.max(this.minWidth, metrics.width) + this.fieldPadding * 2;
-    this.width = Math.max(this.height, w + pl + pr);
-    this.field.style.width = `${w}px`;
-    this.field.style.height = `${this.height}px`;
-    this.field.style.left = `${pl}px`;
+    var w = Math.max(this.height, Math.max(this.minWidth, metrics.width) + this.fieldPadding * 2);
+    this.width = w + pl + pr;
+
+    this.field.className = 'absolute field text-field field-' + this.shape;
+    this.field.type = isColor ? 'color' : '';
+    if (isColor) {
+      this.field.style.width = `${this.width}px`;
+      this.field.style.height = `${this.height}px`;
+      this.field.style.left = '0';
+    } else {
+      this.field.style.width = `${w}px`;
+      this.field.style.height = `${this.height}px`;
+      this.field.style.left = `${pl}px`;
+    }
+
     this.redraw();
   }
 
@@ -716,7 +780,7 @@ class Arrow extends Drawable {
   constructor(icon, action) {
     super();
     this.icon = icon;
-    this.pathFn = icon === '▶' ? this.pathAddInput 
+    this.pathFn = icon === '▶' ? this.pathAddInput
                 : icon === '◀' ? this.pathDelInput : assert(false);
     this.action = action;
 
@@ -1070,6 +1134,9 @@ class Block extends Drawable {
     if (part.isSwitch) {
       //return 12;
       return 16;
+    }
+    if (part.shape === 'Color') {
+      return 6;
     }
     if (part.isBubble) {
       return 0;
@@ -1699,12 +1766,13 @@ specs.forEach(p => {
     } else if (word === '%%') {
       parts.push(new Label("%"));
     } else if (/^%/.test(word)) {
-      var value = def.length ? def.shift() : "";
+      var value = def.length ? def.shift() : word === '%c' ? "#007de0" : "";
       parts.push(new Input(value, {
         '%n': 'Num',
         '%o': 'Record',
         '%l': 'List',
         '%c': 'Color',
+        '%m': 'Menu',
       }[word]));
     } else {
       parts.push(new Label(word));

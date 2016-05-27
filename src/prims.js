@@ -115,7 +115,7 @@ export const specs = [
   ["record", "record with %fields"],
   ["record", "update %o with %fields"], // TODO remove??
   ["record", "merge %o with %o"],
-  ["record", "%m of %o"],
+  ["record", "%m of %o", ["name"]],
 
   /* List */
 
@@ -173,7 +173,7 @@ export const specs = [
 
   /* Color */
 
-  ["color", "color %c", []], // TODO color picker
+  ["color", "%c", []], // TODO color picker
   ["color", "color %s", ["blue"]],
   ["color", "color %s", ["#0cb6f7"]],
   ["color", "mix %c with %n %% of %c", ['', 50, '']],
@@ -510,7 +510,8 @@ export const functions = {
   /* Color */
   // TODO re-implement in-engine
   "Bool <- Color = Color": tinycolor.equals,
-  //"Color <- color Color": x => x,
+  "Color <- Color": x => x,
+  "Color <- color Color": x => x,
   "Color <- color Text": x => {
     var color = tinycolor(x);
     if (!color.isValid()) return;

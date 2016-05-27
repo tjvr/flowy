@@ -278,16 +278,18 @@ html, body {
   pointer-events: auto;
 }
 
-.text-field,
-.enum-field {
+.text-field {
   padding: 0 4px 0;
   -moz-box-sizing: border-box;
   box-sizing: border-box;
   text-align: center;
 }
 
-.enum-field {
+.field-Menu {
   color: #fff;
+}
+.field-Color {
+  padding: 0;
 }
 
 .progress {
