@@ -722,7 +722,7 @@ class SwitchKnob extends Drawable {
     this.el.appendChild(this.canvas = el('canvas', 'absolute'));
     this.context = this.canvas.getContext('2d');
 
-    this.color = '#aaa';
+    this.color = '#bbc';
     this.layoutSelf();
   }
 
@@ -1132,11 +1132,10 @@ class Block extends Drawable {
 
   minDistance(part) {
     if (part.isSwitch) {
-      //return 12;
       return 16;
     }
     if (part.shape === 'Color') {
-      return 6;
+      return 10;
     }
     if (part.isBubble) {
       return 0;
