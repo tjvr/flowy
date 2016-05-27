@@ -806,7 +806,7 @@ class Block extends Drawable {
     for (var i=0; i<parts.length; i++) {
       this.add(parts[i]);
     }
-    this.inputs = this.parts.filter(p => !p.isLabel);
+    this.inputs = this.parts.filter(p => !p.isLabel && !p.isArrow);
 
     this.color = info.color; //'#7a48c3';
 
@@ -960,7 +960,6 @@ class Block extends Drawable {
 
     var i = this.args.indexOf(arg);
     this.replace(arg, this.inputs[i]);
-    // TODO fix variadic add() to amend inputs[] properly
   };
 
   detach() {
@@ -1677,12 +1676,16 @@ specs.forEach(p => {
   if (add) {
     b.count = 1 + def.length;
     def.forEach(value => {
-      b.add(new Input(value));
+      var obj = new Input(value);
+      b.add(obj);
+      b.inputs.push(obj);
     });
     var delInput = new Arrow("◀", function() {
+      if (this === b) return;
       this.count--;
       for (var i=0; i<addSize; i++) {
         this.remove(this.parts[this.parts.length - 3]);
+        this.inputs.pop();
       }
       if (this.count === 1) {
         this.remove(this.parts[this.parts.length - 2]);
@@ -1690,12 +1693,14 @@ specs.forEach(p => {
     });
     if (def.length) b.add(delInput);
     b.add(new Arrow("▶", function() {
+      if (this === b) return;
       this.count++;
       if (this.count === 2) {
-        this.insert(delInput, this.parts.length - 1);
+        this.insert(delInput.copy(), this.parts.length - 1);
       }
       add.call(this).forEach(obj => {
         this.insert(obj, this.parts.length - 2);
+        this.inputs.push(obj);
       });
     }));
   }
