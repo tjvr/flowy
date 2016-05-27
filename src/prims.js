@@ -106,7 +106,6 @@ export const specs = [
 
   /* List */
 
-  ["list", "list %s %s %s", ["foo", "bar", "baz"]],
   ["list", "list %exp", ["foo", "bar", "baz"]],
   ["list", "%l concat %l"],
   ["list", "item %n of %l", [1]],
@@ -119,7 +118,7 @@ export const specs = [
 
   /* Text */
 
-  ["text", "join %s %s", ["Hello ", "world"]],
+  ["text", "join %exp", ["Hello ", "world"]],
   //["text", "join words %s"],
   ["text", "join %l with %s", ["", " "]],
   //["text", "split words %s"],
@@ -435,7 +434,7 @@ export const functions = {
   "Float <- literal Float": x => x,
 
   "Bool <- Text = Text": (a, b) => a === b,
-  "Text <- join Text Text": (a, b) => a + b,
+  "Text <- join Variadic": (...rest) => rest.join(""),
   "Text <- join List with Text": (l, x) => l.join(x),
   // "Text <- join words List": x => x.join(" "),
   "Text List <- split Text by Text": (x, y) => x.split(y),

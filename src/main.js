@@ -1646,7 +1646,7 @@ specs.forEach(p => {
       return new Switch(value);
     } else if (word === '%exp') {
       add = function() {
-        return new Input(def[this.parts.length - index] || "");
+        return new Input(def[this.parts.length - index - 3] || "");
       }
       return new Input(def.length ? def.shift() : "");
     } else if (word === '%%') {
@@ -1663,7 +1663,10 @@ specs.forEach(p => {
   var b = new Block({spec, color, isRing}, parts);
 
   if (add) {
-    b.count = 1;
+    b.count = 1 + def.length;
+    def.forEach(value => {
+      b.add(new Input(value));
+    });
     var delInput = new Arrow("◀", function() {
       this.count--;
       this.remove(this.parts[this.parts.length - 3]);
@@ -1671,6 +1674,7 @@ specs.forEach(p => {
         this.remove(this.parts[this.parts.length - 2]);
       }
     });
+    if (def.length) b.add(delInput);
     b.add(new Arrow("▶", function() {
       this.count++;
       if (this.count === 2) {
