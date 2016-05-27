@@ -120,9 +120,10 @@ export const specs = [
   /* List */
 
   ["list", "list %exp", ["foo", "bar", "baz"]],
-  ["list", "%l concat %l"],
-  ["list", "item %n of %l", [1]],
   ["list", "range %n to %n", [1, 5]],
+  ["list", "item %n of %l", [1]],
+  ["list", "length of %l", []],
+  ["list", "%l concat %l"],
 
   // ["list", "do %r for each %l"],
   // ["list", "keep %r from %l"],
@@ -477,6 +478,11 @@ export const functions = {
       this.emit(value);
     }
   },
+
+  "Int <- length of List": function(list) {
+    return list.length;
+  },
+
 
   /* Record */
   "Record <- record with Variadic": (...pairs) => {
