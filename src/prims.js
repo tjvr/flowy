@@ -16,7 +16,6 @@ class Record {
   }
 
   update(newValues) {
-    assert(!this.schema);
     var values = {};
     Object.keys(this.values).forEach(name => {
       values[name] = this.values[name];
@@ -24,7 +23,8 @@ class Record {
     Object.keys(newValues).forEach(name => {
       values[name] = newValues[name];
     });
-    return new Record(values);
+    // TODO maintain order
+    return new Record(null, values);
   }
 }
 
@@ -114,6 +114,7 @@ export const specs = [
   // TODO
   ["record", "record with %fields"],
   ["record", "update %o with %fields"],
+  ["record", "merge %o with %o"],
   ["record", "%s of %o"],
 
   /* List */
@@ -275,6 +276,9 @@ export const functions = {
     var schema = record.schema;
     var symbols = schema ? schema.symbols : Object.keys(record.values);
     var r = el('Record');
+    if (schema) {
+      r.appendChild(el('Record-title', schema.name));
+    }
     symbols.forEach(symbol => {
       var value = record.values[symbol];
       var field = el('Record-field');
@@ -474,7 +478,7 @@ export const functions = {
   },
 
   /* Record */
-  "Any <- record with Variadic": (...pairs) => {
+  "Record <- record with Variadic": (...pairs) => {
     var values = {};
     for (var i=0; i<pairs.length; i += 2) {
       var name = pairs[i], value = pairs[i + 1];
@@ -482,13 +486,19 @@ export const functions = {
     }
     return new Record(null, values);
   },
-  "Any <- update Record with Variadic": (record, ...pairs) => {
+  "Record <- update Record with Variadic": (record, ...pairs) => {
+    var record = record || new Record(null, {});
+    if (!(record instanceof Record)) return;
     var values = {};
     for (var i=0; i<pairs.length; i += 2) {
       var name = pairs[i], value = pairs[i + 1];
       values[name] = value;
     }
-    return record.update(values);
+    var result = record.update(values);
+    return result;
+  },
+  "Record <- merge Record with Record": (src, dest) => {
+    return src.update(dest.values);
   },
   "Any <- Text of Record": (name, record) => {
     return record.values[name];
@@ -803,6 +813,7 @@ Object.keys(functions).forEach(function(spec) {
   coercify(info.inputs).forEach((c, index) => {
     let {inputs, coercions} = c;
     var hash = inputs.join(", ");
+    hash = /Variadic/.test(hash) ? "Variadic" : hash;
     if (byInputs[hash] && index > 0) {
       return;
     }

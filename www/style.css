@@ -207,13 +207,19 @@ html, body {
   display: inline-block;
   vertical-align: text-top;
 }
+.result-Record-title {
+  display: block;
+  text-align: center;
+  font: bold 12px/20px Helvetica Neue, Helvetica, Lucida Grande, Verdana, DejaVu Sans, sans-serif;
+  color: #555;
+}
 .result-Record-field {
   display: block;
 }
 .result-Record-name,
 .result-Bool {
-  font: bold 12px/20px Helvetica Neue, Helvetica, Lucida Grande, Verdana, DejaVu Sans, sans-serif;
-  color: #555;
+  font: bold 14px/20px Helvetica Neue, Helvetica, Lucida Grande, Verdana, DejaVu Sans, sans-serif;
+  color: #333;
   display: inline-block;
 }
 .result-Record-name {
