@@ -960,6 +960,7 @@ class Block extends Drawable {
 
     var i = this.args.indexOf(arg);
     this.replace(arg, this.inputs[i]);
+    // TODO fix variadic add() to amend inputs[] properly
   };
 
   detach() {

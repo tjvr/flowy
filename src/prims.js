@@ -113,7 +113,7 @@ export const specs = [
 
   // TODO
   ["record", "record with %fields"],
-  ["record", "update %o with %fields"],
+  ["record", "update %o with %fields"], // TODO remove??
   ["record", "merge %o with %o"],
   ["record", "%s of %o"],
 
@@ -283,22 +283,19 @@ export const functions = {
       var value = record.values[symbol];
       var field = el('Record-field');
       field.appendChild(el('Record-name', ''+symbol));
-      var item = el('Record-value');
+      var item = el('Record-value', "...");
 
-      if (value && value.isTask && !value.isDone) {
-        item.textContent = "...";
-        value.onEmit(result => {
-          item.innerHTML = '';
-          var prim = this.evaluator.getPrim("display %s", [result]);
-          var result = prim.func.call(this, result);
-          if (result) item.appendChild(result);
-          this.emit(l);
-        });
-      } else {
-        value = value && value.isTask ? value.result : value;
-        var prim = this.evaluator.getPrim("display %s", [value]);
-        var result = prim.func.call(this, value);
+      var onEmit = result => {
+        item.innerHTML = '';
+        var prim = this.evaluator.getPrim("display %s", [result]);
+        var result = prim.func.call(this, result);
         if (result) item.appendChild(result);
+        this.emit(r);
+      };
+      if (value && value.isTask) {
+        value.withEmit(onEmit);
+      } else {
+        onEmit(value);
       }
 
       field.appendChild(item);
@@ -312,20 +309,17 @@ export const functions = {
     list.forEach(value => {
       var item = el('List-item');
 
-      if (value && value.isTask && !value.isDone) {
-        item.textContent = "...";
-        value.onEmit(result => {
-          item.innerHTML = '';
-          var prim = this.evaluator.getPrim("display %s", [result]);
-          var result = prim.func.call(this, result);
-          if (result) item.appendChild(result);
-          this.emit(l);
-        });
-      } else {
-        value = value && value.isTask ? value.result : value;
-        var prim = this.evaluator.getPrim("display %s", [value]);
-        var result = prim.func.call(this, value);
+      var onEmit = result => {
+        item.innerHTML = '';
+        var prim = this.evaluator.getPrim("display %s", [result]);
+        var result = prim.func.call(this, result);
         if (result) item.appendChild(result);
+        this.emit(l);
+      };
+      if (value && value.isTask) {
+        value.withEmit(onEmit);
+      } else {
+        onEmit(value);
       }
 
       l.appendChild(item);
@@ -473,8 +467,15 @@ export const functions = {
     return result;
   },
 
-  "Any <- item Int of List": (index, list) => {
-    return list[index - 1];
+  "Any Future <- item Int of List": function(index, list) {
+    var value = list[index - 1];
+    if (value && value.isTask) {
+      this.awaitAll([value], () => {
+        this.emit(value.result);
+      });
+    } else {
+      this.emit(value);
+    }
   },
 
   /* Record */
@@ -501,6 +502,7 @@ export const functions = {
     return src.update(dest.values);
   },
   "Any <- Text of Record": (name, record) => {
+    // TODO await if Task
     if (!(record instanceof Record)) return;
     return record.values[name];
   },

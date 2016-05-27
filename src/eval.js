@@ -471,6 +471,14 @@ class Thread {
     }
   }
 
+  withEmit(cb) {
+    if (this.isDone) {
+      cb(this.result);
+    } else {
+      this.onEmit(cb);
+    }
+  }
+
   awaitAll(tasks, func) {
     if (!func) throw "noo";
     tasks.forEach(task => {
