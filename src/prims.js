@@ -141,10 +141,11 @@ export const specs = [
   ["math", "mean %n"],
   ["math", "stddev %n"],
 
-  ["math", "sqrt %n", [10]],
-  ["math", "sin %n", [30]],
-  ["math", "cos %n", [60]],
-  ["math", "tan %n", [45]],
+  // TODO menu inputs
+  ["math", "sqrt of %n", [10]],
+  ["math", "sin of %n", [30]],
+  ["math", "cos of %n", [60]],
+  ["math", "tan of %n", [45]],
 
   // ["math", "random %n to %n", [1, 10]],
 
@@ -173,9 +174,10 @@ export const specs = [
   ["color", "%c to rgb"],
   ["color", "%c to hsv"],
   ["color", "spin %c by %n"],
-  ["color", "analogous %c"],
-  ["color", "triad %c"],
-  ["color", "monochromatic %c"],
+  ["color", "analogous colors %c"],
+  ["color", "triad colors %c"],
+  ["color", "monochromatic colors %c"],
+  ["color", "invert %c"],
   ["color", "complement %c"],
 
   /* Image */
@@ -364,10 +366,10 @@ export const functions = {
   "Bool <- Float = Float": (a, b) => a === b,
   "Bool <- Float < Float": (a, b) => a < b,
 
-  "Float <- sqrt Float": x => { return Math.sqrt(x); },
-  "Float <- sin Float": x => Math.sin(Math.PI / 180 * x),
-  "Float <- cos Float": x => Math.sin(Math.PI / 180 * x),
-  "Float <- tan Float": x => Math.sin(Math.PI / 180 * x),
+  "Float <- sqrt of Float": x => { return Math.sqrt(x); },
+  "Float <- sin of Float": x => Math.sin(Math.PI / 180 * x),
+  "Float <- cos of Float": x => Math.sin(Math.PI / 180 * x),
+  "Float <- tan of Float": x => Math.sin(Math.PI / 180 * x),
 
   /* Complex */
   // TODO
@@ -467,6 +469,7 @@ export const functions = {
   },
 
   /* Color */
+  // TODO re-implement in-engine
   "Bool <- Color = Color": tinycolor.equals,
   //"Color <- color Color": x => x,
   "Color <- color Text": x => {
@@ -483,14 +486,22 @@ export const functions = {
   //},
   "Float <- brightness of Color": x => x.getBrightness(),
   "Float <- luminance of Color": x => x.getLuminance(),
+  "Color <- spin Color by Int": (color, amount) => color.spin(amount),
+  "Color <- complement Color": x => x.complement(),
+  "Color <- invert Color": x => {
+    var {r, g, b} = x.toRgb();
+    return tinycolor({r: 255 - r, g: 255 - g, b: 255 - b});
+  },
+
+  // TODO menu inputs
   "Record <- Color to hex": x => x.toHexString(),
   "Record <- Color to rgb": x => x.toRgb(),
   "Record <- Color to hsv": x => x.toHsv(),
-  "Color <- spin Color by Int": (color, amount) => color.spin(amount),
-  "List <- analogous Color": x => x.analogous(),
-  "List <- triad Color": x => x.triad(),
-  "List <- monochromatic Color": x => x.monochromatic(),
-  "Color <- complement Color": x => x.complement(),
+
+  // TODO menu inputs
+  "List <- analogous colors Color": x => x.analogous(),
+  "List <- triad colors Color": x => x.triad(),
+  "List <- monochromatic colors Color": x => x.monochromatic(),
 
 
   /* Async tests */
@@ -805,12 +816,12 @@ export const typeOf = (value => {
         case Error: return 'Error';
         case BigInteger: return 'Int';
         case Array: return 'List';
-        case tinycolor: return 'Color';
         case Image: return 'Image';
         case Uncertain: return 'Uncertain';
         case Record: return value.schema ? value.schema.name : 'Record';
       }
       if (value instanceof Fraction) return 'Frac'; // TODO
+      if (value instanceof tinycolor) return 'Color'; // TODO
   }
   throw "Unknown type: " + value;
 });
