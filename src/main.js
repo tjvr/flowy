@@ -528,7 +528,7 @@ class Input extends Drawable {
 
     if (this.pathIcon) {
       context.save();
-      context.fillStyle = 'rgba(255, 255, 255, 0.7)';
+      context.fillStyle = 'rgba(255, 255, 255, 0.5)';
       this.pathIcon(context);
       context.closePath();
       context.fill();
@@ -2464,14 +2464,14 @@ class App {
   }
 
   renderFeedback(g) {
-    var feedbackColor = '#fff';
+    var feedbackColor = '#ffa';
     var info = g.feedbackInfo;
     var context = g.feedback;
     var canvas = g.feedback.canvas;
     var l = this.feedbackLineWidth;
     var r = l/2;
 
-    var l = 2;
+    var l = 6;
     var x = info.x - l;
     var y = info.y - l;
     var w = info.obj.width * this.world.zoom;
@@ -2496,7 +2496,7 @@ class App {
     info.obj.pathShadowOn(context);
     context.fill();
     context.globalCompositeOperation = 'source-over';
-    context.globalAlpha = .6;
+    context.globalAlpha = .7;
     context.fillStyle = feedbackColor;
     context.fill();
 

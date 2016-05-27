@@ -116,6 +116,7 @@ export const specs = [
   ["record", "update %o with %fields"], // TODO remove??
   ["record", "merge %o with %o"],
   ["record", "%q of %o", ["name"]],
+  ["record", "record headings: %l values: %l"],
 
   /* List */
 
@@ -512,6 +513,14 @@ export const functions = {
     if (!(record instanceof Record)) return;
     return record.values[name];
   },
+  "Record <- record headings: List values: List": (headings, values) => {
+    var rec = {};
+    for (var i=0; i<headings.length; i++) {
+      var name = headings[i];
+      rec[name] = values[i];
+    }
+    return new Record(null, rec);
+  },
 
   /* Color */
   // TODO re-implement in-engine
@@ -707,7 +716,7 @@ Object.keys(coercions).forEach(spec => {
 });
 
 function parseSpec(spec) {
-  var words = spec.split(/([A-Za-z]+|[()]|<-)|\s+/g).filter(x => !!x);
+  var words = spec.split(/([A-Za-z:]+|[()]|<-)|\s+/g).filter(x => !!x);
   var tok = words[0];
   var i = 0;
   function next() { tok = words[++i]; }
