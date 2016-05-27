@@ -115,7 +115,7 @@ export const specs = [
   ["record", "record with %fields"],
   ["record", "update %o with %fields"], // TODO remove??
   ["record", "merge %o with %o"],
-  ["record", "%s of %o"],
+  ["record", "%m of %o"],
 
   /* List */
 

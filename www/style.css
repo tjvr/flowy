@@ -212,6 +212,7 @@ html, body {
   text-align: center;
   font: bold 12px/20px Helvetica Neue, Helvetica, Lucida Grande, Verdana, DejaVu Sans, sans-serif;
   color: #555;
+  border-bottom: 1px solid #aaa;
 }
 .result-Record-field {
   display: block;
@@ -223,10 +224,15 @@ html, body {
   display: inline-block;
 }
 .result-Record-name {
-  margin-right: 4px;
+  margin-right: 6px;
 }
 .result-Record-name:after {
-  content: ":";
+  /*
+  content: "→";
+  margin-left: 2px;
+  vertical-align: middle;
+  */
+  content: "▸";
 }
 .result-Record-value {
   display: inline-block;
