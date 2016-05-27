@@ -1852,7 +1852,6 @@ class World extends Workspace {
 
     this.scrollX = 0;
     this.scrollY = 0;
-    this.factor = 1;
     this.zoom = 1;
     this.lastX = 0;
     this.lastY = 0;
@@ -1930,11 +1929,10 @@ class World extends Workspace {
     }
   }
 
-  zoomBy(delta, x, y) {
-    this.factor -= delta;
-    this.factor = Math.min(139, this.factor); // zoom <= 4.0
+  zoomBy(factor, x, y) {
     var oldCursor = this.fromScreen(x, y);
-    this.zoom = Math.pow(1.01, this.factor);
+    this.zoom *= factor;
+    this.zoom = Math.min(4.0, this.zoom); // zoom <= 4.0
     this.makeBounds();
     var newCursor = this.fromScreen(x, y);
     this.scrollX += oldCursor.x - newCursor.x;
@@ -2010,6 +2008,9 @@ class App {
     window.addEventListener('resize', this.resize.bind(this));
     document.addEventListener('wheel', this.wheel.bind(this));
     document.addEventListener('mousewheel', this.wheel.bind(this));
+    document.addEventListener('gesturestart', this.gestureStart.bind(this));
+    document.addEventListener('gesturechange', this.gestureChange.bind(this));
+    document.addEventListener('gestureend', this.gestureEnd.bind(this));
     // TODO gesture events
   }
 
@@ -2031,12 +2032,13 @@ class App {
       t = t.parentNode;
     } while (t);
 
-    var w = this.workspaceFromPoint(e.clientX, e.clientY);
+    var w = this.frameFromPoint(e.clientX, e.clientY);
     if (w) {
       if (e.ctrlKey) {
         if (w.isScrollable) {
           e.preventDefault();
-          w.zoomBy(e.deltaY, e.clientX, e.clientY);
+          var factor = Math.pow(1.01, -e.deltaY);
+          w.zoomBy(factor, e.clientX, e.clientY);
         }
       } else if (w.isScrollable) {
         e.preventDefault();
@@ -2044,6 +2046,36 @@ class App {
       }
     }
   }
+
+  gestureStart(e) {
+    e.preventDefault();
+    if (isNaN(e.scale)) return;
+    var w = this.frameFromPoint(e.clientX, e.clientY);
+    if (w) {
+      if (w.isScrollable) {
+        this.gesture = {
+          frame: w,
+          lastScale: 1.0,
+        };
+      }
+    }
+  }
+
+  gestureChange(e) {
+    e.preventDefault();
+    if (!this.gesture) return;
+    if (isNaN(e.scale) || !isFinite(e.scale)) {
+      return;
+    }
+    var p = this.gesture;
+    p.frame.zoomBy(e.scale / p.lastScale, e.clientX, e.clientY);
+    p.lastScale = e.scale;
+  }
+
+  gestureEnd(e) {
+    this.gesture = null;
+  }
+
 
   mouseDown(e) {
     var p = {clientX: e.clientX, clientY: e.clientY, identifier: this};
@@ -2137,6 +2169,17 @@ class App {
     if (!w) return null;
     var pos = w.screenPosition;
     return w.objectFromPoint(x - pos.x, y - pos.y);
+  }
+
+  frameFromPoint(x, y) {
+    // TODO
+    var workspaces = this.workspaces;
+    for (var i = workspaces.length; i--;) {
+      var w = workspaces[i];
+      var pos = w.screenPosition;
+      if (containsPoint(w, x - pos.x, y - pos.y)) return w;
+    }
+    return null;
   }
 
   workspaceFromPoint(x, y) {
