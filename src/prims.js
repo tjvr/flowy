@@ -276,14 +276,14 @@ export const functions = {
           item.innerHTML = '';
           var prim = this.evaluator.getPrim("display %s", [result]);
           var result = prim.func.call(this, result);
-          item.appendChild(result);
+          if (result) item.appendChild(result);
           this.emit(l);
         });
       } else {
         value = value.isTask ? value.result : value;
         var prim = this.evaluator.getPrim("display %s", [value]);
         var result = prim.func.call(this, value);
-        item.appendChild(result);
+        if (result) item.appendChild(result);
       }
 
       field.appendChild(item);
@@ -303,14 +303,14 @@ export const functions = {
           item.innerHTML = '';
           var prim = this.evaluator.getPrim("display %s", [result]);
           var result = prim.func.call(this, result);
-          item.appendChild(result);
+          if (result) item.appendChild(result);
           this.emit(l);
         });
       } else {
         value = value.isTask ? value.result : value;
         var prim = this.evaluator.getPrim("display %s", [value]);
         var result = prim.func.call(this, value);
-        item.appendChild(result);
+        if (result) item.appendChild(result);
       }
 
       l.appendChild(item);

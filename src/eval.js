@@ -349,29 +349,40 @@ class Thread {
     this.evaluator = evaluator;
   }
 
-  static fake(prim, args) {
-    if (prim.coercions) {
-      for (var i=0; i<prim.coercions.length; i++) {
-        var coerce = prim.coercions[i];
-        if (coerce) {
-          args[i] = coerce(args[i]);
+  static fake(prim, inputs) {
+    var thread = new Thread(null);
+
+    // TODO unevaluated inputs
+    var tasks = inputs.filter(task => task.isTask); // TODO
+    thread.awaitAll(tasks, compute.bind(thread));
+    
+    function compute() {
+      var func = prim.func;
+      var args = inputs.map((obj, index) => {
+        if (!obj.isTask) return obj;
+        // if (this.target.inputs[index] === '%u') {
+        //   return obj;
+        // }
+        return obj.result;
+      });
+      
+      if (prim.coercions) {
+        for (var i=0; i<prim.coercions.length; i++) {
+          var coerce = prim.coercions[i];
+          if (coerce) {
+            args[i] = coerce(args[i]);
+          }
         }
       }
-    }
 
-    // TODO may need to await args!
-    // for container types -- eg List
-    
-    var thread = new Thread(null);
-    var func = prim.func;
-    thread.schedule(function() {
       var result = func.apply(this, args);
       //console.log(func, args, result);
       if (!/Future/.test(prim.output)) {
         this.emit(result);
         this.isRunning = false;
       }
-    }.bind(thread));
+    }
+
     return thread;
   }
 
