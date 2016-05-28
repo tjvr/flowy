@@ -1441,7 +1441,7 @@ class Source extends Drawable {
     var r = Bubble.radius;
     var w12 = this.width / 2;
 
-    context.moveTo(1.5, r + .5);
+    context.moveTo(1, r + .5);
     context.arc(r + 1, r + .5, r, PI, PI32, false);
     context.arc(w - r - 1, r + .5, r, PI32, 0, false);
     context.arc(w - r - 1, h - r - 1, r, 0, PI12, false);
@@ -2528,9 +2528,10 @@ class App {
       info.obj.replaceWith(g.dragScript);
     } else {
       g.dropWorkspace = this.workspaceFromPoint(g.dragX + g.mouseX, g.dragY + g.mouseY) || this.world;
-      if (g.dropWorkspace.isPalette && g.dragScript.isBlock && g.dragScript.outputs.length === 1 && g.dragScript.bubble.isBubble) {
+      var canDelete = (g.dragScript.isBlock && g.dragScript.outputs.length === 1 && g.dragScript.bubble.isBubble) || (g.dragScript.isSource && !g.dragScript.outputs.length);
+      if (g.dropWorkspace.isPalette && canDelete) {
         this.remove(g.dragScript);
-        if (g.dragScript.bubble.curve.parent === this.world) {
+        if (g.dragScript.isBlock && g.dragScript.bubble.curve.parent === this.world) {
           this.world.remove(g.dragScript.bubble.curve)
         }
       } else {
