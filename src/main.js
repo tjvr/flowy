@@ -375,7 +375,7 @@ class Drawable {
   isDoubleTap() {
     return +new Date() - this.lastTap < 400;
   }
-  
+
 
   setHover(hover) {}
 }
@@ -1307,6 +1307,7 @@ class Block extends Drawable {
 class Source extends Drawable {
   constructor(value) {
     super();
+    if (this.constructor === Bubble) return;
 
     this.el = el('absolute source');
     this.el.appendChild(this.canvas = el('canvas', 'absolute'));
@@ -1322,8 +1323,20 @@ class Source extends Drawable {
     this.display(this.repr.value);
     this.repr.onEmit(this.onEmit.bind(this));
     this.repr.onProgress(this.onProgress.bind(this));
+
+    this.outputs = [];
+    this.curves = [];
+    this.blob = this.bubble = new Blob(this);
+    this.el.appendChild(this.blob.el);
   }
 
+  addBubble(bubble) {
+    bubble.curve.parent.remove(bubble.curve);
+    bubble.parent.remove(bubble);
+    this.removeOutput(bubble);
+  }
+
+  get isSource() { return true; }
   get isDraggable() { return true; }
 
   display(value) {
@@ -1358,7 +1371,10 @@ class Source extends Drawable {
   }
 
   objectFromPoint(x, y) {
-    return opaqueAt(this.context, x * density, y * density) ? this : null;
+    if (opaqueAt(this.context, x * density, y * density)) return this;
+    var o = this.blob.objectFromPoint(x - this.blob.x, y - this.blob.y)
+    if (o) return o;
+    return null;
   }
 
   get dragObject() {
@@ -1379,18 +1395,15 @@ class Source extends Drawable {
     return new Source(this.node.value);
   }
 
-  /*
-  replaceWith(other) {
-    assert(this.isInside);
-    var obj = this.parent;
-    obj.replace(this, other);
-    if (other === this.target) {
-      assert(this.target.bubble.isBlob);
-      other.addBubble(this);
-      other.layoutChildren();
-    }
+  layoutChildren() {
+    this.blob.layoutChildren();
+    this.layoutSelf();
   }
-  */
+
+  drawChildren() {
+    this.blob.drawChildren();
+    this.draw();
+  }
 
   click() {
     super.click();
@@ -1409,23 +1422,28 @@ class Source extends Drawable {
     var y = t + py + 1;
     this.elContents.style.transform = `translate(${x}px, ${y}px)`;
 
+    this.ownWidth = this.width;
+    this.ownHeight = this.height;
+    this.layoutBubble(this.blob);
     this.moved();
     this.redraw();
   }
 
+  layoutBubble(bubble) {
+    var x = (this.width - bubble.width) / 2;
+    var y = this.height - 1;
+    bubble.moveTo(x, y);
+  }
+
   pathBubble(context) {
-    var t = 0; //Bubble.tipSize;
     var w = this.width;
     var h = this.height;
     var r = Bubble.radius;
     var w12 = this.width / 2;
 
-    context.moveTo(1, t + r + .5);
-    context.arc(r + 1, t + r + .5, r, PI, PI32, false);
-    context.lineTo(w12 - t, t + .5);
-    context.lineTo(w12, 1);
-    context.lineTo(w12 + t, t + .5);
-    context.arc(w - r - 1, t + r + .5, r, PI32, 0, false);
+    context.moveTo(1.5, r + .5);
+    context.arc(r + 1, r + .5, r, PI, PI32, false);
+    context.arc(w - r - 1, r + .5, r, PI32, 0, false);
     context.arc(w - r - 1, h - r - 1, r, 0, PI12, false);
     context.arc(r + 1, h - r - 1, r, PI12, PI, false);
   }
@@ -1461,7 +1479,35 @@ class Source extends Drawable {
     this.pathBubble(context);
     context.closePath();
   }
-  
+
+  moveTo(x, y) {
+    super.moveTo(x, y);
+    this.moved();
+  }
+
+  moved() {
+    this.curves.forEach(c => c.layoutSelf());
+  }
+
+  updateSinky() {}
+
+  addOutput(output) {
+    this.outputs.push(output);
+    output.target = this;
+
+    var curve = new Curve(this, output);
+    output.curve = curve;
+    this.curves.push(curve);
+
+    this.layoutBubble(output);
+  }
+
+  removeOutput(output) {
+    var index = this.outputs.indexOf(output);
+    this.outputs.splice(index, 1);
+    output.parent = null;
+  }
+
 }
 
 
@@ -1488,6 +1534,7 @@ class Bubble extends Source {
     this.target.repr.onProgress(this.onProgress.bind(this));
   }
 
+  get isSource() { return false; }
   get isBubble() { return true; }
   get isDraggable() { return true; }
 
@@ -1515,6 +1562,10 @@ class Bubble extends Source {
     return r;
   }
 
+  objectFromPoint(x, y) {
+    return opaqueAt(this.context, x * density, y * density) ? this : null;
+  }
+
   replaceWith(other) {
     assert(this.isInside);
     var obj = this.parent;
@@ -1530,16 +1581,28 @@ class Bubble extends Source {
     super.click();
   }
 
-  moveTo(x, y) {
-    if (this.parent && !(this.isInside || this.parent.bubble === this)) {
-      //y = Math.max(y, this.target.y + this.target.ownHeight);
-    }
-    super.moveTo(x, y);
-    this.moved();
-  }
+  // moveTo(x, y) {
+  //   if (this.parent && !(this.isInside || this.parent.bubble === this)) {
+  //     //y = Math.max(y, this.target.y + this.target.ownHeight);
+  //   }
+  //   super.moveTo(x, y);
+  //   this.moved();
+  // }
 
   moved() {
     if (this.curve) this.curve.layoutSelf();
+  }
+
+  layoutChildren() {
+    // if (this.dirty) {
+    //   this.dirty = false;
+    this.layoutSelf();
+  }
+
+  drawChildren() {
+    // if (this.dirty) {
+    //   this.dirty = false;
+    this.layoutSelf();
   }
 
   layoutSelf() {
@@ -2539,8 +2602,11 @@ class App {
     if (obj.isBlock) {
       obj.parts.forEach(child => this.addFeedback(g, x, y, child));
       if (obj.bubble.isBlob) {
-        this.addFeedback(g, x, y, obj.blob); // + obj.ownWidth / 2, y + obj.ownHeight / 2, obj.blob)
+        this.addFeedback(g, x, y, obj.blob);
       }
+    }
+    if (obj.isSource) {
+      this.addFeedback(g, x, y, obj.blob);
     }
 
     var gx = g.dragScript.x;
