@@ -57,6 +57,22 @@ class Uncertain {
 
 }
 
+function jsonToRecords(obj) {
+  if (typeof obj === 'object') {
+    if (obj.constructor === Array) {
+      return obj.map(jsonToRecords);
+    } else {
+      var values = {};
+      Object.keys(obj).forEach(key => {
+        values[key] = jsonToRecords(obj[key]);
+      });
+      return new Record(null, values);
+    }
+  } else {
+    return obj;
+  }
+}
+
 
 
 var literals = [
@@ -139,6 +155,7 @@ export const specs = [
   //["text", "split words %s"],
   ["text", "split %s by %s", ["", " "]],
   //["text", "split lines %s"],
+  ["text", "replace %s with %s in %s", ["-", "_", "fish-cake"]],
 
   /* Math */
 
@@ -201,6 +218,7 @@ export const specs = [
 
   ["sensing", "get %s", ["https://tjvr.org/"]],
   ["sensing", "get %s", ["http://i.imgur.com/svIp9cx.jpg?1"]],
+  ["sensing", "get %s", ["http://api.scratch.mit.edu/users/blob8108"]],
 
   // ["sensing", "select %s from %html"],
 
@@ -453,6 +471,9 @@ export const functions = {
   "Text List <- split Text by Text": (x, y) => x.split(y),
   // "Text List <- split words Text": x => x.trim().split(/\s+/g),
   //"Text List <- split lines Text": x => x.split(/\r|\n|\r\n/g),
+  "Text <- replace Text with Text in Text": (a, b, c) => {
+    return c.replace(a, b);
+  },
 
   /* List */
 
@@ -562,8 +583,11 @@ export const functions = {
   /* Async tests */
 
   "WebPage Future <- get Text": function(url) {
+    //var cors = 'http://crossorigin.me/http://';
+    // var cors = 'http://localhost:1337/';
+    // url = cors + url.replace(/^https?\:\/\//, "");
     var xhr = new XMLHttpRequest;
-    xhr.open('GET', 'http://crossorigin.me/' + url, true);
+    xhr.open('GET', url, true);
     xhr.onprogress = e => {
       this.progress(e.loaded, e.total, e.lengthComputable);
     };
@@ -582,7 +606,22 @@ export const functions = {
             this.emit(img);
           });
           img.src = URL.createObjectURL(blob);
-        } else if (/^text\//.test(mime) || mime === 'application/json') {
+        } else if (mime === 'application/json' || mime === 'text/json') {
+          var reader = new FileReader;
+          reader.onloadend = () => {
+            try {
+              var json = JSON.parse(reader.result);
+            } catch (e) {
+              this.emit(new Error("Invalid JSON"));
+              return;
+            }
+            this.emit(jsonToRecords(json));
+          };
+          reader.onprogress = function(e) {
+            //future.progress(e.loaded, e.total, e.lengthComputable);
+          };
+          reader.readAsText(blob);
+        } else if (/^text\//.test(mime)) {
           var reader = new FileReader;
           reader.onloadend = () => {
             this.emit(reader.result);

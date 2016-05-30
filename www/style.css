@@ -138,6 +138,10 @@ html, body {
 .result-Text,
 .result-Error {
   font: 14px/20px Helvetica Neue, Helvetica, Lucida Grande, Verdana, DejaVu Sans, sans-serif;
+  /*
+  max-width: 512px;
+  white-space: pre-wrap;
+  */
 }
 .result-Text:before, .result-Text:after {
   font: bold 16px/20px Baskerville, Georgia, serif;
@@ -227,15 +231,16 @@ html, body {
   margin-right: 6px;
 }
 .result-Record-name:after {
-  /*
   content: "→";
   margin-left: 2px;
   vertical-align: middle;
-  */
+  /*
   content: "▸";
+  */
 }
 .result-Record-value {
   display: inline-block;
+  vertical-align: text-top;
 }
 
 .result-Bool {
