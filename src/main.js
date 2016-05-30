@@ -2528,17 +2528,25 @@ class App {
       info.obj.replaceWith(g.dragScript);
     } else {
       g.dropWorkspace = this.workspaceFromPoint(g.dragX + g.mouseX, g.dragY + g.mouseY) || this.world;
-      var canDelete = (g.dragScript.isBlock && g.dragScript.outputs.length === 1 && g.dragScript.bubble.isBubble) || (g.dragScript.isSource && !g.dragScript.outputs.length);
+      var d = g.dragScript;
+      var canDelete = false;
+      if (d.isBlock || d.isSource) {
+        canDelete = d.outputs.filter(bubble => {
+          return bubble.parent !== d && bubble.parent.isBlock;
+        }).length === 0;
+      }
+      // TODO don't delete if inputs
       if (g.dropWorkspace.isPalette && canDelete) {
-        this.remove(g.dragScript);
-        if (g.dragScript.isBlock && g.dragScript.bubble.curve.parent === this.world) {
-          this.world.remove(g.dragScript.bubble.curve)
-        }
+        this.remove(d);
+        d.outputs.forEach(bubble => {
+          if (bubble.parent === this.world) this.world.remove(bubble);
+          if (bubble.curve.parent === this.world) this.world.remove(bubble.curve);
+        });
       } else {
         g.dropWorkspace = this.world;
         var pos = g.dropWorkspace.worldPositionOf(g.dragX + g.mouseX, g.dragY + g.mouseY);
-        g.dropWorkspace.add(g.dragScript);
-        g.dragScript.moveTo(pos.x, pos.y);
+        g.dropWorkspace.add(d);
+        d.moveTo(pos.x, pos.y);
       }
     }
 

@@ -602,6 +602,7 @@ export const functions = {
   /* Async tests */
 
   "WebPage Future <- get Text": function(url) {
+    // TODO cors proxy
     //var cors = 'http://crossorigin.me/http://';
     // var cors = 'http://localhost:1337/';
     // url = cors + url.replace(/^https?\:\/\//, "");
@@ -617,7 +618,7 @@ export const functions = {
           response: xhr.response,
         };
 
-        var mime = r.contentType;
+        var mime = r.contentType.split(";")[0];
         var blob = r.response;
         if (/^image\//.test(mime)) {
           var img = new Image();
