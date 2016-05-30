@@ -26,6 +26,10 @@ class Record {
     // TODO maintain order
     return new Record(null, values);
   }
+
+  toJSON() {
+    return this.values;
+  }
 }
 
 class Schema {
@@ -133,6 +137,8 @@ export const specs = [
   ["record", "merge %o with %o"],
   ["record", "%q of %o", ["name"]],
   ["record", "record headings: %l values: %l"],
+  ["record", "%o to JSON"],
+  ["record", "record from JSON %s"],
 
   /* List */
 
@@ -542,6 +548,19 @@ export const functions = {
     }
     return new Record(null, rec);
   },
+  "Record <- Record to JSON": record => {
+    return JSON.stringify(record);
+  },
+
+  "Record <- record from JSON Text": text => {
+    try {
+      var json = JSON.parse(text);
+    } catch (e) {
+      return new Error("Invalid JSON");
+    }
+    return jsonToRecords(json);
+  },
+
 
   /* Color */
   // TODO re-implement in-engine
@@ -761,7 +780,7 @@ function parseSpec(spec) {
   function next() { tok = words[++i]; }
   function peek() { return words[i + 1]; }
 
-  var isType = (tok => /^[A-Z_]/.test(tok));
+  var isType = (tok => /^[A-Z_][a-z]+/.test(tok));
 
   function pSpec() {
     var words = [];
