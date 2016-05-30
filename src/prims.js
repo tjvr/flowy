@@ -471,7 +471,39 @@ export const functions = {
   "Float <- literal Float": x => x,
 
   "Bool <- Text = Text": (a, b) => a === b,
-  "Text <- join Variadic": (...rest) => rest.join(""),
+  "Text <- join Variadic": function(...args) {
+    var arrays = [];
+    var vectorise = [];
+    var len;
+    for (var index=0; index<args.length; index++) {
+      var item = args[index];
+      if (item && item.constructor === Array) {
+        arrays.push(item);
+        vectorise.push(index);
+        if (len === undefined) {
+          len = item.length;
+        } else if (len !== item.length) {
+          return new Error("Lists must be same length");
+        }
+      }
+    }
+    if (!arrays.length) {
+      return args.join("");
+    }
+
+    var prim = this.evaluator.getPrim("join %exp", args);
+    var Thread = this.constructor;
+    var threads = [];
+    for (var i=0; i<len; i++) {
+      for (var j=0; j<vectorise.length; j++) {
+        var index = vectorise[j];
+        args[index] = arrays[j][i];
+      }
+      threads.push(Thread.fake(prim, args.slice()));
+    }
+    this.awaitAll(threads, () => {});
+    return threads;
+  },
   "Text <- join List with Text": (l, x) => l.join(x),
   // "Text <- join words List": x => x.join(" "),
   "Text List <- split Text by Text": (x, y) => x.split(y),

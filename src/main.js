@@ -1133,6 +1133,7 @@ class Block extends Drawable {
 
   copy() {
     var b = new Block(this.info, this.parts.map(c => c.copy()));
+    // TODO init b.inputs correctly
     b.count = this.count;
     return b;
   }
