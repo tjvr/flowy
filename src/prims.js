@@ -645,8 +645,8 @@ export const functions = {
   "WebPage Future <- get Text": function(url) {
     // TODO cors proxy
     //var cors = 'http://crossorigin.me/http://';
-    // var cors = 'http://localhost:1337/';
-    // url = cors + url.replace(/^https?\:\/\//, "");
+    var cors = 'http://localhost:1337/';
+    url = cors + url.replace(/^https?\:\/\//, "");
     var xhr = new XMLHttpRequest;
     xhr.open('GET', url, true);
     xhr.onprogress = e => {

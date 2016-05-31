@@ -384,6 +384,151 @@ class Drawable {
 }
 
 
+class Frame {
+  constructor() {
+    this.el = el('frame');
+    this.elContents = el('absolute frame-contents');
+    this.el.appendChild(this.elContents);
+
+    this.parent = null;
+    this.scrollX = 0;
+    this.scrollY = 0;
+    this.zoom = 1;
+    this.lastX = 0;
+    this.lastY = 0;
+    this.inertiaX = 0;
+    this.inertiaY = 0;
+    this.scrolling = false;
+    setInterval(this.tick.bind(this), 1000 / 60);
+
+    this.contentsLeft = 0;
+    this.contentsTop = 0;
+    this.contentsRight = 0;
+    this.contentsBottom = 0;
+  }
+
+  get isScrollable() { return true; }
+  get isZoomable() { return false; }
+
+  toScreen(x, y) {
+    return {
+      x: (x - this.scrollX) * this.zoom,
+      y: (y - this.scrollY) * this.zoom,
+    };
+  };
+
+  fromScreen(x, y) {
+    return {
+      x: (x / this.zoom) + this.scrollX,
+      y: (y / this.zoom) + this.scrollY,
+    };
+  };
+
+  objectFromPoint(x, y) {
+    var pos = this.fromScreen(x, y);
+    var scripts = this.scripts;
+    for (var i=scripts.length; i--;) {
+      var script = scripts[i];
+      var o = script.objectFromPoint(pos.x - script.x, pos.y - script.y);
+      if (o) return o;
+    }
+    return this;
+  }
+
+  resize() {
+    this.width = this.el.offsetWidth;
+    this.height = this.el.offsetHeight;
+    // TODO re-center
+    this.makeBounds();
+    this.transform();
+  }
+
+  scrollBy(dx, dy) {
+    this.scrollX += dx / this.zoom;
+    this.scrollY += dy / this.zoom;
+    this.makeBounds();
+    this.transform();
+  }
+
+  fingerScroll(dx, dy) {
+    if (!this.scrolling) {
+      this.inertiaX = 0;
+      this.inertiaY = 0;
+    }
+    this.scrollBy(-dx, -dy);
+    this.scrolling = true;
+  }
+
+  fingerScrollEnd() {
+    this.scrolling = false;
+  }
+
+  tick() {
+    if (this.scrolling) {
+      this.inertiaX = (this.inertiaX * 4 + (this.scrollX - this.lastX)) / 5;
+      this.inertiaY = (this.inertiaY * 4 + (this.scrollY - this.lastY)) / 5;
+      this.lastX = this.scrollX;
+      this.lastY = this.scrollY;
+    } else {
+      if (this.inertiaX !== 0 || this.inertiaY !== 0) {
+        this.scrollBy(this.inertiaX, this.inertiaY);
+        this.inertiaX *= 0.95;
+        this.inertiaY *= 0.95;
+        if (Math.abs(this.inertiaX) < 0.01) this.inertiaX = 0;
+        if (Math.abs(this.inertiaY) < 0.01) this.inertiaY = 0;
+      }
+    }
+  }
+
+  fixZoom(zoom) {
+    return Math.max(1.0, this.zoom);
+  }
+
+  zoomBy(factor, x, y) {
+    if (!this.isZoomable) return;
+    var oldCursor = this.fromScreen(x, y);
+    this.zoom *= factor;
+    this.zoom = this.fixZoom(this.zoom * factor);
+    this.makeBounds();
+    var newCursor = this.fromScreen(x, y);
+    this.scrollX += oldCursor.x - newCursor.x;
+    this.scrollY += oldCursor.y - newCursor.y;
+    this.makeBounds();
+    this.transform();
+  }
+
+  // TODO pinch zoom
+
+  makeBounds() {
+    if (!this.isInfinite) {
+      this.scrollX = Math.min(
+          Math.max(this.scrollX, this.contentsLeft),
+          this.contentsRight * this.zoom - this.width // TODO
+      );
+      this.scrollY = Math.min(
+          Math.max(this.scrollY, this.contentsTop),
+          this.contentsBottom * this.zoom - this.height
+      );
+    }
+
+    this.bounds = {
+      left: this.scrollX - (this.width / 2) / this.zoom + 0.5| 0,
+      right: this.scrollX + (this.width / 2) / this.zoom + 0.5| 0,
+      bottom: this.scrollY - (this.height / 2) / this.zoom + 0.5 | 0,
+      top: this.scrollY + (this.height / 2) / this.zoom + 0.5 | 0,
+    };
+  }
+
+  transform() {
+    this.elContents.style.transform = `scale(${this.zoom}) translate(${-this.scrollX}px, ${-this.scrollY}px)`;
+  }
+
+}
+
+
+/*****************************************************************************/
+
+
 class Label extends Drawable {
   constructor(text, cls) {
     assert(typeof text === 'string');
@@ -1320,32 +1465,41 @@ class Block extends Drawable {
 
 }
 
+/*****************************************************************************/
 
 
 class Source extends Drawable {
-  constructor(value) {
+  constructor(node, repr) {
     super();
-    if (this.constructor === Bubble) return;
 
     this.el = el('absolute source');
     this.el.appendChild(this.canvas = el('canvas', 'absolute'));
     this.context = this.canvas.getContext('2d');
 
-    this.el.appendChild(this.progress = el('progress absolute'));
-    this.el.appendChild(this.elContents = el('result'));
+    //this.node = Node.input(value);
+    this.node = node;
+    this.repr = repr;
+    if (!this.repr) {
+      this.repr = Node.repr(this.node);
+      this.repr.setSink(true);
+    }
 
-    this.node = Node.input(value);
-    this.repr = Node.repr(this.node);
-    this.repr.setSink(true);
-
-    this.display(this.repr.value);
-    this.repr.onEmit(this.onEmit.bind(this));
     this.repr.onProgress(this.onProgress.bind(this));
+    this.el.appendChild(this.progress = el('progress absolute'));
 
-    this.outputs = [];
-    this.curves = [];
-    this.blob = this.bubble = new Blob(this);
-    this.el.appendChild(this.blob.el);
+    this.result = new Result(this, this.repr);
+    this.el.appendChild(this.result.el);
+
+    if (this.constructor === Source) {
+      this.outputs = [];
+      this.curves = [];
+      this.blob = this.bubble = new Blob(this);
+      this.el.appendChild(this.blob.el);
+    }
+  }
+
+  static value(value) {
+    return new Source(Node.input(value));
   }
 
   addBubble(bubble) {
@@ -1357,29 +1511,6 @@ class Source extends Drawable {
   get isSource() { return true; }
   get isDraggable() { return true; }
 
-  display(value) {
-    // TODO ellipsis during progress
-    this.elContents.innerHTML = '';
-    if (value) this.elContents.appendChild(value.cloneNode(true));
-    this.valueWidth = value ? this.elContents.offsetWidth : 0;
-    this.valueHeight = value ? this.elContents.offsetHeight : 16;
-    this.layout();
-  }
-
-  onEmit(value) {
-    if (value === null) {
-      this.elContents.classList.add('result-invalid');
-      return;
-    }
-    this.elContents.classList.remove('result-invalid');
-    this.display(value);
-    if (this.fraction === 0) this.fraction = 1;
-    this.drawProgress();
-    setTimeout(() => {
-      this.progress.classList.remove('progress-loading');
-    });
-  }
-
   onProgress(e) {
     this.fraction = e.loaded / e.total;
     if (this.fraction < 1) {
@@ -1388,8 +1519,14 @@ class Source extends Drawable {
     this.drawProgress();
   }
 
+  drawProgress() {
+    var f = this.fraction; //  0.1 + (this.fraction * 0.9);
+    var pw = this.width - 2 * Bubble.radius;
+    this.progress.style.width = `${f * pw}px`;
+  }
+
   objectFromPoint(x, y) {
-    if (opaqueAt(this.context, x * density, y * density)) return this;
+    if (opaqueAt(this.context, x * density, y * density)) return this.result;
     var o = this.blob.objectFromPoint(x - this.blob.x, y - this.blob.y)
     if (o) return o;
     return null;
@@ -1410,16 +1547,18 @@ class Source extends Drawable {
   }
 
   copy() {
-    return new Source(this.node.value);
+    return Source.value(this.node.value);
   }
 
   layoutChildren() {
     this.blob.layoutChildren();
+    this.result.layout();
     this.layoutSelf();
   }
 
   drawChildren() {
     this.blob.drawChildren();
+    this.result.draw();
     this.draw();
   }
 
@@ -1431,6 +1570,7 @@ class Source extends Drawable {
     var px = Bubble.paddingX;
     var py = Bubble.paddingY;
 
+    /*
     var w = this.valueWidth;
     var h = this.valueHeight;
     this.width = Math.max(Bubble.minWidth, w + 2 * px);
@@ -1439,6 +1579,7 @@ class Source extends Drawable {
     var x = (this.width - w) / 2;
     var y = t + py + 1;
     this.elContents.style.transform = `translate(${x}px, ${y}px)`;
+    */
 
     this.ownWidth = this.width;
     this.ownHeight = this.height;
@@ -1475,12 +1616,6 @@ class Source extends Drawable {
     this.drawOn(this.context);
 
     this.drawProgress();
-  }
-
-  drawProgress() {
-    var f = this.fraction; //  0.1 + (this.fraction * 0.9);
-    var pw = this.width - 2 * Bubble.radius;
-    this.progress.style.width = `${f * pw}px`;
   }
 
   drawOn(context) {
@@ -1532,24 +1667,13 @@ class Source extends Drawable {
 
 class Bubble extends Source {
   constructor(target) {
-    super();
-
-    this.el = el('absolute bubble');
-    this.el.appendChild(this.canvas = el('canvas', 'absolute'));
-    this.context = this.canvas.getContext('2d');
-
-    this.el.appendChild(this.progress = el('progress absolute'));
-    this.el.appendChild(this.elContents = el('result'));
+    super(target.node, target.repr);
+    this.el.className = 'absolute bubble';
 
     this.target = target;
     this.curve = null;
 
     if (target.workspace) target.workspace.add(this);
-
-    this.node = target.node;
-    this.display(this.target.repr.value);
-    this.target.repr.onEmit(this.onEmit.bind(this));
-    this.target.repr.onProgress(this.onProgress.bind(this));
   }
 
   get isSource() { return false; }
@@ -1564,7 +1688,7 @@ class Bubble extends Source {
 
   detach() {
     if (this.isDoubleTap()) {
-      return new Source(this.node.value);
+      return Source.value(this.node.value);
     }
     if (this.parent.isBlock) {
       if (this.parent.bubble !== this) {
@@ -1585,7 +1709,7 @@ class Bubble extends Source {
   }
 
   objectFromPoint(x, y) {
-    return opaqueAt(this.context, x * density, y * density) ? this : null;
+    return opaqueAt(this.context, x * density, y * density) ? this.result : null;
   }
 
   replaceWith(other) {
@@ -1602,14 +1726,6 @@ class Bubble extends Source {
   click() {
     super.click();
   }
-
-  // moveTo(x, y) {
-  //   if (this.parent && !(this.isInside || this.parent.bubble === this)) {
-  //     //y = Math.max(y, this.target.y + this.target.ownHeight);
-  //   }
-  //   super.moveTo(x, y);
-  //   this.moved();
-  // }
 
   moved() {
     if (this.curve) this.curve.layoutSelf();
@@ -1631,14 +1747,15 @@ class Bubble extends Source {
     var px = Bubble.paddingX;
     var py = Bubble.paddingY;
 
-    var w = this.valueWidth;
-    var h = this.valueHeight;
+    var w = this.result.width;
+    var h = this.result.height;
     this.width = Math.max(Bubble.minWidth, w + 2 * px);
-    var t = Bubble.tipSize // Math.min(, this.width / 2);
-    this.height = h + 2 * py + t;
+    var t = Bubble.tipSize;
     var x = (this.width - w) / 2;
     var y = t + py + 1;
-    this.elContents.style.transform = `translate(${x}px, ${y}px)`;
+    this.result.moveTo(x, y);
+    this.height = h + 2 * py + t;
+    //this.elContents.style.transform = `translate(${x}px, ${y}px)`;
 
     this.moved();
     this.redraw();
@@ -1675,6 +1792,82 @@ Bubble.paddingY = 2;
 Bubble.minWidth = 32; //26;
 
 
+
+class Result extends Frame {
+  constructor(bubble, repr) {
+    super();
+    this.parent = bubble;
+    this.elContents.className += ' result';
+
+    this.repr = repr;
+    this.display(this.repr.value);
+    this.repr.onEmit(this.onEmit.bind(this));
+  }
+
+  get isDraggable() { return true; }
+  get dragObject() {
+    return this.parent;
+  }
+  get isZoomable() { return true; }
+  get isScrollable() {
+    return this.contentsRight * this.zoom > Result.maxWidth
+        || this.contentsBottom * this.zoom > Result.maxHeight;
+  }
+
+  display(value) {
+    this.elContents.innerHTML = '';
+    if (value) this.elContents.appendChild(value.cloneNode(true));
+    this.contentsRight = value ? this.elContents.offsetWidth : 0;
+    this.contentsBottom = value ? this.elContents.offsetHeight : 16;
+    this.layout();
+  }
+
+  onEmit(value) {
+    if (value === null) {
+      this.elContents.classList.add('result-invalid');
+      return;
+    }
+    this.elContents.classList.remove('result-invalid');
+    this.display(value);
+    if (this.fraction === 0) this.fraction = 1;
+    this.parent.drawProgress();
+    setTimeout(() => {
+      this.parent.progress.classList.remove('progress-loading');
+    });
+  }
+
+  layout() {
+    if (!this.parent) return;
+
+    this.layoutSelf();
+    this.parent.layout();
+  }
+
+  layoutSelf() {
+    this.width = Math.min(Result.maxWidth, this.contentsRight);
+    this.height = Math.min(Result.maxHeight, this.contentsBottom);
+    this.makeBounds();
+    this.draw();
+  }
+
+  draw() {
+    this.el.style.width = `${this.width}px`;
+    this.el.style.height = `${this.height}px`;
+  }
+
+  moveTo(x, y) {
+    this.x = x | 0;
+    this.y = y | 0;
+    this.el.style.transform = `translate(${this.x}px, ${this.y}px)`;
+  }
+
+}
+Result.maxWidth = 512;
+Result.maxHeight = 512;
+
+
+
+/*****************************************************************************/
 
 class Blob extends Drawable {
   constructor(target) {
@@ -1847,143 +2040,16 @@ class Curve extends Drawable {
 
 /*****************************************************************************/
 
-class Workspace {
+
+class Workspace extends Frame {
   constructor() {
-    this.el = el('workspace no-select');
-    this.elContents = el('absolute workspace-contents');
-    this.el.appendChild(this.elContents);
+    super();
+    this.el.className += ' workspace no-select';
 
     this.scripts = [];
-
-    this.parent = null;
-    this.scrollX = 0;
-    this.scrollY = 0;
-    this.zoom = 1;
-    this.lastX = 0;
-    this.lastY = 0;
-    this.inertiaX = 0;
-    this.inertiaY = 0;
-    this.scrolling = false;
-    setInterval(this.tick.bind(this), 1000 / 60);
-
-    this.contentsLeft = 0;
-    this.contentsTop = 0;
-    this.contentsRight = 0;
-    this.contentsBottom = 0;
   }
 
   get isWorkspace() { return true; }
-  get isScrollable() { return true; }
-  get isZoomable() { return false; }
-
-  toScreen(x, y) {
-    return {
-      x: (x - this.scrollX) * this.zoom,
-      y: (y - this.scrollY) * this.zoom,
-    };
-  };
-
-  fromScreen(x, y) {
-    return {
-      x: (x / this.zoom) + this.scrollX,
-      y: (y / this.zoom) + this.scrollY,
-    };
-  };
-
-  objectFromPoint(x, y) {
-    var pos = this.fromScreen(x, y);
-    var scripts = this.scripts;
-    for (var i=scripts.length; i--;) {
-      var script = scripts[i];
-      var o = script.objectFromPoint(pos.x - script.x, pos.y - script.y);
-      if (o) return o;
-    }
-    return this;
-  }
-
-  resize() {
-    this.width = this.el.offsetWidth;
-    this.height = this.el.offsetHeight;
-    // TODO re-center
-    this.makeBounds();
-    this.transform();
-  }
-
-  scrollBy(dx, dy) {
-    this.scrollX += dx / this.zoom;
-    this.scrollY += dy / this.zoom;
-    this.makeBounds();
-    this.transform();
-  }
-
-  fingerScroll(dx, dy) {
-    if (!this.scrolling) {
-      this.inertiaX = 0;
-      this.inertiaY = 0;
-    }
-    this.scrollBy(-dx, -dy);
-    this.scrolling = true;
-  }
-
-  fingerScrollEnd() {
-    this.scrolling = false;
-  }
-
-  tick() {
-    if (this.scrolling) {
-      this.inertiaX = (this.inertiaX * 4 + (this.scrollX - this.lastX)) / 5;
-      this.inertiaY = (this.inertiaY * 4 + (this.scrollY - this.lastY)) / 5;
-      this.lastX = this.scrollX;
-      this.lastY = this.scrollY;
-    } else {
-      if (this.inertiaX !== 0 || this.inertiaY !== 0) {
-        this.scrollBy(this.inertiaX, this.inertiaY);
-        this.inertiaX *= 0.95;
-        this.inertiaY *= 0.95;
-        if (Math.abs(this.inertiaX) < 0.01) this.inertiaX = 0;
-        if (Math.abs(this.inertiaY) < 0.01) this.inertiaY = 0;
-      }
-    }
-  }
-
-  zoomBy(factor, x, y) {
-    if (!this.isZoomable) return;
-    var oldCursor = this.fromScreen(x, y);
-    this.zoom *= factor;
-    this.zoom = Math.min(4.0, this.zoom); // zoom <= 4.0
-    this.makeBounds();
-    var newCursor = this.fromScreen(x, y);
-    this.scrollX += oldCursor.x - newCursor.x;
-    this.scrollY += oldCursor.y - newCursor.y;
-    this.makeBounds();
-    this.transform();
-  }
-
-  // TODO pinch zoom
-
-  makeBounds() {
-    if (!this.isInfinite) {
-      this.scrollX = Math.min(
-          Math.max(this.scrollX, this.contentsLeft),
-          this.contentsRight * this.zoom - this.width // TODO
-      );
-      this.scrollY = Math.min(
-          Math.max(this.scrollY, this.contentsTop),
-          this.contentsBottom * this.zoom - this.height
-      );
-    }
-
-    this.bounds = {
-      left: this.scrollX - (this.width / 2) / this.zoom + 0.5| 0,
-      right: this.scrollX + (this.width / 2) / this.zoom + 0.5| 0,
-      bottom: this.scrollY - (this.height / 2) / this.zoom + 0.5 | 0,
-      top: this.scrollY + (this.height / 2) / this.zoom + 0.5 | 0,
-    };
-  }
-
-  transform() {
-    this.elContents.style.transform = `scale(${this.zoom}) translate(${-this.scrollX}px, ${-this.scrollY}px)`;
-  }
 
   layout() {}
 
@@ -2207,6 +2273,10 @@ class World extends Workspace {
   get isInfinite() { return true; }
   get isZoomable() { return true; }
 
+  fixZoom(zoom) {
+    return Math.min(4.0, this.zoom);
+  }
+
 }
 
 /*****************************************************************************/
@@ -2262,12 +2332,6 @@ class App {
 
   wheel(e) {
     // TODO trackpad should scroll vertically; mouse scroll wheel should zoom!
-
-    var t = e.target;
-    do {
-      if (t.className === 'result') return;
-      t = t.parentNode;
-    } while (t);
 
     var w = this.frameFromPoint(e.clientX, e.clientY);
     if (w) {
@@ -2409,14 +2473,12 @@ class App {
   }
 
   frameFromPoint(x, y) {
-    // TODO
-    var workspaces = this.workspaces;
-    for (var i = workspaces.length; i--;) {
-      var w = workspaces[i];
-      var pos = w.screenPosition;
-      if (containsPoint(w, x - pos.x, y - pos.y)) return w;
+    var o = this.objectFromPoint(x, y);
+    while (!o.isScrollable) {
+      o = o.parent;
     }
-    return null;
+    console.log('frame', o);
+    return o;
   }
 
   workspaceFromPoint(x, y) {

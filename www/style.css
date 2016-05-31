@@ -45,10 +45,20 @@ html, body {
 
 /* * */
 
+.frame {
+  overflow: hidden;
+}
+.frame-contents {
+  position: absolute;
+  cursor: default;
+  transform-origin: top left;
+  overflow: visible;
+}
+
 .workspace {
   position: relative;
   cursor: default;
-  overflow: auto;
+  overflow: hidden;
 }
 
 .world {
@@ -57,14 +67,6 @@ html, body {
   left: 0;
   right: 0;
   bottom: 50px;
-  overflow: hidden;
-}
-
-.workspace-contents {
-  position: absolute;
-  cursor: default;
-  transform-origin: top left;
-  overflow: visible;
 }
 
 .palette {
@@ -113,13 +115,7 @@ html, body {
   font: 16px/20px Source Code Pro, Monaco, monospace;
   white-space: pre;
   display: inline-block;
-
-  /* TODO frames */
   min-height: 12px;
-  max-height: 256px;
-  overflow-x: hidden;
-  overflow-y: auto;
-
   transition: opacity 100ms linear, background 100ms linear;
 }
 .result-invalid {
