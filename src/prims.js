@@ -148,7 +148,7 @@ export const specs = [
   ["list", "count %l", []],
   ["list", "%l concat %l"],
   ["list", "sum %l"],
-  ["list", "count %l if %r", []],
+  //["list", "count %l if %r", []],
 
   // ["list", "do %r for each %l"],
   // ["list", "keep %r from %l"],
@@ -548,10 +548,6 @@ export const functions = {
 
   "Int <- count List": function(list) {
     return list.length;
-  },
-
-  "Int <- count List if Ring": function(list, ring) {
-    // TODO
   },
 
   /* Record */

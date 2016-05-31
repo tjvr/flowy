@@ -592,6 +592,7 @@ class Input extends Drawable {
   }
 
   get isInput() { return true; }
+  get isArg() { return true; }
 
   get isDraggable() {
     return this.workspace && this.workspace.isPalette;
@@ -702,7 +703,7 @@ class Input extends Drawable {
   pathRounded(context, r) {
     var w = this.width;
     var h = this.height;
-    var r = r !== undefined ? r : 6;
+    var r = r !== undefined ? r : 4;
     context.moveTo(0, r + .5);
     context.arc(r, r + .5, r, PI, PI32, false);
     context.arc(w - r, r + .5, r, PI32, 0, false);
@@ -827,6 +828,25 @@ Input.prototype.fieldPadding = 4;
 
 
 
+class Break extends Drawable {
+  constructor() {
+    super();
+    this.el = el('br', '');
+  }
+
+  get isBreak() { return true; }
+
+  copy() {
+    return new Break();
+  }
+
+  layoutSelf() {}
+  draw() {}
+  objectFromPoint() {}
+
+}
+
+
 
 class Switch extends Drawable {
   constructor(value) {
@@ -844,6 +864,7 @@ class Switch extends Drawable {
   }
 
   get isSwitch() { return true; }
+  get isArg() { return true; }
 
   copy() {
     return new Switch(this.value);
@@ -1115,7 +1136,7 @@ class Block extends Drawable {
     for (var i=0; i<parts.length; i++) {
       this.add(parts[i]);
     }
-    this.inputs = this.parts.filter(p => !p.isLabel && !p.isArrow);
+    this.inputs = this.parts.filter(part => part.isArg);
 
     this.color = info.color; //'#7a48c3';
 
@@ -1126,9 +1147,12 @@ class Block extends Drawable {
     this.el.appendChild(this.bubble.el);
     this.addOutput(this.bubble);
     this.bubble.parent = this;
+
+    this.wrap = false;
   }
 
   get isBlock() { return true; }
+  get isArg() { return true; }
   get isDraggable() { return true; }
 
   get parent() { return this._parent; }
@@ -1158,10 +1182,10 @@ class Block extends Drawable {
     this.layout();
     this.el.appendChild(part.el);
 
-    var array = part.isLabel || part.isArrow ? this.labels : this.args;
+    var array = part.isArg ? this.args : this.labels;
     array.push(part); // TODO
 
-    if (!part.isLabel && !part.isArrow) {
+    if (part.isArg) {
       var index = array.length - 1;
       this.node.addInput(index, part.node);
     }
@@ -1178,7 +1202,7 @@ class Block extends Drawable {
     var index = this.parts.indexOf(oldPart);
     this.parts.splice(index, 1, newPart);
 
-    var array = oldPart.isLabel ? this.labels : this.args;
+    var array = oldPart.isArg ? this.args : this.labels;
     var index = array.indexOf(oldPart);
     array.splice(index, 1, newPart);
 
@@ -1207,7 +1231,7 @@ class Block extends Drawable {
     this.layout();
     this.el.removeChild(part.el);
 
-    var array = part.isLabel || part.isArrow ? this.labels : this.args;
+    var array = part.isArg ? this.args : this.labels;
     var index = array.indexOf(part);
     array.splice(index, 1);
 
@@ -1277,6 +1301,7 @@ class Block extends Drawable {
   reset(arg) {
     if (arg.parent !== this || arg.isLabel) return this;
 
+    assert(arg.isArg);
     var i = this.args.indexOf(arg);
     this.replace(arg, this.inputs[i]);
   };
@@ -1300,6 +1325,7 @@ class Block extends Drawable {
     var b = new Block(this.info, this.parts.map(c => c.copy()));
     // TODO init b.inputs correctly
     b.count = this.count;
+    b.wrap = this.wrap;
     return b;
   }
 
@@ -1385,38 +1411,89 @@ class Block extends Drawable {
     var lineX = 0;
     var width = 0;
     var height = 28;
-    var xs = [0];
+
+    var lines = [[]];
+    var lineXs = [[0]];
+    var lineHeights = [0];
+    var line = 0;
 
     var parts = this.parts;
     var length = parts.length;
+    var wrap = this.wrap;
+    var canWrap = false;
     for (var i=0; i<length; i++) {
       var part = parts[i];
 
+      if (part instanceof Break) {
+        canWrap = true;
+        if (!wrap) continue;
+        if (lineHeights.length === 1) {
+          lineHeights[0] -= 4;
+        }
+        line++;
+        lineX = 20;
+        lineXs.push([lineX]);
+        lines.push([]);
+        lineHeights.push(0);
+        continue;
+      }
+      if (wrap && part instanceof Arrow) {
+        if (part.icon === '◀') {
+          lineXs[line][lineXs[line].length - 1] = 2;
+          lines[line].push(part);
+          lineX = 0;
+          continue;
+        } else if (part.icon === '▶') {
+          line++;
+          lineHeights.push(4);
+          lineXs.push([2]);
+          lines.push([part]);
+          continue;
+        }
+      }
+
       var md = this.minDistance(part);
-      if (md && lineX < md - px) { // && first line
-        lineX = xs[xs.length - 1] = md - px;
+      if (md && lineX < md - px && line === 0) {
+        lineX = lineXs[0][lineXs[0].length - 1] = md - px;
       }
       lineX += part.width;
       width = Math.max(width, lineX + Math.max(0, md - px));
       lineX += 4;
-      xs.push(lineX);
+      lineXs[line].push(lineX);
 
       var h = part.height + (part.isBubble ? 0 : 4);
-      height = Math.max(height, h);
+      lineHeights[line] = Math.max(lineHeights[line], h);
+      lines[line].push(part);
     }
     width = Math.max(20, width + px * 2);
+
+    if (canWrap && !wrap && width > 512) {
+      this.wrap = true;
+      this.layoutSelf();
+      return;
+    }
+
+    var y = 0;
+    for (var i=0; i<lineXs.length; i++) {
+      var line = lines[i];
+      var lh = lineHeights[i];
+      var xs = lineXs[i];
+      for (var j=0, l = line.length; j < l; j++) {
+        var part = line[j];
+        var cx = px + xs[j];
+        var cy = (lh - part.height) / 2;
+        if (part.isBubble) cy -= 2;
+        if (part.isLabel) cy += 1;
+        if (part.icon === '▶' && wrap) cy = -4;
+        part.moveTo(cx, y + cy);
+      }
+      y += lh;
+    }
+    height = y;
+    if (wrap) height += 8;
+
     this.ownWidth = width;
     this.ownHeight = height;
-
-    for (var i=0; i<length; i++) {
-      var part = parts[i];
-      var h = part.height;
-      var x = px + xs[i];
-      var y = (height - h) / 2;
-      if (part.isBubble) y -= 2;
-      if (part.isLabel) y += 1;
-      part.moveTo(x, y);
-    }
     this.width = width;
     this.height = height;
 
@@ -1517,6 +1594,7 @@ class Source extends Drawable {
 
   get isSource() { return true; }
   get isDraggable() { return true; }
+  get isArg() { return true; }
 
   onProgress(e) {
     this.fraction = e.loaded / e.total;
@@ -2169,16 +2247,21 @@ specs.forEach(p => {
     } else if (word === '%fields') {
       add = function() {
         return [
+          new Break(),
           new Input("name", 'Symbol'),
           new Input("", 'Text'),
         ];
       }
-      addSize = 2;
+      addSize = 3;
     } else if (word === '%exp') {
       add = function() {
-        return [new Input(def[this.parts.length - index - 3] || "", 'Text')];
+        return [
+          new Break(),
+          new Input(def[this.parts.length - index - 3] || "", 'Text'),
+        ];
       }
-      addSize = 1;
+      addSize = 2;
+      parts.push(new Break());
       parts.push(new Input(def.length ? def.shift() : "", 'Text'));
     } else if (word === '%%') {
       parts.push(new Label("%"));
@@ -2204,6 +2287,7 @@ specs.forEach(p => {
     b.count = 1 + def.length;
     def.forEach(value => {
       var obj = new Input(value, 'Text');
+      b.add(new Break());
       b.add(obj);
       b.inputs.push(obj);
     });
@@ -2211,9 +2295,10 @@ specs.forEach(p => {
       if (this === b) return;
       for (var i=0; i<addSize; i++) {
         var arg = this.parts[this.parts.length - 3 - i];
-        if (!arg.isInput) return;
+        if (!(arg.isInput || arg.isBreak)) return;
       }
       this.count--;
+      this.wrap = false;
       for (var i=0; i<addSize; i++) {
         this.remove(this.parts[this.parts.length - 3]);
         this.inputs.pop();
