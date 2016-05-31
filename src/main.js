@@ -1917,6 +1917,10 @@ class Workspace {
   }
 
   fingerScroll(dx, dy) {
+    if (!this.scrolling) {
+      this.inertiaX = 0;
+      this.inertiaY = 0;
+    }
     this.scrollBy(-dx, -dy);
     this.scrolling = true;
   }
@@ -2450,7 +2454,9 @@ class App {
       e.preventDefault();
     }
 
-    // TODO if shouldScroll, fingerDown should kill inertia
+    if (g.shouldScroll) {
+      g.pressObject.fingerScroll(0, 0);
+    }
 
     g.pressed = true;
     g.dragging = false;

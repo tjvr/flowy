@@ -145,8 +145,10 @@ export const specs = [
   ["list", "list %exp", ["foo", "bar", "baz"]],
   ["list", "range %n to %n", [1, 5]],
   ["list", "item %n of %l", [1]],
-  ["list", "length of %l", []],
+  ["list", "count %l", []],
   ["list", "%l concat %l"],
+  ["list", "sum %l"],
+  ["list", "count %l if %r", []],
 
   // ["list", "do %r for each %l"],
   // ["list", "keep %r from %l"],
@@ -540,10 +542,17 @@ export const functions = {
     }
   },
 
-  "Int <- length of List": function(list) {
+  "Int <- sum List": function(list) {
+    // TODO
+  },
+
+  "Int <- count List": function(list) {
     return list.length;
   },
 
+  "Int <- count List if Ring": function(list, ring) {
+    // TODO
+  },
 
   /* Record */
   "Record <- record with Variadic": (...pairs) => {
