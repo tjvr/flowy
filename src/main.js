@@ -1865,6 +1865,11 @@ class Workspace {
     this.inertiaY = 0;
     this.scrolling = false;
     setInterval(this.tick.bind(this), 1000 / 60);
+
+    this.contentsLeft = 0;
+    this.contentsTop = 0;
+    this.contentsRight = 0;
+    this.contentsBottom = 0;
   }
 
   get isWorkspace() { return true; }
@@ -1938,6 +1943,7 @@ class Workspace {
   }
 
   zoomBy(factor, x, y) {
+    if (!this.isZoomable) return;
     var oldCursor = this.fromScreen(x, y);
     this.zoom *= factor;
     this.zoom = Math.min(4.0, this.zoom); // zoom <= 4.0
@@ -1952,6 +1958,17 @@ class Workspace {
   // TODO pinch zoom
 
   makeBounds() {
+    if (!this.isInfinite) {
+      this.scrollX = Math.min(
+          Math.max(this.scrollX, this.contentsLeft),
+          this.contentsRight * this.zoom - this.width // TODO
+      );
+      this.scrollY = Math.min(
+          Math.max(this.scrollY, this.contentsTop),
+          this.contentsBottom * this.zoom - this.height
+      );
+    }
+
     this.bounds = {
       left: this.scrollX - (this.width / 2) / this.zoom + 0.5| 0,
       right: this.scrollX + (this.width / 2) / this.zoom + 0.5| 0,
@@ -2158,7 +2175,17 @@ class Palette extends Workspace {
       this.add(o);
       x += o.width + 8;
     });
+    this.contentsBottom = 64;
+    this.contentsRight = x;
+
+    // setTimeout(() => {
+    //   this.zoom = 1.5;
+    //   this.makeBounds();
+    //   this.transform();
+    // });
   }
+
+  layout() {}
 
   get isPalette() { return true; }
 }
@@ -2173,6 +2200,7 @@ class World extends Workspace {
   }
 
   get isWorld() { return true; }
+  get isInfinite() { return true; }
   get isZoomable() { return true; }
 
 }
@@ -2371,7 +2399,6 @@ class App {
 
   objectFromPoint(x, y) {
     var w = this.workspaceFromPoint(x, y)
-    console.log(w);
     if (!w) return null;
     var pos = w.screenPosition;
     return w.objectFromPoint(x - pos.x, y - pos.y);
@@ -2393,7 +2420,6 @@ class App {
     for (var i = workspaces.length; i--;) {
       var w = workspaces[i];
       var pos = w.screenPosition;
-      console.log(w, pos);
       if (containsPoint(w, x - pos.x, y - pos.y)) return w;
     }
     return null;
