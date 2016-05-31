@@ -424,17 +424,6 @@ class Frame {
     };
   };
 
-  objectFromPoint(x, y) {
-    var pos = this.fromScreen(x, y);
-    var scripts = this.scripts;
-    for (var i=scripts.length; i--;) {
-      var script = scripts[i];
-      var o = script.objectFromPoint(pos.x - script.x, pos.y - script.y);
-      if (o) return o;
-    }
-    return this;
-  }
-
   resize() {
     this.width = this.el.offsetWidth;
     this.height = this.el.offsetHeight;
@@ -2144,6 +2133,25 @@ class Workspace extends Frame {
 
   layout() {}
 
+  objectFromPoint(x, y) {
+    var pos = this.fromScreen(x, y);
+    var scripts = this.scripts;
+    for (var i=scripts.length; i--;) {
+      var script = scripts[i];
+      var o = script.objectFromPoint(pos.x - script.x, pos.y - script.y);
+      if (o) return o;
+    }
+    return this;
+  }
+
+  resize() {
+    super.resize();
+    var bb = this.el.getBoundingClientRect();
+    this.screenX = Math.round(bb.left);
+    this.screenY = Math.round(bb.top);
+    this.screenPosition = {x: this.screenX, y: this.screenY};
+  }
+
   positionOf(obj) {
     if (obj.workspace === this) {
       return obj.workspacePosition;
@@ -2152,20 +2160,12 @@ class Workspace extends Frame {
     return this.worldPositionOf(pos.x, pos.y);
   }
 
-  get screenPosition() {
-    var bb = this.el.getBoundingClientRect();
-    var x = Math.round(bb.left);
-    var y = Math.round(bb.top);
-    return {x: x, y: y};
-  }
-  screenPositionOf(x, y) {
-    var pos = this.screenPosition;
-    return {x: x + pos.x - this.scrollX, y: y + pos.y - this.scrollY};
+  worldPositionOf(x, y) {
+    return this.fromScreen(x - this.screenX, y - this.screenY)
   }
 
-  worldPositionOf(x, y) {
-    var pos = this.screenPosition;
-    return {x: x - pos.x + this.scrollX, y: y - pos.y + this.scrollY};
+  screenPositionOf(x, y) {
+    return this.toScreen(x + this.screenX, y + this.screenY)
   }
 
   /* * */
