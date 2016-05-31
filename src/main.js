@@ -1577,16 +1577,14 @@ class Source extends Drawable {
     var px = Bubble.paddingX;
     var py = Bubble.paddingY;
 
-    /*
-    var w = this.valueWidth;
-    var h = this.valueHeight;
+    var w = this.result.width;
+    var h = this.result.height;
     this.width = Math.max(Bubble.minWidth, w + 2 * px);
-    var t = 0; //Bubble.tipSize // Math.min(, this.width / 2);
-    this.height = h + 2 * py + t;
+    var t = 0;
     var x = (this.width - w) / 2;
     var y = t + py + 1;
-    this.elContents.style.transform = `translate(${x}px, ${y}px)`;
-    */
+    this.result.moveTo(x, y);
+    this.height = h + 2 * py + t;
 
     this.ownWidth = this.width;
     this.ownHeight = this.height;
@@ -1762,7 +1760,6 @@ class Bubble extends Source {
     var y = t + py + 1;
     this.result.moveTo(x, y);
     this.height = h + 2 * py + t;
-    //this.elContents.style.transform = `translate(${x}px, ${y}px)`;
 
     this.moved();
     this.redraw();
@@ -1819,6 +1816,14 @@ class Result extends Frame {
   get isScrollable() {
     return this.contentsRight > Result.maxWidth
         || this.contentsBottom > Result.maxHeight;
+  }
+
+  fixZoom(zoom) {
+    return Math.max(1, zoom);
+  }
+
+  click() {
+    this.parent.click();
   }
 
   display(value) {
@@ -2528,7 +2533,8 @@ class App {
         // right-click
       } else if (leftClick) {
         g.shouldDrag = g.pressObject.isDraggable;
-        g.shouldScroll = g.pressObject.isScrollable;
+        g.shouldScroll = g.pressObject.isScrollable; //&& e.button === undefined;
+        // TODO disable drag-scrolling using mouse
       }
     }
 
