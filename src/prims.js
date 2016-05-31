@@ -585,7 +585,13 @@ export const functions = {
     }
     return new Record(null, rec);
   },
-  "Record <- Record to JSON": record => {
+  "Text <- Any to JSON": record => {
+    return JSON.stringify(record);
+  },
+  "Text <- List to JSON": record => {
+    return JSON.stringify(record);
+  },
+  "Text <- Record to JSON": record => {
     return JSON.stringify(record);
   },
 

@@ -1400,7 +1400,7 @@ class Block extends Drawable {
       return 6;
     }
     if (part.shape === 'Symbol') {
-      return 8;
+      return 9;
     }
     return -2 + part.height/2 | 0;
   }
@@ -1414,7 +1414,7 @@ class Block extends Drawable {
 
     var lines = [[]];
     var lineXs = [[0]];
-    var lineHeights = [0];
+    var lineHeights = [28];
     var line = 0;
 
     var parts = this.parts;
@@ -1881,6 +1881,7 @@ class Result extends Frame {
     this.parent = bubble;
     this.elContents.className += ' result';
 
+    assert(repr instanceof Node);
     this.repr = repr;
     this.display(this.repr.value);
     this.repr.onEmit(this.onEmit.bind(this));
@@ -1928,7 +1929,6 @@ class Result extends Frame {
 
   layout() {
     if (!this.parent) return;
-
     this.layoutSelf();
     this.parent.layout();
   }
@@ -2074,7 +2074,7 @@ class Curve extends Drawable {
   objectFromPoint() {}
 
   destroy() {
-    this.workspace.remove(this);
+    if (this.workspace) this.workspace.remove(this);
   }
 
   layoutSelf() {

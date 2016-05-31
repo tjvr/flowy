@@ -162,8 +162,11 @@ function autoVectorise(byInputs, inputs, inputTypes) {
   var vectorise = [];
   inputs.forEach((arg, index) => {
     if (inputTypes[index] === 'List') {
-      assert(arg.isTask && arg.isDone);
-      inputTypes[index] = typeOf(arg.result[0]);
+      if (arg.isTask) {
+        assert(arg.isDone);
+        arg = arg.result;
+      }
+      inputTypes[index] = typeOf(arg[0]);
       vectorise.push(index);
     }
   });
