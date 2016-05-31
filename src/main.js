@@ -2312,6 +2312,7 @@ class App {
     document.addEventListener('mouseup', this.mouseUp.bind(this));
     // TODO pointer events
 
+    this.scroll = null;
     window.addEventListener('resize', this.resize.bind(this));
     document.addEventListener('wheel', this.wheel.bind(this));
     document.addEventListener('mousewheel', this.wheel.bind(this));
@@ -2332,20 +2333,31 @@ class App {
 
   wheel(e) {
     // TODO trackpad should scroll vertically; mouse scroll wheel should zoom!
-
-    var w = this.frameFromPoint(e.clientX, e.clientY);
-    if (w) {
-      if (e.ctrlKey) {
-        if (w.isScrollable) {
-          e.preventDefault();
-          var factor = Math.pow(1.01, -e.deltaY);
-          w.zoomBy(factor, e.clientX, e.clientY);
-        }
-      } else if (w.isScrollable) {
-        e.preventDefault();
-        w.scrollBy(e.deltaX, e.deltaY);
-      }
+    if (!this.scroll) {
+      var w = this.frameFromPoint(e.clientX, e.clientY);
+      this.scroll = {
+        frame: w,
+      };
     }
+
+    if (this.scroll.timeout) clearTimeout(this.scroll.timeout);
+    this.scroll.timeout = setTimeout(this.endScroll.bind(this), 200);
+
+    var w = this.scroll.frame;
+    if (e.ctrlKey) {
+      if (w.isScrollable) {
+        e.preventDefault();
+        var factor = Math.pow(1.01, -e.deltaY);
+        w.zoomBy(factor, e.clientX, e.clientY);
+      }
+    } else if (w.isScrollable) {
+      e.preventDefault();
+      w.scrollBy(e.deltaX, e.deltaY);
+    }
+  }
+
+  endScroll() {
+    this.scroll = null;
   }
 
   gestureStart(e) {
