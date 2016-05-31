@@ -1883,7 +1883,8 @@ class Result extends Frame {
 
     assert(repr instanceof Node);
     this.repr = repr;
-    this.display(this.repr.value);
+    this.display();
+    setTimeout(() => this.display(this.repr.value));
     this.repr.onEmit(this.onEmit.bind(this));
   }
 
