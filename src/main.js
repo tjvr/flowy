@@ -2314,9 +2314,10 @@ specs.forEach(p => {
       if (this.count === 2) {
         this.insert(delInput.copy(), this.parts.length - 1);
       }
-      add.call(this).forEach(obj => {
+      add.call(this).forEach((obj, index) => {
         this.insert(obj, this.parts.length - 2);
         this.inputs.push(obj);
+        if (index === 1) obj.click();
       });
     }));
   }
