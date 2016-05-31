@@ -481,7 +481,7 @@ class Frame {
   }
 
   fixZoom(zoom) {
-    return Math.max(1.0, this.zoom);
+    return zoom;
   }
 
   zoomBy(factor, x, y) {
@@ -498,6 +498,13 @@ class Frame {
   }
 
   // TODO pinch zoom
+
+  canScroll(dx, dy) {
+    var sx = this.scrollX + dx;
+    var sy = this.scrollY + dy;
+    return this.contentsLeft <= sx && sx <= this.contentsRight * this.zoom - this.width && this.contentsTop <= sy && sy <= this.contentsBottom * this.zoom - this.height; 
+    // TODO check zoom calculations
+  }
 
   makeBounds() {
     if (!this.isInfinite) {
@@ -1810,8 +1817,8 @@ class Result extends Frame {
   }
   get isZoomable() { return true; }
   get isScrollable() {
-    return this.contentsRight * this.zoom > Result.maxWidth
-        || this.contentsBottom * this.zoom > Result.maxHeight;
+    return this.contentsRight > Result.maxWidth
+        || this.contentsBottom > Result.maxHeight;
   }
 
   display(value) {
@@ -2485,11 +2492,13 @@ class App {
   }
 
   frameFromPoint(x, y) {
-    var o = this.objectFromPoint(x, y);
+    return this.frameFromObject(this.objectFromPoint(x, y));
+  }
+
+  frameFromObject(o) {
     while (!o.isScrollable) {
       o = o.parent;
     }
-    console.log('frame', o);
     return o;
   }
 
@@ -2544,19 +2553,24 @@ class App {
 
     if (g.pressed && g.shouldDrag && !g.dragging) {
       var obj = g.pressObject.dragObject;
-      if (obj.workspace.isPalette) {
-        var dx = g.mouseX - g.pressX;
-        var dy = g.mouseY - g.pressY;
-        if (Math.abs(dy) < Math.abs(dx)) {
-          g.shouldDrag = false;
-          g.shouldScroll = true;
-          g.pressObject = obj.workspace;
-        }
+      var frame = this.frameFromObject(g.pressObject);
+      var dx = g.mouseX - g.pressX;
+      var dy = g.mouseY - g.pressY;
+
+      var canScroll = (
+           (frame.isPalette && Math.abs(dy) < Math.abs(dx)
+        || (!frame.isWorkspace && frame.canScroll(-dx, -dy)))
+      );
+      if (canScroll) {
+        g.shouldDrag = false;
+        g.shouldScroll = true;
+        g.pressObject = frame;
       }
     }
 
     if (g.pressed && g.shouldDrag && !g.dragging) {
       this.drop(g);
+      g.shouldScroll = false;
       var obj = g.pressObject.dragObject;
       var pos = obj.screenPosition;
       g.dragging = true;
@@ -2582,6 +2596,7 @@ class App {
 
     } else if (g.pressed && g.shouldScroll && !g.scrolling) {
       g.scrolling = true;
+      g.shouldScroll = false;
       g.scrollX = g.pressX;
       g.scrollY = g.pressY;
 
