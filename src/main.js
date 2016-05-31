@@ -2462,12 +2462,20 @@ class App {
     g.mouseX = p.clientX;
     g.mouseY = p.clientY;
 
-    if (g.pressed && g.shouldScroll && !g.scrolling) {
-      g.scrolling = true;
-      g.scrollX = g.pressX;
-      g.scrollY = g.pressY;
+    if (g.pressed && g.shouldDrag && !g.dragging) {
+      var obj = g.pressObject.dragObject;
+      if (obj.workspace.isPalette) {
+        var dx = g.mouseX - g.pressX;
+        var dy = g.mouseY - g.pressY;
+        if (Math.abs(dy) < Math.abs(dx)) {
+          g.shouldDrag = false;
+          g.shouldScroll = true;
+          g.pressObject = obj.workspace;
+        }
+      }
+    }
 
-    } else if (g.pressed && g.shouldDrag && !g.dragging) {
+    if (g.pressed && g.shouldDrag && !g.dragging) {
       this.drop(g);
       var obj = g.pressObject.dragObject;
       var pos = obj.screenPosition;
@@ -2491,6 +2499,12 @@ class App {
       g.dragScript.layoutChildren();
       g.dragScript.drawChildren();
       // TODO add shadow
+
+    } else if (g.pressed && g.shouldScroll && !g.scrolling) {
+      g.scrolling = true;
+      g.scrollX = g.pressX;
+      g.scrollY = g.pressY;
+
     }
 
     if (g.scrolling || g.dragging) {
