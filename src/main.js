@@ -276,6 +276,8 @@ class Drawable {
     this.el.style.transform = t;
   }
 
+  destroy() {}
+
   moved() {}
 
   layout() {
@@ -1074,8 +1076,18 @@ class Block extends Drawable {
 
   removeOutput(output) {
     var index = this.outputs.indexOf(output);
+    this.curves[index].destroy();
     this.outputs.splice(index, 1);
+    this.curves.splice(index, 1);
     output.parent = null;
+    if (index === 0 && this.outputs.length === 0) {
+      // TODO if there's no bubble, make one
+      // this.bubble = new Bubble(this);
+      // // this.el.appendChild(this.bubble.el);
+      // this.addOutput(this.bubble);
+      // this.bubble.parent = null;
+      // this.addBubble(bubble);
+    }
   }
 
   addBubble(bubble) {
@@ -1137,6 +1149,10 @@ class Block extends Drawable {
     // TODO init b.inputs correctly
     b.count = this.count;
     return b;
+  }
+
+  destroy() {
+    this.parts.forEach(part => part.destroy());
   }
 
   replaceWith(other) {
@@ -1564,6 +1580,10 @@ class Bubble extends Source {
     return r;
   }
 
+  destroy() {
+    this.target.removeOutput(this);
+  }
+
   objectFromPoint(x, y) {
     return opaqueAt(this.context, x * density, y * density) ? this : null;
   }
@@ -1769,6 +1789,10 @@ class Curve extends Drawable {
   get isCurve() { return true; }
 
   objectFromPoint() {}
+
+  destroy() {
+    this.workspace.remove(this);
+  }
 
   layoutSelf() {
     if (!this.workspace) return;
@@ -2544,6 +2568,7 @@ class App {
           if (bubble.parent === this.world) this.world.remove(bubble);
           if (bubble.curve.parent === this.world) this.world.remove(bubble.curve);
         });
+        d.destroy();
       } else {
         g.dropWorkspace = this.world;
         var pos = g.dropWorkspace.worldPositionOf(g.dragX + g.mouseX, g.dragY + g.mouseY);

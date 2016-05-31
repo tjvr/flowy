@@ -40,6 +40,7 @@ var compile = (function() {
       if (node.isObservable) {
         source += `${tmp} = ${node}.value\n`;
         return tmp;
+      }
       if (node.thread) {
         if (node.thread.isDone) {
           source += `${tmp} = ${node}.thread.result\n`;
