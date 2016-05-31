@@ -60,7 +60,7 @@ html, body {
   overflow: hidden;
 }
 
-.world-contents {
+.workspace-contents {
   position: absolute;
   cursor: default;
   transform-origin: top left;
@@ -76,9 +76,6 @@ html, body {
   left: 0;
   right: 0;
   background: #fff;
-  overflow-y: hidden;
-  overflow-x: scroll;
-  -webkit-overflow-scrolling: touch;
 }
 
 .feedback {

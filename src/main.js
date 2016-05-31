@@ -1849,8 +1849,8 @@ class Curve extends Drawable {
 
 class Workspace {
   constructor() {
-    this.elContents = el('absolute');
     this.el = el('workspace no-select');
+    this.elContents = el('absolute workspace-contents');
     this.el.appendChild(this.elContents);
 
     this.scripts = [];
@@ -1858,40 +1858,111 @@ class Workspace {
     this.parent = null;
     this.scrollX = 0;
     this.scrollY = 0;
-    this.el.addEventListener('scroll', this.scrolled.bind(this));
+    this.zoom = 1;
+    this.lastX = 0;
+    this.lastY = 0;
+    this.inertiaX = 0;
+    this.inertiaY = 0;
+    this.scrolling = false;
+    setInterval(this.tick.bind(this), 1000 / 60);
   }
 
   get isWorkspace() { return true; }
+  get isScrollable() { return true; }
+  get isZoomable() { return false; }
 
+  toScreen(x, y) {
+    return {
+      x: (x - this.scrollX) * this.zoom,
+      y: (y - this.scrollY) * this.zoom,
+    };
+  };
 
-  scrolled(e) {
-    this.scrollX = this.el.scrollLeft;
-    this.scrollY = this.el.scrollTop;
-  }
-
-  resize() {
-    this.width = this.el.offsetWidth;
-    this.height = this.el.offsetHeight;
-    // this.el.style.width = width + 'px';
-    // this.el.style.height = height + 'px';
-    // TODO do something
-  }
-
+  fromScreen(x, y) {
+    return {
+      x: (x / this.zoom) + this.scrollX,
+      y: (y / this.zoom) + this.scrollY,
+    };
+  };
 
   objectFromPoint(x, y) {
-    x += this.scrollX;
-    y += this.scrollY;
+    var pos = this.fromScreen(x, y);
     var scripts = this.scripts;
     for (var i=scripts.length; i--;) {
       var script = scripts[i];
-      var o = script.objectFromPoint(x - script.x, y - script.y);
+      var o = script.objectFromPoint(pos.x - script.x, pos.y - script.y);
       if (o) return o;
     }
     return this;
   }
 
+  resize() {
+    this.width = this.el.offsetWidth;
+    this.height = this.el.offsetHeight;
+    // TODO re-center
+    this.makeBounds();
+    this.transform();
+  }
 
-  // TODO
+  scrollBy(dx, dy) {
+    this.scrollX += dx / this.zoom;
+    this.scrollY += dy / this.zoom;
+    this.makeBounds();
+    this.transform();
+  }
+
+  fingerScroll(dx, dy) {
+    this.scrollBy(-dx, -dy);
+    this.scrolling = true;
+  }
+
+  fingerScrollEnd() {
+    this.scrolling = false;
+  }
+
+  tick() {
+    if (this.scrolling) {
+      this.inertiaX = (this.inertiaX * 4 + (this.scrollX - this.lastX)) / 5;
+      this.inertiaY = (this.inertiaY * 4 + (this.scrollY - this.lastY)) / 5;
+      this.lastX = this.scrollX;
+      this.lastY = this.scrollY;
+    } else {
+      if (this.inertiaX !== 0 || this.inertiaY !== 0) {
+        this.scrollBy(this.inertiaX, this.inertiaY);
+        this.inertiaX *= 0.95;
+        this.inertiaY *= 0.95;
+        if (Math.abs(this.inertiaX) < 0.01) this.inertiaX = 0;
+        if (Math.abs(this.inertiaY) < 0.01) this.inertiaY = 0;
+      }
+    }
+  }
+
+  zoomBy(factor, x, y) {
+    var oldCursor = this.fromScreen(x, y);
+    this.zoom *= factor;
+    this.zoom = Math.min(4.0, this.zoom); // zoom <= 4.0
+    this.makeBounds();
+    var newCursor = this.fromScreen(x, y);
+    this.scrollX += oldCursor.x - newCursor.x;
+    this.scrollY += oldCursor.y - newCursor.y;
+    this.makeBounds();
+    this.transform();
+  }
+
+  // TODO pinch zoom
+
+  makeBounds() {
+    this.bounds = {
+      left: this.scrollX - (this.width / 2) / this.zoom + 0.5| 0,
+      right: this.scrollX + (this.width / 2) / this.zoom + 0.5| 0,
+      bottom: this.scrollY - (this.height / 2) / this.zoom + 0.5 | 0,
+      top: this.scrollY + (this.height / 2) / this.zoom + 0.5 | 0,
+    };
+  }
+
+  transform() {
+    this.elContents.style.transform = `scale(${this.zoom}) translate(${-this.scrollX}px, ${-this.scrollY}px)`;
+  }
 
   layout() {}
 
@@ -1919,6 +1990,8 @@ class Workspace {
     return {x: x - pos.x + this.scrollX, y: y - pos.y + this.scrollY};
   }
 
+  /* * */
+
   add(script) {
     if (script.parent) script.parent.remove(script);
     script.parent = this;
@@ -1943,6 +2016,7 @@ class Workspace {
     this.scripts.splice(index, 1);
     this.elContents.removeChild(script.el);
   }
+
 }
 
 /*****************************************************************************/
@@ -2096,126 +2170,10 @@ class World extends Workspace {
     super();
     this.el.className += ' world';
     this.elContents.className += ' world-contents';
-
-    this.scrollX = 0;
-    this.scrollY = 0;
-    this.zoom = 1;
-    this.lastX = 0;
-    this.lastY = 0;
-    this.inertiaX = 0;
-    this.inertiaY = 0;
-    this.scrolling = false;
-    setInterval(this.tick.bind(this), 1000 / 60);
   }
 
   get isWorld() { return true; }
-  get isScrollable() { return true; }
-
-  toScreen(x, y) {
-    return {
-      x: (x - this.scrollX) * this.zoom,
-      y: (y - this.scrollY) * this.zoom,
-    };
-  };
-
-  fromScreen(x, y) {
-    return {
-      x: (x / this.zoom) + this.scrollX,
-      y: (y / this.zoom) + this.scrollY,
-    };
-  };
-
-  objectFromPoint(x, y) {
-    var pos = this.fromScreen(x, y);
-    var scripts = this.scripts;
-    for (var i=scripts.length; i--;) {
-      var script = scripts[i];
-      var o = script.objectFromPoint(pos.x - script.x, pos.y - script.y);
-      if (o) return o;
-    }
-    return this;
-  }
-
-  resize() {
-    super.resize();
-    // TODO re-center
-    this.makeBounds();
-    this.transform();
-  }
-
-  scrollBy(dx, dy) {
-    this.scrollX += dx / this.zoom;
-    this.scrollY += dy / this.zoom;
-    this.makeBounds();
-    this.transform();
-  }
-
-  fingerScroll(dx, dy) {
-    this.scrollBy(-dx, -dy);
-    this.scrolling = true;
-  }
-
-  fingerScrollEnd() {
-    this.scrolling = false;
-  }
-
-  tick() {
-    if (this.scrolling) {
-      this.inertiaX = (this.inertiaX * 4 + (this.scrollX - this.lastX)) / 5;
-      this.inertiaY = (this.inertiaY * 4 + (this.scrollY - this.lastY)) / 5;
-      this.lastX = this.scrollX;
-      this.lastY = this.scrollY;
-    } else {
-      if (this.inertiaX !== 0 || this.inertiaY !== 0) {
-        this.scrollBy(this.inertiaX, this.inertiaY);
-        this.inertiaX *= 0.95;
-        this.inertiaY *= 0.95;
-        if (Math.abs(this.inertiaX) < 0.01) this.inertiaX = 0;
-        if (Math.abs(this.inertiaY) < 0.01) this.inertiaY = 0;
-      }
-    }
-  }
-
-  zoomBy(factor, x, y) {
-    var oldCursor = this.fromScreen(x, y);
-    this.zoom *= factor;
-    this.zoom = Math.min(4.0, this.zoom); // zoom <= 4.0
-    this.makeBounds();
-    var newCursor = this.fromScreen(x, y);
-    this.scrollX += oldCursor.x - newCursor.x;
-    this.scrollY += oldCursor.y - newCursor.y;
-    this.makeBounds();
-    this.transform();
-  }
-
-  // TODO pinch zoom
-
-  makeBounds() {
-    this.bounds = {
-      left: this.scrollX - (this.width / 2) / this.zoom + 0.5| 0,
-      right: this.scrollX + (this.width / 2) / this.zoom + 0.5| 0,
-      bottom: this.scrollY - (this.height / 2) / this.zoom + 0.5 | 0,
-      top: this.scrollY + (this.height / 2) / this.zoom + 0.5 | 0,
-    };
-  }
-
-  transform() {
-    this.elContents.style.transform = `scale(${this.zoom}) translate(${-this.scrollX}px, ${-this.scrollY}px)`;
-  }
-
-  // TODO
-
-  get screenPosition() {
-    return {x: 0, y: 0};
-  }
-
-  worldPositionOf(x, y) {
-    return this.fromScreen(x, y);
-  }
-
-  screenPositionOf(x, y) {
-    return this.toScreen(x, y);
-  }
+  get isZoomable() { return true; }
 
 }
 
@@ -2413,6 +2371,7 @@ class App {
 
   objectFromPoint(x, y) {
     var w = this.workspaceFromPoint(x, y)
+    console.log(w);
     if (!w) return null;
     var pos = w.screenPosition;
     return w.objectFromPoint(x - pos.x, y - pos.y);
@@ -2434,6 +2393,7 @@ class App {
     for (var i = workspaces.length; i--;) {
       var w = workspaces[i];
       var pos = w.screenPosition;
+      console.log(w, pos);
       if (containsPoint(w, x - pos.x, y - pos.y)) return w;
     }
     return null;
@@ -2446,6 +2406,8 @@ class App {
     g.pressObject = this.objectFromPoint(g.pressX, g.pressY);
     g.shouldDrag = false;
     g.shouldScroll = false;
+
+    console.log('press', g.pressObject);
 
     if (g.pressObject) {
       var leftClick = e.button === 0 || e.button === undefined;
@@ -2461,6 +2423,8 @@ class App {
       document.activeElement.blur();
       e.preventDefault();
     }
+
+    // TODO if shouldScroll, fingerDown should kill inertia
 
     g.pressed = true;
     g.dragging = false;
