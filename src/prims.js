@@ -442,6 +442,7 @@ export const functions = {
     }
     var mean = s / n;
     var variance = (s2 / (n - 1)) - mean * mean;
+    // TODO be actually correct
     return new Uncertain(mean, Math.sqrt(variance));
   },
   "Float <- mean Uncertain": x => x.m,
