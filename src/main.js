@@ -2152,6 +2152,11 @@ class Workspace extends Frame {
     this.screenPosition = {x: this.screenX, y: this.screenY};
   }
 
+  scrollBy(dx, dy) {
+    super.scrollBy(dx, dy);
+    if (this.app) this.app.workspaceScrolled();
+  }
+
   positionOf(obj) {
     if (obj.workspace === this) {
       return obj.workspacePosition;
@@ -2412,7 +2417,9 @@ class Palette extends Workspace {
     });
     this.contentsBottom = y;
     this.contentsRight = w + 16;
-    this.scrollBy(0, -9999);
+    this.scrollY = 0;
+    this.makeBounds();
+    this.transform();
   }
 
   objectFromPoint(x, y) {
@@ -2527,6 +2534,17 @@ class App {
     this.scroll = null;
   }
 
+  workspaceScrolled() {
+    if (this.dragging) {
+      this.dragScript.moved();
+    }
+    this.fingers.forEach(g => {
+      if (g.dragging) {
+        g.dragScript.moved();
+      }
+    });
+  }
+
   gestureStart(e) {
     e.preventDefault();
     if (isNaN(e.scale)) return;
@@ -2616,7 +2634,7 @@ class App {
     if (id === this) return this;
     var g = this.fingers[id];
     if (g) return g;
-      return this.fingers[id] = {feedback: this.createFeedback()};
+    return this.fingers[id] = {feedback: this.createFeedback()};
   }
 
   destroyFinger(id) {
