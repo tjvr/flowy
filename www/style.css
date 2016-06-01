@@ -72,12 +72,21 @@ html, body {
 .palette {
   position: fixed;
   bottom: 0;
-  height: 64px;
+  height: 56px;
   z-index: 101;
   border-top: 2px solid #aaa;
   left: 0;
   right: 0;
   background: #fff;
+}
+
+.search {
+  font: 16px/20px Noto Sans, Lucida Grande, Verdana, Arial, DejaVu Sans, sans-serif;
+  display: block;
+  height: 28px;
+  -webkit-appearance: none;
+  border: 1px solid #ccc;
+  border-radius: 4px;
 }
 
 .feedback {

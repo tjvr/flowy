@@ -499,11 +499,11 @@ class Frame {
     if (!this.isInfinite) {
       this.scrollX = Math.min(
           Math.max(this.scrollX, this.contentsLeft),
-          this.contentsRight * this.zoom - this.width // TODO
+          Math.max(0, this.contentsRight * this.zoom - this.width)
       );
       this.scrollY = Math.min(
           Math.max(this.scrollY, this.contentsTop),
-          this.contentsBottom * this.zoom - this.height
+          Math.max(0, this.contentsBottom * this.zoom - this.height)
       );
     }
 
@@ -2282,7 +2282,7 @@ specs.forEach(p => {
   });
 
   var isRing = category === 'ring';
-  var b = new Block({spec, color, isRing}, parts);
+  var b = new Block({spec, category, color, isRing}, parts);
 
   if (add) {
     b.count = 1 + def.length;
@@ -2333,25 +2333,91 @@ specs.forEach(p => {
   paletteContents.push(b);
 });
 
+class Search extends Drawable {
+  constructor(parent) {
+    super();
+    this.parent = parent;
+
+    this.el = el('input', 'absolute search');
+    this.el.setAttribute('type', 'search');
+    this.el.setAttribute('placeholder', 'search');
+    this.el.style.left = '8px';
+    this.el.style.top = '8px';
+    this.el.style.width = '96px';
+
+    this.el.addEventListener('input', this.change.bind(this));
+    this.el.addEventListener('keydown', this.keyDown.bind(this));
+    this.layout();
+  }
+
+  click() {
+    this.el.focus();
+  }
+
+  layout() {
+    this.width = 98;
+    this.height = 28;
+  }
+
+  change(e) {
+    this.parent.filter(this.el.value);
+  }
+
+  keyDown(e) {
+    if (e.keyCode === 13) {
+      // TODO insert selected block into world
+    }
+  }
+
+}
+
 class Palette extends Workspace {
   constructor() {
     super();
     this.el.className += ' palette';
 
-    var x = 10;
-    paletteContents.forEach(o => {
-      o.moveTo(x, 8);
+    this.search = new Search(this);
+    this.elContents.appendChild(this.search.el);
+
+    this.blocks = paletteContents;
+    this.blocks.forEach(o => {
       this.add(o);
-      x += o.width + 8;
+    });
+    setTimeout(this.filter.bind(this, ""));
+  }
+
+  filter(query) {
+    var words = query.split(/ /g);
+    function matches(o) {
+      if (!query) return true;
+      for (var i=0; i<words.length; i++) {
+        if (o.info.spec.indexOf(words[i]) === -1 && o.info.category.indexOf(words[i]) !== 0) {
+          return false;
+        }
+      }
+      return true;
+    }
+
+    var x = 112;
+    this.blocks.forEach(o => {
+      if (matches(o)) {
+        o.moveTo(x, 8);
+        o.el.style.visibility = 'visible';
+        x += o.width + 8;
+      } else {
+        o.el.style.visibility = 'hidden';
+      }
     });
     this.contentsBottom = 64;
     this.contentsRight = x;
+    this.scrollBy(-99999, 0);
+  }
 
-    // setTimeout(() => {
-    //   this.zoom = 1.5;
-    //   this.makeBounds();
-    //   this.transform();
-    // });
+  objectFromPoint(x, y) {
+    if (containsPoint(this.search, x - this.search.x, y - this.search.y)) {
+      return this.search;
+    }
+    return super.objectFromPoint(x, y);
   }
 
   layout() {}
