@@ -489,6 +489,7 @@ class Frame {
   // TODO pinch zoom
 
   canScroll(dx, dy) {
+    if (this.isInfinite) return true;
     var sx = this.scrollX + dx;
     var sy = this.scrollY + dy;
     return this.contentsLeft <= sx && sx <= this.contentsRight * this.zoom - this.width && this.contentsTop <= sy && sy <= this.contentsBottom * this.zoom - this.height;
@@ -1943,10 +1944,10 @@ class Result extends Frame {
 
   layoutSelf() {
     var px, pt, pb;
-    if (this.view instanceof ImageView) {
-      px = pt = pb = 6;
+    if (this.view.isBlock) {
+      px = pt = pb = this.view.margin;
     } else {
-      px = 4;
+      px = this.view.margin;
       pt = 1;
       pb = -1;
     }
@@ -1979,6 +1980,8 @@ Result.maxHeight = 512;
 /*****************************************************************************/
 
 class View extends Drawable {
+
+  get margin() { return 4; }
 
   static fromJSON(args) {
     if (!args) return new TextView("null", "");
@@ -2108,6 +2111,8 @@ class BlockView extends InlineView {
   get isInline() { return false; }
   get isBlock() { return true; }
 
+  get margin() { return this._margin; }
+
   layoutSelf() {
     var children = this.children;
     var length = children.length;
@@ -2115,8 +2120,10 @@ class BlockView extends InlineView {
     var y = 0;
     var w = 0;
     var ys = [];
+    var lastMargin = 0;
     for (var i=0; i<length; i++) {
       var child = children[i];
+      if (i > 0) y += Math.max(child.margin, lastMargin);
       ys.push(y);
       y += child.height;
       if (child.width !== null) {
@@ -2125,6 +2132,7 @@ class BlockView extends InlineView {
     }
     this.width = w;
     this.height = y;
+    this._margin = Math.max(child.margin, children[0].margin);
 
     for (var i=0; i<length; i++) {
       var child = children[i];
@@ -2142,8 +2150,11 @@ class ImageView extends View {
   constructor(image) {
     super();
     this.el = image.cloneNode();
+    this.el.className = 'absolute view-image';
   }
   get isBlock() { return true; }
+
+  get margin() { return 6; }
 
   layoutSelf() {
     var w = this.el.naturalWidth;
@@ -2788,6 +2799,15 @@ class App {
     // TODO trackpad should scroll vertically; mouse scroll wheel should zoom!
     if (!this.scroll) {
       var w = this.frameFromPoint(e.clientX, e.clientY);
+      if (!e.ctrlKey) {
+        var o = w;
+        while (!o.canScroll(e.deltaX, e.deltaY)) {
+          do {
+            o = o.parent;
+          } while (o && !o.isScrollable);
+        }
+        if (o) w = o;
+      }
       this.scroll = {
         frame: w,
       };

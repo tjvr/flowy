@@ -334,15 +334,16 @@ export const functions = {
     return r;
   },
   "UI Future <- display List": function(list) {
-    var l = el('List');
-    list.forEach(value => {
-      var item = el('List-item');
-
+    var items = [];
+    var l = ['block', items];
+    list.forEach((value, index) => {
+      items.push(['text', 'ellipsis', ". . ."]);
       var onEmit = result => {
-        item.innerHTML = '';
         var prim = this.evaluator.getPrim("display %s", [result]);
         var result = prim.func.call(this, result);
-        if (result) item.appendChild(result);
+        if (result) {
+          items[index] = result;
+        }
         this.emit(l);
       };
       if (value && value.isTask) {
@@ -350,8 +351,6 @@ export const functions = {
       } else {
         onEmit(value);
       }
-
-      l.appendChild(item);
     });
     this.emit(l);
     return l;
