@@ -42,6 +42,8 @@ class Schema {
 }
 var Time = new Schema('Time', ['hour', 'mins', 'secs']);
 var Date_ = new Schema('Date', ['year', 'month', 'day']);
+var RGB = new Schema('Rgb', ['red', 'green', 'blue']);
+var HSV = new Schema('Hsv', ['hue', 'sat', 'val']);
 
 class Uncertain {
   constructor(mean, stddev) {
@@ -632,6 +634,18 @@ export const functions = {
     if (!color.isValid()) return;
     return color;
   },
+  "Color <- color Rgb": record => {
+    var values = record.values;
+    var color = tinycolor({ r: values.red, g: values.green, b: values.blue });
+    if (!color.isValid()) return;
+    return color;
+  },
+  "Color <- color Hsv": record => {
+    var values = record.values;
+    var color = tinycolor({ h: values.hue, s: values.sat, v: values.val });
+    if (!color.isValid()) return;
+    return color;
+  },
   "Color <- mix Color with Float % of Color": (a, mix, b) => tinycolor.mix(a, b, mix),
   //"Color <- r Int g Int b Int": (r, g, b) => {
   //  return tinycolor({r, g, b});
@@ -650,8 +664,14 @@ export const functions = {
 
   // TODO menus
   "Record <- Color to hex": x => x.toHexString(),
-  "Record <- Color to rgb": x => x.toRgb(),
-  "Record <- Color to hsv": x => x.toHsv(),
+  "Record <- Color to rgb": x => {
+    var o = x.toRgb();
+    return new Record(RGB, { red: o.r, green: o.g, blue: o.b });
+  },
+  "Record <- Color to hsv": x => {
+    var o = x.toHsv();
+    return new Record(HSV, { hue: o.h, sat: o.s, val: o.v });
+  },
 
   // TODO menus
   "List <- analogous colors Color": x => x.analogous(),
@@ -823,6 +843,8 @@ let coercions = {
 
   "Record <- Time": x => x,
   "Record <- Date": x => x,
+  "Record <- Rgb": x => x,
+  "Record <- Hsv": x => x,
 
   "Uncertain <- Int": x => new Uncertain(x.toString()),
   "Uncertain <- Frac": x => new Uncertain(x.n / x.d),

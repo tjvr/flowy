@@ -2427,9 +2427,11 @@ class Palette extends Workspace {
         o.moveTo(8, y);
         w = Math.max(w, o.width);
         o.el.style.visibility = 'visible';
+        o.hidden = false;
         y += o.height + 8;
       } else {
         o.el.style.visibility = 'hidden';
+        o.hidden = true;
       }
     });
     this.contentsBottom = y;
@@ -2444,7 +2446,14 @@ class Palette extends Workspace {
     if (containsPoint(this.search, pos.x - this.search.x, pos.y - this.search.y)) {
       return this.search;
     }
-    return super.objectFromPoint(x, y);
+    var scripts = this.scripts;
+    for (var i=scripts.length; i--;) {
+      var script = scripts[i];
+      if (script.hidden) continue;
+      var o = script.objectFromPoint(pos.x - script.x, pos.y - script.y);
+      if (o) return o;
+    }
+    return this;
   }
 
   get isPalette() { return true; }
