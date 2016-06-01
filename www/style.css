@@ -81,12 +81,19 @@ html, body {
 }
 
 .search {
-  font: 16px/20px Noto Sans, Lucida Grande, Verdana, Arial, DejaVu Sans, sans-serif;
+  font: bold 14px/20px Noto Sans, Lucida Grande, Verdana, Arial, DejaVu Sans, sans-serif;
   display: block;
   height: 28px;
   -webkit-appearance: none;
   border: 1px solid #ccc;
-  border-radius: 4px;
+  border-radius: 12px;
+  padding: 0 6px 0 3px;
+  color: rgba(0,0,0,0.7);
+  outline: none;
+}
+.search:focus {
+  box-shadow: 0 0 6px 1px rgba(0, 125, 224, 0.4);
+  border-color: rgba(28, 139, 226, 0.5);
 }
 
 .feedback {

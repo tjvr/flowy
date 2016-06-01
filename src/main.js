@@ -2362,7 +2362,7 @@ class Search extends Drawable {
     this.el.setAttribute('placeholder', 'search');
     this.el.style.left = '8px';
     this.el.style.top = '8px';
-    this.el.style.width = '96px';
+    this.el.style.width = '240px';
 
     this.el.addEventListener('input', this.change.bind(this));
     this.el.addEventListener('keydown', this.keyDown.bind(this));
@@ -2374,7 +2374,7 @@ class Search extends Drawable {
   }
 
   layout() {
-    this.width = 98;
+    this.width = 242;
     this.height = 28;
   }
 
@@ -2407,13 +2407,15 @@ class Palette extends Workspace {
   layout() {}
 
   filter(query) {
-    var words = query.split(/ /g);
+    var words = query.split(/ /g).map(word => new RegExp(word, 'i'));
     function matches(o) {
       if (!query) return true;
       for (var i=0; i<words.length; i++) {
-        if (o.info.spec.indexOf(words[i]) === -1 && o.info.category.indexOf(words[i]) !== 0) {
-          return false;
+        var word = words[i];
+        if (word.test(o.info.spec) || word.test(o.info.category)) {
+          continue;
         }
+        return false;
       }
       return true;
     }
