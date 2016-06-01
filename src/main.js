@@ -1311,7 +1311,13 @@ class Block extends Drawable {
 
   copy() {
     var b = new Block(this.info, this.parts.map(c => c.copy()));
-    // TODO init b.inputs correctly
+    b.inputs = this.inputs.map(part => {
+      var index = this.parts.indexOf(part);
+      if (index === -1) {
+        return part.copy();
+      }
+      return b.parts[index];
+    });
     b.count = this.count;
     b.wrap = this.wrap;
     return b;
