@@ -1,4 +1,6 @@
 
+var isMac = /Mac/i.test(navigator.userAgent);
+
 import tinycolor from  "tinycolor2";
 
 function assert(x) {
@@ -2506,6 +2508,8 @@ class App {
     document.addEventListener('gesturechange', this.gestureChange.bind(this));
     document.addEventListener('gestureend', this.gestureEnd.bind(this));
     // TODO gesture events
+
+    document.addEventListener('keydown', this.keyDown.bind(this));
   }
 
   get isApp() { return true; }
@@ -2515,6 +2519,23 @@ class App {
 
   resize(e) {
     this.workspaces.forEach(w => w.resize());
+  }
+
+  keyDown(e) {
+    if (e.altKey) return;
+    if (isMac && e.ctrlKey) return;
+    if (isMac ? e.metaKey : e.ctrlKey) {
+      if (e.keyCode === 70) {
+        this.palette.search.el.focus();
+        e.preventDefault();
+      }
+    }
+
+    if (e.target === document.body) {
+      if (e.keyCode === 8) {
+        e.preventDefault();
+      }
+    }
   }
 
   wheel(e) {
@@ -2718,7 +2739,7 @@ class App {
         // right-click
       } else if (leftClick) {
         g.shouldDrag = g.pressObject.isDraggable;
-        g.shouldScroll = g.pressObject.isScrollable; //&& e.button === undefined;
+        g.shouldScroll = g.pressObject.isScrollable && e.button === undefined;
         // TODO disable drag-scrolling using mouse
       }
     }
