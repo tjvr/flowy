@@ -71,12 +71,12 @@ html, body {
 
 .palette {
   position: fixed;
+  top: 0;
   bottom: 0;
-  height: 56px;
-  z-index: 101;
-  border-top: 2px solid #aaa;
   left: 0;
-  right: 0;
+  width: 256px;
+  z-index: 101;
+  border-right: 2px solid #aaa;
   background: #fff;
 }
 

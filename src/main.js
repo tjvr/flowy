@@ -2398,19 +2398,21 @@ class Palette extends Workspace {
       return true;
     }
 
-    var x = 112;
+    var w = 0;
+    var y = 48;
     this.blocks.forEach(o => {
       if (matches(o)) {
-        o.moveTo(x, 8);
+        o.moveTo(8, y);
+        w = Math.max(w, o.width);
         o.el.style.visibility = 'visible';
-        x += o.width + 8;
+        y += o.height + 8;
       } else {
         o.el.style.visibility = 'hidden';
       }
     });
-    this.contentsBottom = 64;
-    this.contentsRight = x;
-    this.scrollBy(-99999, 0);
+    this.contentsBottom = y;
+    this.contentsRight = w + 16;
+    this.scrollBy(0, -9999);
   }
 
   objectFromPoint(x, y) {
@@ -2717,7 +2719,7 @@ class App {
       var dy = g.mouseY - g.pressY;
 
       var canScroll = (
-           (frame.isPalette && Math.abs(dy) < Math.abs(dx)
+           (frame.isPalette && Math.abs(dx) < Math.abs(dy)
         || (!frame.isWorkspace && frame.canScroll(-dx, -dy)))
       );
       if (canScroll) {
