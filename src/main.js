@@ -2900,7 +2900,7 @@ class App {
 
     var w = this.workspaceFromPoint(g.mouseX, g.mouseY);
     if (w === this.world) {
-      var pos = w.toScreen(0, 0);
+      var pos = w.screenPositionOf(0, 0);
       w.scripts.forEach(script => this.addFeedback(g, pos.x, pos.y, script));
     }
 
