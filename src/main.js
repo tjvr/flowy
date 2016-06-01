@@ -1518,6 +1518,9 @@ class Block extends Drawable {
     this.drawOn(this.context);
 
     this.bubble.el.style.visibility = this.bubbleVisible ? 'visible' : 'hidden';
+    if (this.bubble.curve) {
+      this.bubble.curve.el.style.visibility = this.bubbleVisible ? 'visible' : 'hidden';
+    }
   }
 
   drawOn(context) {
