@@ -270,10 +270,7 @@ class Imp {
 }
 
 function el(type, content) {
-  var el = document.createElement('div');
-  el.className = 'result-' + type;
-  if (content) el.textContent = content+'\u200b';
-  return el;
+  return ['text', 'view-' + type, content || '']
 }
 
 export const functions = {
@@ -294,15 +291,15 @@ export const functions = {
     return el('Float', r);
   },
   "UI <- display Frac": frac => {
-    var f = el('Frac');
-    f.appendChild(el('Frac-num', ''+frac.n));
-    f.appendChild(el('Frac-bar'));
-    f.appendChild(el('Frac-den', ''+frac.d));
-    return f;
+    return ['block', [
+      el('Frac-num', ''+frac.n),
+      ['rect', '#000', null, 2],
+      el('Frac-den', ''+frac.d),
+    ]];
   },
   "UI <- display Bool": x => {
     var val = x ? 'yes' : 'no';
-    return el(`Bool result-Bool-${val}`, val);
+    return el(`Symbol view-Bool-${val}`, val);
   },
   "UI Future <- display Record": function(record) {
     var schema = record.schema;
@@ -360,9 +357,7 @@ export const functions = {
     return l;
   },
   "UI <- display Image": image => {
-    var image = image.cloneNode();
-    image.className = 'result-Image';
-    return image;
+    return ['image', image.cloneNode()];
   },
   "UI <- display Color": color => {
     var square = el('Color');
@@ -370,11 +365,11 @@ export const functions = {
     return square;
   },
   "UI <- display Uncertain": uncertain => {
-    var f = el('Uncertain');
-    f.appendChild(el('Uncertain-mean', ''+uncertain.m));
-    f.appendChild(el('Uncertain-sym', "±"));
-    f.appendChild(el('Uncertain-stddev', ''+uncertain.s));
-    return f;
+    return ['inline', [
+      el('Uncertain-mean', uncertain.m),
+      el('Uncertain-sym', "±"),
+      el('Uncertain-stddev', uncertain.s),
+    ]];
   },
 
   /* Int */

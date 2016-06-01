@@ -127,8 +127,10 @@ html, body {
 }
 
 .result {
+  border-radius: 5px;
+}
+.result-contents {
   color: #000;
-  font: 16px/20px Source Code Pro, Monaco, monospace;
   white-space: pre;
   display: inline-block;
   min-height: 12px;
@@ -139,66 +141,42 @@ html, body {
   background: rgba(255,255,127,0.5);
 }
 
-.result-Error {
+.view-Error {
   color: #e40046;
-  margin: 0 4px;
 }
 
-.result-Text,
-.result-Error {
+.view-Text,
+.view-Error {
   font: 14px/20px Helvetica Neue, Helvetica, Lucida Grande, Verdana, DejaVu Sans, sans-serif;
-  /*
-  max-width: 512px;
-  white-space: pre-wrap;
-  */
 }
-.result-Text:before, .result-Text:after {
+.view-Text:before, .view-Text:after {
   font: bold 16px/20px Baskerville, Georgia, serif;
   content: "“";
 }
-.result-Text:after {
+.view-Text:after {
   content: "”";
 }
 
-
-.result-Int,
-.result-Float {
-  margin: -2px 4px 2px;
-}
-
-.result-Int,
-.result-Float,
-.result-Frac-num,
-.result-Frac-den,
-.result-Uncertain-mean,
-.result-Uncertain-stddev {
+.view-Int,
+.view-Float,
+.view-Frac-num,
+.view-Frac-den,
+.view-Uncertain-mean,
+.view-Uncertain-stddev {
   font: 14px/20px Source Code Pro, Monaco, monospace;
 }
 
-.result-Frac {
-  margin: 0 4px;
-}
-.result-Frac-num,
-.result-Frac-den {
+.view-Frac-num,
+.view-Frac-den {
   padding: 0 4px;
-}
-.result-Frac-bar {
-  background: #000;
-  height: 2px;
+  font: 16px/20px Source Code Pro, Monaco, monospace;
 }
 
-.result-Uncertain {
-  margin: 0 2px 2px;
+.view-Uncertain-sym {
+  font: 16px/20px Source Code Pro, Monaco, monospace;
+  padding: 0 4px;
+  margin: -1px 0 0;
 }
-.result-Uncertain-mean,
-.result-Uncertain-sym,
-.result-Uncertain-stddev {
-  display: inline;
-}
-.result-Uncertain-sym {
-  margin: 0 4px;
-}
-
 
 .result-List {
   margin-left: 2px;
@@ -230,14 +208,9 @@ html, body {
 .result-Record-field {
   display: block;
 }
-.result-Record-name,
-.result-Bool {
+.view-Symbol {
   font: bold 14px/20px Helvetica Neue, Helvetica, Lucida Grande, Verdana, DejaVu Sans, sans-serif;
   color: #333;
-  display: inline-block;
-}
-.result-Record-name {
-  margin-right: 6px;
 }
 .result-Record-name:after {
   content: "→";
@@ -252,11 +225,8 @@ html, body {
   vertical-align: text-top;
 }
 
-.result-Bool {
-  margin-bottom: 2px;
-}
-.result-Bool-yes { color: #2a792a; }
-.result-Bool-no { color: #914646; }
+.view-Bool-yes { color: #2a792a; }
+.view-Bool-no { color: #914646; }
 
 
 .result-Color {

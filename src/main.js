@@ -491,7 +491,7 @@ class Frame {
   canScroll(dx, dy) {
     var sx = this.scrollX + dx;
     var sy = this.scrollY + dy;
-    return this.contentsLeft <= sx && sx <= this.contentsRight * this.zoom - this.width && this.contentsTop <= sy && sy <= this.contentsBottom * this.zoom - this.height; 
+    return this.contentsLeft <= sx && sx <= this.contentsRight * this.zoom - this.width && this.contentsTop <= sy && sy <= this.contentsBottom * this.zoom - this.height;
     // TODO check zoom calculations
   }
 
@@ -527,10 +527,10 @@ class Frame {
 
 
 class Label extends Drawable {
-  constructor(text, cls) {
+  constructor(text) {
     assert(typeof text === 'string');
     super();
-    this.el = el('absolute label ' + (cls || ''));
+    this.el = el('absolute label');
     this.text = text;
   }
 
@@ -551,7 +551,6 @@ class Label extends Drawable {
   }
 
   layoutSelf() {}
-  drawChildren() {}
   draw() {}
 
   get dragObject() {
@@ -1660,10 +1659,10 @@ class Source extends Drawable {
 
     var w = this.result.width;
     var h = this.result.height;
-    this.width = Math.max(Bubble.minWidth, w + 2 * px);
+    this.width = Math.max(Bubble.minWidth, w + 4);
     var t = 0;
     var x = (this.width - w) / 2;
-    var y = t + py + 1;
+    var y = t + py;
     this.result.moveTo(x, y);
     this.height = h + 2 * py + t;
 
@@ -1686,9 +1685,9 @@ class Source extends Drawable {
     var r = Bubble.radius;
     var w12 = this.width / 2;
 
-    context.moveTo(1, r + .5);
-    context.arc(r + 1, r + .5, r, PI, PI32, false);
-    context.arc(w - r - 1, r + .5, r, PI32, 0, false);
+    context.moveTo(1, r + 1);
+    context.arc(r + 1, r + 1, r, PI, PI32, false);
+    context.arc(w - r - 1, r + 1, r, PI32, 0, false);
     context.arc(w - r - 1, h - r - 1, r, 0, PI12, false);
     context.arc(r + 1, h - r - 1, r, PI12, PI, false);
   }
@@ -1835,12 +1834,12 @@ class Bubble extends Source {
 
     var w = this.result.width;
     var h = this.result.height;
-    this.width = Math.max(Bubble.minWidth, w + 2 * px);
+    this.width = Math.max(Bubble.minWidth, w + 4);
     var t = Bubble.tipSize;
     var x = (this.width - w) / 2;
-    var y = t + py + 1;
-    this.result.moveTo(x, y);
-    this.height = h + 2 * py + t;
+    var y = t + py;
+    this.result.moveTo(x, y - 1);
+    this.height = h + 2 * py + t - 1;
 
     this.moved();
     this.redraw();
@@ -1853,12 +1852,12 @@ class Bubble extends Source {
     var r = Bubble.radius;
     var w12 = this.width / 2;
 
-    context.moveTo(1, t + r + .5);
-    context.arc(r + 1, t + r + .5, r, PI, PI32, false);
-    context.lineTo(w12 - t, t + .5);
+    context.moveTo(1, t + r);
+    context.arc(r + 1, t + r, r, PI, PI32, false);
+    context.lineTo(w12 - t, t);
     context.lineTo(w12, 1);
-    context.lineTo(w12 + t, t + .5);
-    context.arc(w - r - 1, t + r + .5, r, PI32, 0, false);
+    context.lineTo(w12 + t, t);
+    context.arc(w - r - 1, t + r, r, PI32, 0, false);
     context.arc(w - r - 1, h - r - 1, r, 0, PI12, false);
     context.arc(r + 1, h - r - 1, r, PI12, PI, false);
   }
@@ -1870,7 +1869,7 @@ class Bubble extends Source {
 }
 Bubble.measure = createMetrics('result-label');
 
-Bubble.tipSize = 6;
+Bubble.tipSize = 7;
 Bubble.radius = 6;
 Bubble.paddingX = 4;
 Bubble.paddingY = 2;
@@ -1882,10 +1881,12 @@ class Result extends Frame {
   constructor(bubble, repr) {
     super();
     this.parent = bubble;
-    this.elContents.className += ' result';
+    this.el.className += ' result';
+    this.elContents.className += ' result-contents';
 
     assert(repr instanceof Node);
     this.repr = repr;
+    this.view = null;
     this.display();
     setTimeout(() => this.display(this.repr.value));
     this.repr.onEmit(this.onEmit.bind(this));
@@ -1898,7 +1899,8 @@ class Result extends Frame {
   get isZoomable() { return true; }
   get isScrollable() {
     return this.contentsRight > Result.maxWidth
-        || this.contentsBottom > Result.maxHeight;
+        || this.contentsBottom > Result.maxHeight
+        || this.view instanceof ImageView;
   }
 
   fixZoom(zoom) {
@@ -1911,9 +1913,11 @@ class Result extends Frame {
 
   display(value) {
     this.elContents.innerHTML = '';
-    if (value) this.elContents.appendChild(value.cloneNode(true));
-    this.contentsRight = value ? this.elContents.offsetWidth : 0;
-    this.contentsBottom = value ? this.elContents.offsetHeight : 16;
+    this.view = View.fromJSON(value);
+    this.view.layoutChildren();
+    this.view.drawChildren();
+    this.view.parent = this;
+    this.elContents.appendChild(this.view.el);
     this.layout();
   }
 
@@ -1938,8 +1942,21 @@ class Result extends Frame {
   }
 
   layoutSelf() {
-    this.width = Math.min(Result.maxWidth, this.contentsRight);
-    this.height = Math.min(Result.maxHeight, this.contentsBottom);
+    var px, pt, pb;
+    if (this.view instanceof ImageView) {
+      px = pt = pb = 6;
+    } else {
+      px = 4;
+      pt = 1;
+      pb = -1;
+    }
+    var w = this.view.width + 2 * px;
+    var h = this.view.height + pt + pb;
+    this.view.moveTo(px, pt);
+    this.contentsRight = w;
+    this.contentsBottom = h;
+    this.width = Math.min(Result.maxWidth, w);
+    this.height = Math.min(Result.maxHeight, h);
     this.makeBounds();
     this.draw();
   }
@@ -1959,7 +1976,224 @@ class Result extends Frame {
 Result.maxWidth = 512;
 Result.maxHeight = 512;
 
+/*****************************************************************************/
 
+class View extends Drawable {
+
+  static fromJSON(args) {
+    if (!args) return new TextView("null", "");
+    args = args.slice();
+    var selector = args.shift();
+    var cls = View.classes[selector];
+    return cls.fromArgs.apply(cls, args);
+  }
+
+  static fromArgs(...args) {
+    return new this(...args);
+  }
+
+  objectFromPoint(x, y) {
+    return containsPoint(this, x, y);
+  }
+
+  draw() {}
+}
+
+class RectView extends View {
+  constructor(fill, width, height) {
+    super();
+    this.el = el('div', 'rect');
+    this.fill = fill;
+    this.width = width;
+    this.height = height;
+  }
+  get isBlock() { return true; }
+  layoutSelf() {}
+
+  get width() { return this._width; }
+  set width(value) {
+    this._width = value;
+    this.redraw();
+  }
+
+  draw() {
+    this.el.style.width = `${this.width}px`;
+    this.el.style.height = `${this.height}px`;
+    this.el.style.background = this.fill;
+  }
+}
+
+class TextView extends View {
+  constructor(cls, text) {
+    super();
+    cls = cls || '';
+    text = ''+text;
+    this.el = el('absolute text ' + cls);
+    this.el.textContent = text;
+
+    if (!TextView.measure[cls]) {
+      TextView.measure[cls] = createMetrics('text ' + cls);
+    }
+    var metrics = TextView.measure[cls](text);
+    this.width = metrics.width;
+    this.height = metrics.height * 1.2 | 0;
+    this.layout();
+  }
+  get isInline() { return true; }
+
+  layoutSelf() {}
+}
+TextView.measure = {};
+
+class InlineView extends View {
+  constructor(children) {
+    super();
+    this.el = el('absolute view-inline');
+
+    this.children = children;
+    children.forEach(child => {
+      child.parent = this;
+      this.el.appendChild(child.el);
+    });
+  }
+  get isInline() { return true; }
+
+  static fromArgs(children) {
+    return new this(children.map(View.fromJSON));
+  }
+
+  layoutChildren() {
+    this.children.forEach(c => c.layoutChildren());
+    if (this.dirty) {
+      this.dirty = false;
+      this.layoutSelf();
+    }
+  }
+
+  drawChildren() {
+    this.children.forEach(c => c.drawChildren());
+    if (this.graphicsDirty) {
+      this.graphicsDirty = false;
+      this.draw();
+    }
+  }
+
+  layoutSelf() {
+    var children = this.children;
+    var length = children.length;
+    var x = 0;
+    var h = 0;
+    var xs = [];
+    for (var i=0; i<length; i++) {
+      var child = children[i];
+      xs.push(x);
+      x += child.width;
+      h = Math.max(h, child.height);
+    }
+    this.width = x;
+    this.height = h;
+
+    for (var i=0; i<length; i++) {
+      var child = children[i];
+      child.moveTo(xs[i], (h - child.height) / 2 | 0);
+    }
+  }
+}
+
+class BlockView extends InlineView {
+  constructor(children) {
+    super(children);
+    this.el.className = 'absolute view-block';
+  }
+  get isInline() { return false; }
+  get isBlock() { return true; }
+
+  layoutSelf() {
+    var children = this.children;
+    var length = children.length;
+
+    var y = 0;
+    var w = 0;
+    var ys = [];
+    for (var i=0; i<length; i++) {
+      var child = children[i];
+      ys.push(y);
+      y += child.height;
+      if (child.width !== null) {
+        w = Math.max(w, child.width);
+      }
+    }
+    this.width = w;
+    this.height = y;
+
+    for (var i=0; i<length; i++) {
+      var child = children[i];
+      if (child.width === null) {
+        child.width = w;
+      }
+      var x = child.isInline ? (w - child.width) / 2 : 0;
+      var y = ys[i];
+      child.moveTo(x, y);
+    }
+  }
+}
+
+class ImageView extends View {
+  constructor(image) {
+    super();
+    this.el = image.cloneNode();
+  }
+  get isBlock() { return true; }
+
+  layoutSelf() {
+    var w = this.el.naturalWidth;
+    var h = this.el.naturalHeight;
+    var maxWidth = 256;
+    var maxHeight = 256;
+    var s = Math.min(1, maxWidth / w, maxHeight / h);
+    this.width = w * s | 0;
+    this.height = h * s | 0;
+    this.redraw();
+  }
+
+  draw() {
+    this.el.style.width = `${this.width}px`;
+    this.el.style.height = `${this.height}px`;
+  }
+}
+
+class ListView extends View {
+  //constructor(list) {}
+  get isBlock() { return true; }
+}
+
+class TableView extends ListView {
+  //constructor(recordList) {}
+  get isBlock() { return true; }
+}
+
+class FieldView extends InlineView {
+  get isBlock() { return true; }
+}
+
+class RecordView extends BlockView {
+  //constructor(record) {}
+  get isBlock() { return true; }
+}
+
+View.classes = {
+  'rect': RectView,
+  'text': TextView,
+  'image': ImageView,
+
+  'inline': InlineView,
+  'block': BlockView,
+
+  'list': ListView,
+  'table': TableView,
+  'field': FieldView,
+  'record': RecordView,
+};
 
 /*****************************************************************************/
 
@@ -2497,6 +2731,7 @@ class App {
 
     this.resize();
     this.palette.filter("");
+    this.palette.search.el.focus();
 
     this.fingers = [];
     this.feedbackPool = [];
