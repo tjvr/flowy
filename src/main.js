@@ -294,9 +294,6 @@ class Drawable {
     }
   }
 
-  /*
-   * just draw children. Called when Drawable::workspace changes I think?
-   */
   drawChildren() { // assume no children
     if (this.graphicsDirty) {
       this.graphicsDirty = false;
@@ -308,13 +305,13 @@ class Drawable {
     if (this.workspace) {
       this.graphicsDirty = false;
       this.draw();
+
+      // for debugging
+      this.el.style.width = this.width + 'px';
+      this.el.style.height = this.height + 'px';
     } else {
       this.graphicsDirty = true;
     }
-
-    // for debugging
-    this.el.style.width = this.width + 'px';
-    this.el.style.height = this.height + 'px';
   }
 
   // layoutSelf() {}
@@ -379,8 +376,9 @@ class Drawable {
     return +new Date() - this.lastTap < 400;
   }
 
-
   setHover(hover) {}
+  setDragging(dragging) {}
+
 }
 
 
@@ -505,6 +503,7 @@ class Frame {
           Math.max(this.scrollY, this.contentsTop),
           Math.max(0, this.contentsBottom * this.zoom - this.height)
       );
+      assert(!isNaN(this.scrollY));
     }
 
     this.bounds = {
@@ -1362,8 +1361,8 @@ class Block extends Drawable {
     this.bubble.layoutChildren();
     if (this.dirty) {
       this.dirty = false;
+      this.layoutSelf();
     }
-    this.layoutSelf();
   }
 
   drawChildren() {
@@ -1534,6 +1533,10 @@ class Block extends Drawable {
       return !bubble.parent.isBlock || (this.bubbleVisible && bubble.parent === this);
     }).length;
     this.repr.setSink(!!isSink);
+  }
+
+  setDragging(dragging) {
+    this.bubble.el.style.visibility = !dragging && this.bubbleVisible ? 'visible' : 'hidden';
   }
 
 }
@@ -2388,8 +2391,9 @@ class Palette extends Workspace {
     this.blocks.forEach(o => {
       this.add(o);
     });
-    setTimeout(this.filter.bind(this, ""));
   }
+
+  layout() {}
 
   filter(query) {
     var words = query.split(/ /g);
@@ -2423,13 +2427,12 @@ class Palette extends Workspace {
   }
 
   objectFromPoint(x, y) {
-    if (containsPoint(this.search, x - this.search.x, y - this.search.y)) {
+    var pos = this.fromScreen(x, y);
+    if (containsPoint(this.search, pos.x - this.search.x, pos.y - this.search.y)) {
       return this.search;
     }
     return super.objectFromPoint(x, y);
   }
-
-  layout() {}
 
   get isPalette() { return true; }
 }
@@ -2459,6 +2462,8 @@ class App {
   constructor() {
     this.el = el('app');
     this.workspaces = [];
+    document.body.appendChild(this.el);
+    document.body.appendChild(this.elScripts = el('absolute dragging'));
 
     this.world = new World(this.elWorld = el(''));
     this.palette = new Palette(this.elPalette = el(''));
@@ -2468,10 +2473,8 @@ class App {
 
     this.world.app = this; // TODO
 
-    document.body.appendChild(this.el);
-    document.body.appendChild(this.elScripts = el('absolute dragging'));
-
     this.resize();
+    this.palette.filter("");
 
     this.fingers = [];
     this.feedbackPool = [];
@@ -2771,6 +2774,7 @@ class App {
       this.elScripts.appendChild(g.dragScript.el);
       g.dragScript.layoutChildren();
       g.dragScript.drawChildren();
+      g.dragScript.setDragging(true);
       // TODO add shadow
 
     } else if (g.pressed && g.shouldScroll && !g.scrolling) {
@@ -2827,6 +2831,7 @@ class App {
     if (!g.dragging) return;
     g.feedback.canvas.style.display = 'none';
 
+    g.dragScript.setDragging(false);
     if (g.feedbackInfo) {
       var info = g.feedbackInfo;
       info.obj.replaceWith(g.dragScript);
