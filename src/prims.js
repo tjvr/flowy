@@ -760,6 +760,18 @@ export const functions = {
     update();
   },
 
+  "Bool <- Time < Time": function(a, b) {
+    var x = a.values;
+    var y = b.values;
+    return x.hour < y.hour && x.mins < y.mins && x.secs < y.secs;
+  },
+  "Bool <- Date < Date": function(a, b) {
+    var x = a.values;
+    var y = b.values;
+    return x.year < y.year && x.month < y.month && x.day < y.day;
+  },
+
+
 
   // "A Future <- delay A by Float secs": (value, time) => {
   //   // TODO

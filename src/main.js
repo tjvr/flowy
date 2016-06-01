@@ -1389,7 +1389,7 @@ class Block extends Drawable {
     if (part.shape === 'Color') {
       return 10;
     }
-    if (part.isBubble) {
+    if (part.isBubble || part.isSource) {
       return 0;
     }
     if (part.isBlock) {
@@ -2738,8 +2738,9 @@ class App {
       if (e.button === 2 || leftClick && e.ctrlKey) {
         // right-click
       } else if (leftClick) {
+        g.canFingerScroll = e.button === undefined;
         g.shouldDrag = g.pressObject.isDraggable;
-        g.shouldScroll = g.pressObject.isScrollable && e.button === undefined;
+        g.shouldScroll = g.pressObject.isScrollable && g.canFingerScroll;
         // TODO disable drag-scrolling using mouse
       }
     }
@@ -2763,7 +2764,7 @@ class App {
     g.mouseX = p.clientX;
     g.mouseY = p.clientY;
 
-    if (g.pressed && g.shouldDrag && !g.dragging) {
+    if (g.pressed && g.shouldDrag && !g.dragging && g.canFingerScroll) {
       var obj = g.pressObject.dragObject;
       var frame = this.frameFromObject(g.pressObject);
       var dx = g.mouseX - g.pressX;
