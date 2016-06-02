@@ -2003,9 +2003,9 @@ class View extends Drawable {
 }
 
 class RectView extends View {
-  constructor(fill, width, height) {
+  constructor(fill, width, height, cls) {
     super();
-    this.el = el('div', 'rect');
+    this.el = el('div', 'rect ' + cls);
     this.fill = fill;
     this.width = width;
     this.height = height;

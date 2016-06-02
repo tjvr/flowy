@@ -228,12 +228,9 @@ html, body {
 .view-Bool-yes { color: #2a792a; }
 .view-Bool-no { color: #914646; }
 
-
-.result-Color {
-  width: 24px;
-  height: 24px;
-  margin: 2px 2px 4px;
+.view-Color {
   border: 1px solid #888;
+  box-sizing: border-box;
 }
 
 .result-Image {

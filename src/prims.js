@@ -302,6 +302,7 @@ export const functions = {
     return el(`Symbol view-Bool-${val}`, val);
   },
   "UI Future <- display Record": function(record) {
+    // TODO use RecordView
     var schema = record.schema;
     var symbols = schema ? schema.symbols : Object.keys(record.values);
     var r = el('Record');
@@ -334,6 +335,7 @@ export const functions = {
     return r;
   },
   "UI Future <- display List": function(list) {
+    // TODO use ListView
     var items = [];
     var l = ['block', items];
     list.forEach((value, index) => {
@@ -359,9 +361,7 @@ export const functions = {
     return ['image', image.cloneNode()];
   },
   "UI <- display Color": color => {
-    var square = el('Color');
-    square.style.background = color.toHexString();
-    return square;
+    return ['rect', color.toHexString(), 24, 24, 'view-Color'];
   },
   "UI <- display Uncertain": uncertain => {
     return ['inline', [
