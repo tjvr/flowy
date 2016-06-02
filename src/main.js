@@ -372,6 +372,7 @@ class Drawable {
   }
 
   click() {
+    console.log('click', this);
     this.lastTap = +new Date();
   }
   isDoubleTap() {
@@ -1635,6 +1636,7 @@ class Source extends Drawable {
   }
 
   copy() {
+    // TODO this doesn't work
     return Source.value(this.node.value);
   }
 
@@ -1774,7 +1776,7 @@ class Bubble extends Source {
 
   detach() {
     if (this.isDoubleTap()) {
-      return Source.value(this.node.value);
+      return this.makeSource();
     }
     if (this.parent.isBlock) {
       if (this.parent.bubble !== this) {
@@ -1782,6 +1784,10 @@ class Bubble extends Source {
       }
     }
     return this;
+  }
+
+  makeSource() {
+    return Source.value(this.node.value);
   }
 
   copy() {
@@ -1904,10 +1910,20 @@ class Result extends Frame {
         || this.view instanceof ImageView;
   }
 
+  get result() {
+    return this;
+  }
+
   objectFromPoint(x, y) {
     var o = this.view.objectFromPoint(x - this.view.x, y - this.view.y)
-    console.log(o);
-    return o && o.isDraggable ? o : this;
+    return o ? o : this;
+  }
+  detach() {
+    return this.parent.detach();
+  }
+  cloneify(cloneify) {
+    var bubble = this.result.parent;
+    return cloneify ? bubble.detach() : bubble.makeSource();
   }
 
   fixZoom(zoom) {
@@ -1994,6 +2010,26 @@ class View extends Drawable {
                    //: this.width ? 'fixed' : 'natural';
     this.heightMode = this.height === 'auto' ? 'auto' : 'natural';
                     //: this.height ? 'fixed' : 'natural';
+  }
+
+  get result() {
+    return this.parent.result;
+  }
+
+  get isDraggable() {
+    return true;
+  }
+  get dragObject() {
+    return this;
+  }
+  detach() {
+    if (this.isDoubleTap()) {
+      return this.cloneify();
+    }
+    return this.result.detach();
+  }
+  cloneify(cloneify) {
+    return this.parent.cloneify(cloneify);
   }
 
   setWidth(width) {
@@ -2152,7 +2188,7 @@ class InlineView extends View {
       var o = child.objectFromPoint(x - child.x, y - child.y);
       if (o) return o;
     }
-    return containsPoint(this, x, y);
+    return containsPoint(this, x, y) ? this : null;
   }
 
 }
@@ -2235,21 +2271,48 @@ class ListView extends View {
 }
 
 class CellView extends View {
-  constructor(cls, child) {
+  constructor(cls, child, key) {
     super();
     this.el = el(`absolute cell ${cls}-cell`);
     this.child = child;
+    child.parent = this;
     this.el.appendChild(child.el);
     this.paddingX = 2;
     this.paddingY = 2;
+    this.key = key;
+  }
+
+  objectFromPoint(x, y) {
+    return this.child.objectFromPoint(x - this.child.x, y - this.child.y);
+  }
+
+  cloneify(cloneify) {
+    var key = this.key;
+    switch (this.parent.cls) {
+      case 'list':
+        var b = blocksBySpec['item %n of %l'].copy();
+        break;
+      case 'record':
+        var b = blocksBySpec['%q of %o'].copy();
+        break;
+      case 'field':
+        var b = blocksBySpec['%q of %o'].copy();
+        key = this.parent.key;
+        break;
+      default:
+        return super.cloneify(cloneify);
+    }
+    b.inputs[0].value = key;
+    b.replace(b.inputs[1], this.parent.cloneify(true));
+    return b;
   }
 
   get margin() {
     return 2;
   }
 
-  static fromArgs(cls, child) {
-    return new this(cls, View.fromJSON(child));
+  static fromArgs(cls, child, ...rest) {
+    return new this(cls, View.fromJSON(child), ...rest);
   }
 
   layoutSelf() {
@@ -2277,12 +2340,31 @@ class RowView extends InlineView {
     super(children);
     this.cls = cls;
     this.el.className += ` absolute row-${cls}`;
+    this.key = cls === 'field' ? children[0].text : index + 1;
   }
   get isInline() { return false; }
   get isBlock() { return true; }
 
   static fromArgs(cls, index, children, ...rest) {
     return new this(cls, index, children.map(View.fromJSON), ...rest);
+  }
+
+  cloneify(cloneify) {
+    switch (this.cls) {
+      // case 'field':
+      //   var b = blocksBySpec['%q of %o'].copy();
+      //   break;
+      case 'item':
+      case 'record':
+      case 'list':
+        var b = blocksBySpec['item %n of %l'].copy();
+        break;
+      default:
+        return super.cloneify(cloneify);
+    }
+    b.inputs[0].value = this.key;
+    b.replace(b.inputs[1], this.parent.cloneify(true));
+    return b;
   }
 
   get margin() {
@@ -3237,7 +3319,9 @@ class App {
       g.dragX = pos.x - g.pressX;
       g.dragY = pos.y - g.pressY;
       assert(''+g.dragX !== 'NaN');
+      console.log('drag', obj);
       g.dragScript = obj.detach();
+      console.log('detach', g.dragScript);
       if (obj.dragOffset) {
         var offset = obj.dragOffset(g.dragScript);
         g.dragX += offset.x * this.world.zoom;

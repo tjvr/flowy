@@ -365,6 +365,8 @@ export const functions = {
         isRecordTable = true;
       }
 
+      // TODO header row for list lists
+
       list.forEach((item, index) => {
         var type = typeOf(item);
         if (isRecordTable) {
@@ -373,7 +375,7 @@ export const functions = {
             var values = symbols.map(sym => {
               var value = result[sym];
               var prim = this.evaluator.getPrim("display %s", [value]);
-              return ['cell', 'record', prim.func.call(this, value)];
+              return ['cell', 'record', prim.func.call(this, value), sym];
             });
             items[index + 1] = ['row', 'record', index, values];
             this.emit(l);
@@ -382,9 +384,9 @@ export const functions = {
         } else if (/List$/.test(type)) {
           items.push(['row', 'list', index, [ellipsis]]);
           withValue(item, result => {
-            var values = result.map(item2 => {
+            var values = result.map((item2, index2) => {
               var prim = this.evaluator.getPrim("display %s", [item2]);
-              return ['cell', 'list', prim.func.call(this, item2)];
+              return ['cell', 'list', prim.func.call(this, item2), index2 + 1];
             });
             items[index] = ['row', 'list', index, values];
           });
