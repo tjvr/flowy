@@ -147,6 +147,7 @@ export const specs = [
   ["list", "list %exp", ["foo", "bar", "baz"]],
   ["list", "range %n to %n", [1, 5]],
   ["list", "item %n of %l", [1]],
+  ["list", "length of %l", []],
   ["list", "count %l", []],
   ["list", "%l concat %l"],
   ["list", "sum %l"],
@@ -360,7 +361,7 @@ export const functions = {
       if (first instanceof Record) {
         var schema = first.schema;
         var symbols = schema ? schema.symbols : Object.keys(first.values);
-        var headings = symbols.map(text => ['cell', 'header', ['text', 'heading', text]]);
+        var headings = symbols.map(text => ['cell', 'header', ['text', 'heading', text], text]);
         items.push(['row', 'header', null, headings]);
         isRecordTable = true;
       }
@@ -608,8 +609,11 @@ export const functions = {
     // TODO
   },
 
-  "Int <- count List": function(list) {
+  "Int <- length of List": function(list) {
     return list.length;
+  },
+  "Int <- count List": function(list) {
+    return list.filter(x => !!x).length;
   },
 
   /* Record */

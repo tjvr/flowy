@@ -1805,7 +1805,7 @@ class Bubble extends Source {
   }
 
   objectFromPoint(x, y) {
-    return opaqueAt(this.context, x * density, y * density) ? this.result.objectFromPoint(x, y) : null;
+    return opaqueAt(this.context, x * density, y * density) ? this.result.objectFromPoint(x - this.result.x, y - this.result.y) : null;
   }
 
   replaceWith(other) {
@@ -1927,7 +1927,15 @@ class Result extends Frame {
   }
   cloneify(cloneify) {
     var bubble = this.result.parent;
-    return cloneify ? bubble.detach() : bubble.makeSource();
+    if (cloneify) {
+      if (bubble.isInside) {
+        return bubble.copy();
+      } else {
+        return bubble.detach();
+      }
+    } else {
+      return bubble.makeSource();
+    }
   }
 
   fixZoom(zoom) {
@@ -2018,6 +2026,12 @@ class View extends Drawable {
 
   get result() {
     return this.parent.result;
+  }
+
+  setHover(hover) {
+    if (this.parent.setHover) {
+      this.parent.setHover(hover);
+    }
   }
 
   get isDraggable() {
@@ -2187,13 +2201,16 @@ class InlineView extends View {
   }
 
   objectFromPoint(x, y) {
-    var children = this.children;
-    for (var i = children.length; i-- ; ) {
-      var child = children[i];
-      var o = child.objectFromPoint(x - child.x, y - child.y);
-      if (o) return o;
+    if (containsPoint(this, x, y)) {
+      var children = this.children;
+      for (var i = children.length; i-- ; ) {
+        var child = children[i];
+        var o = child.objectFromPoint(x - child.x, y - child.y);
+        if (o) return o;
+      }
+      return this;
     }
-    return containsPoint(this, x, y) ? this : null;
+    return null;
   }
 
 }
@@ -2291,7 +2308,12 @@ class CellView extends View {
   }
 
   objectFromPoint(x, y) {
-    return this.child.objectFromPoint(x - this.child.x, y - this.child.y);
+    if (containsPoint(this, x, y)) {
+      var o = this.child.objectFromPoint(x - this.child.x, y - this.child.y);
+      if (o) return o;
+      return this;
+    }
+    return null;
   }
 
   cloneify(cloneify) {
@@ -2300,6 +2322,7 @@ class CellView extends View {
       case 'list':
         var b = blocksBySpec['item %n of %l'].copy();
         break;
+      case 'header':
       case 'record':
         var b = blocksBySpec['%q of %o'].copy();
         break;
@@ -2356,6 +2379,10 @@ class CellView extends View {
     this.el.style.padding = `${this.paddingY}px ${this.paddingX}px`
   }
 
+  setHover(hover) {
+    this.el.style.background = hover ? '#dfe5ff' : '';
+  }
+
 }
 
 class RowView extends InlineView {
@@ -2378,16 +2405,24 @@ class RowView extends InlineView {
   }
 
   cloneify(cloneify) {
+    var key = this.key;
     switch (this.cls) {
-      case 'item':
+      case 'header':
+        return super.cloneify(true);
       case 'record':
+        //key -= 1;
+        // if (key === 0) {
+        //   return super.cloneify(true);
+        // }
+        // fall-thru
+      case 'item':
       case 'list':
         var b = blocksBySpec['item %n of %l'].copy();
         break;
       default:
         return super.cloneify(cloneify);
     }
-    b.inputs[0].value = this.key;
+    b.inputs[0].value = key;
     b.replace(b.inputs[1], this.parent.cloneify(true));
     return b;
   }
@@ -3417,14 +3452,14 @@ class App {
       g.dragScript.moveTo((g.dragX + g.mouseX), (g.dragY + g.mouseY));
       this.showFeedback(g);
       e.preventDefault();
-    } else if (!g.pressed) {
-      var obj = this.objectFromPoint(g.mouseX, g.mouseY);
-      if (!obj || !obj.setHover) obj = null;
-      if (obj !== g.hoverScript) {
-        if (g.hoverScript) g.hoverScript.setHover(false);
-        g.hoverScript = obj;
-        if (g.hoverScript) g.hoverScript.setHover(true);
-      }
+    }
+
+    var obj = this.objectFromPoint(g.mouseX, g.mouseY);
+    if (!obj || !obj.setHover) obj = null;
+    if (obj !== g.hoverScript) {
+      if (g.hoverScript) g.hoverScript.setHover(false);
+      g.hoverScript = obj;
+      if (g.hoverScript) g.hoverScript.setHover(true);
     }
   }
 

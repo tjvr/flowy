@@ -242,14 +242,16 @@ html, body {
   height: 20px !important;
 }
 .row-header, .header-cell {
+  border-top: 1px solid #bbb;
+  top: -1px;
   border-bottom: 1px solid #626262;
 }
-.row-record {
-  border-bottom: 1px solid #B9B9B9;
+.row-record, .record-cell {
+  border-bottom: 1px solid #bbb;
 }
 .row-record > .item-index,
 .record-cell {
-  border-right: 1px solid #B9B9B9;
+  border-right: 1px solid #bbb;
 }
 
 .field {
