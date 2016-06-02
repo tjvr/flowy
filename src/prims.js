@@ -201,7 +201,7 @@ export const specs = [
   ["bool", "not %b"],
   ["bool", "%b"],
   ["bool", "%u if %b else %u", ['', true]],
-  ["bool", "repeat %s times %n", ['party', 3]],
+  ["bool", "repeat %n times: %s", [3, 'party']],
 
   /* Color */
 
@@ -519,17 +519,17 @@ export const functions = {
     });
   },
 
-  "Text <- repeat Text times Int": function(obj, times) {
-    var out = "";
-    for (var i=0; i<times; i++) {
-      out += obj;
-    }
-    return out;
-  },
-  "List <- repeat Any times Int": function(obj, times) {
+  "List <- repeat Int times: Any": function(times, obj) {
     var out = [];
     for (var i=0; i<times; i++) {
       out.push(obj);
+    }
+    return out;
+  },
+  "Text <- repeat Int times: Text": function(times, obj) {
+    var out = "";
+    for (var i=0; i<times; i++) {
+      out += obj;
     }
     return out;
   },
