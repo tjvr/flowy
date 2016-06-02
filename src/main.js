@@ -1980,6 +1980,37 @@ Result.maxHeight = 512;
 /*****************************************************************************/
 
 class View extends Drawable {
+  constructor(width, height) {
+    super();
+    this.width = width;
+    this.height = height;
+    this.widthMode = this.width === 'auto' ? 'auto' : 'natural';
+                   //: this.width ? 'fixed' : 'natural';
+    this.heightMode = this.height === 'auto' ? 'auto' : 'natural';
+                    //: this.height ? 'fixed' : 'natural';
+  }
+
+  setWidth(width) {
+    this.width = width;
+    this.layoutSelf();
+  }
+  setHeight(height) {
+    this.height = height;
+    this.layoutSelf();
+  }
+
+  layoutView(w, h) {
+    this.naturalWidth = w;
+    this.naturalHeight = h;
+    var wm = this.widthMode;
+    var hm = this.heightMode;
+    this.width = wm === 'natural' ? w : wm === 'auto' ? null : this.width;
+    this.height = hm === 'natural' ? h : hm === 'auto' ? null : this.height;
+  }
+
+  layoutSelf() {
+    this.layoutView(this.width, this.height);
+  }
 
   get margin() { return 4; }
 
@@ -2004,18 +2035,15 @@ class View extends Drawable {
 
 class RectView extends View {
   constructor(fill, width, height, cls) {
-    super();
-    this.el = el('div', 'rect ' + cls);
+    super(width, height);
+    this.el = el('div', 'rect ' + (cls || ''));
     this.fill = fill;
-    this.width = width;
-    this.height = height;
   }
   get isBlock() { return true; }
-  layoutSelf() {}
 
-  get width() { return this._width; }
-  set width(value) {
-    this._width = value;
+  get fill() { return this._fill; }
+  set fill(value) {
+    this._fill = value;
     this.redraw();
   }
 
@@ -2027,30 +2055,32 @@ class RectView extends View {
 }
 
 class TextView extends View {
-  constructor(cls, text) {
-    super();
-    cls = cls || '';
-    text = ''+text;
+  constructor(cls, text, width, height) {
+    super(width, height);
+    this.cls = cls || '';
     this.el = el('absolute text ' + cls);
-    this.el.textContent = text;
-
-    if (!TextView.measure[cls]) {
-      TextView.measure[cls] = createMetrics('text ' + cls);
-    }
-    var metrics = TextView.measure[cls](text);
-    this.width = metrics.width;
-    this.height = metrics.height * 1.2 | 0;
-    this.layout();
+    this.text = text;
   }
   get isInline() { return true; }
 
-  layoutSelf() {}
+  get text() { return this._text; }
+  set text(text) {
+    this._text = text = ''+text;
+    this.el.textContent = text;
+
+    if (!TextView.measure[this.cls]) {
+      TextView.measure[this.cls] = createMetrics('text ' + this.cls);
+    }
+    var metrics = TextView.measure[this.cls](text);
+    this.layoutView(metrics.width, metrics.height * 1.2 | 0);
+    this.layout();
+  }
 }
 TextView.measure = {};
 
 class InlineView extends View {
-  constructor(children) {
-    super();
+  constructor(children, width, height) {
+    super(width, height);
     this.el = el('absolute view-inline');
 
     this.children = children;
@@ -2093,6 +2123,7 @@ class InlineView extends View {
       x += child.width;
       h = Math.max(h, child.height);
     }
+    // TODO layoutView
     this.width = x;
     this.height = h;
 
@@ -2104,8 +2135,8 @@ class InlineView extends View {
 }
 
 class BlockView extends InlineView {
-  constructor(children) {
-    super(children);
+  constructor(children, width, height) {
+    super(children, width, height);
     this.el.className = 'absolute view-block';
   }
   get isInline() { return false; }
@@ -2132,6 +2163,7 @@ class BlockView extends InlineView {
     }
     this.width = w;
     this.height = y;
+    // TODO layoutView
     this._margin = Math.max(child.margin, children[0].margin);
 
     for (var i=0; i<length; i++) {
@@ -2147,8 +2179,8 @@ class BlockView extends InlineView {
 }
 
 class ImageView extends View {
-  constructor(image) {
-    super();
+  constructor(image, width, height) {
+    super(width, height);
     this.el = image.cloneNode();
     this.el.className = 'absolute view-image';
   }
@@ -2801,7 +2833,7 @@ class App {
       var w = this.frameFromPoint(e.clientX, e.clientY);
       if (!e.ctrlKey) {
         var o = w;
-        while (!o.canScroll(e.deltaX, e.deltaY)) {
+        while (o && !o.canScroll(e.deltaX, e.deltaY)) {
           do {
             o = o.parent;
           } while (o && !o.isScrollable);

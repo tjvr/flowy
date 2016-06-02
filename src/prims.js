@@ -293,7 +293,7 @@ export const functions = {
   "UI <- display Frac": frac => {
     return ['block', [
       el('Frac-num', ''+frac.n),
-      ['rect', '#000', null, 2],
+      ['rect', '#000', 'auto', 2],
       el('Frac-den', ''+frac.d),
     ]];
   },
