@@ -147,16 +147,15 @@ export const specs = [
   ["list", "list %exp", ["foo", "bar", "baz"]],
   ["list", "range %n to %n", [1, 5]],
   ["list", "item %n of %l", [1]],
+  ["list", "%l concat %l"],
   ["list", "length of %l", []],
+  ["list", "sum %l"],
   ["list", "count %l", []],
   ["list", "count %l if %r", []],
-  ["list", "keep from %l if %r"],
-  ["list", "%l concat %l"],
-  ["list", "sum %l"],
-  //["list", "count %l if %r", []],
-
-  ["list", "do %r for each %l"],
+  ["list", "keep %r from %l"],
+  ["list", "for each %l do %r"],
   ["list", "combine %l with %r"],
+
   // TODO
 
   /* Text */

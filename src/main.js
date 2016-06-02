@@ -376,7 +376,6 @@ class Drawable {
   }
 
   click() {
-    console.log('click', this);
     this.lastTap = +new Date();
   }
   isDoubleTap() {
@@ -3360,8 +3359,6 @@ class App {
     g.shouldDrag = false;
     g.shouldScroll = false;
 
-    console.log('press', g.pressObject);
-
     if (g.pressObject) {
       var leftClick = e.button === 0 || e.button === undefined;
       if (e.button === 2 || leftClick && e.ctrlKey) {
@@ -3420,9 +3417,7 @@ class App {
       g.dragX = pos.x - g.pressX;
       g.dragY = pos.y - g.pressY;
       assert(''+g.dragX !== 'NaN');
-      console.log('drag', obj);
       g.dragScript = obj.detach();
-      console.log('detach', g.dragScript);
       if (obj.dragOffset) {
         var offset = obj.dragOffset(g.dragScript);
         g.dragX += offset.x * this.world.zoom;
