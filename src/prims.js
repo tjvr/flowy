@@ -138,7 +138,7 @@ export const specs = [
   ["record", "update %o with %fields"], // TODO remove??
   ["record", "merge %o with %o"],
   ["record", "%q of %o", ["name"]],
-  ["record", "table headings: %l rows: %l"],
+  ["record", "table headings: %l %br rows: %l"],
   ["record", "%o to JSON"],
   ["record", "from JSON %s"],
 
@@ -247,7 +247,12 @@ export const specs = [
 var byHash = {};
 specs.forEach(p => {
   let [category, spec, defaults] = p;
-  var hash = spec.split(" ").map(word => word === '%%' ? "%" : /^%/.test(word) ? "_" : word).join(" ");
+  var hash = spec.split(" ").map(word => {
+    return word === '%%' ? "%"
+         : word === '%br' ? "BR"
+         : /^%/.test(word) ? "_"
+         : word;
+  }).join(" ");
   byHash[hash] = spec;
 });
 
@@ -643,7 +648,7 @@ export const functions = {
     if (!(record instanceof Record)) return;
     return record.values[name];
   },
-  "Record Future <- table headings: List rows: List": function(symbols, rows) {
+  "Record Future <- table headings: List BR rows: List": function(symbols, rows) {
     var table = [];
     var init = false;
     rows.forEach((item, index) => {

@@ -2859,9 +2859,11 @@ specs.forEach(p => {
   words.forEach((word, index) => {
     if (word === '%r') {
       parts.push(ringBlock.copy());
+
     } else if (word === '%b') {
       var value = def.length ? def.shift() : !!(i++ % 2);
       parts.push(new Switch(value));
+
     } else if (word === '%fields') {
       add = function() {
         return [
@@ -2871,6 +2873,7 @@ specs.forEach(p => {
         ];
       }
       addSize = 3;
+
     } else if (word === '%exp') {
       add = function() {
         return [
@@ -2881,8 +2884,13 @@ specs.forEach(p => {
       addSize = 2;
       parts.push(new Break());
       parts.push(new Input(def.length ? def.shift() : "", 'Text'));
+
     } else if (word === '%%') {
       parts.push(new Label("%"));
+
+    } else if (word === '%br') {
+      parts.push(new Break());
+
     } else if (/^%/.test(word)) {
       var value = def.length ? def.shift() : word === '%c' ? "#007de0" : "";
       parts.push(new Input(value, {
@@ -2893,6 +2901,7 @@ specs.forEach(p => {
         '%m': 'Menu',
         '%q': 'Symbol',
       }[word]));
+
     } else {
       parts.push(new Label(word));
     }
