@@ -1986,7 +1986,7 @@ class Result extends Frame {
       pb = -1;
     }
     var w = this.view.width + 2 * px;
-    var h = this.view.height + pt + pb;
+    var h = Math.max(12, this.view.height + pt + pb);
     this.view.moveTo(px, pt);
     this.contentsRight = w;
     this.contentsBottom = h;
