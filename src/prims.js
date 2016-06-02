@@ -273,6 +273,14 @@ function el(type, content) {
   return ['text', 'view-' + type, content || '']
 }
 
+function withValue(value, cb) {
+  if (value && value.isTask) {
+    value.withEmit(() => cb(value.result));
+  } else {
+    cb(value);
+  }
+}
+
 export const functions = {
 
   "UI <- display Error": x => el('Error', x.message || x),
@@ -301,62 +309,100 @@ export const functions = {
     var val = x ? 'yes' : 'no';
     return el(`Symbol view-Bool-${val}`, val);
   },
+
   "UI Future <- display Record": function(record) {
     // TODO use RecordView
     var schema = record.schema;
     var symbols = schema ? schema.symbols : Object.keys(record.values);
-    var r = el('Record');
+    var items = [];
+    var r = ['table', items];
     if (schema) {
-      r.appendChild(el('Record-title', schema.name));
+      r = ['block', [
+        ['text', 'record-title', schema.name, 'auto'],
+        r,
+      ]];
     }
-    symbols.forEach(symbol => {
-      var value = record.values[symbol];
-      var field = el('Record-field');
-      field.appendChild(el('Record-name', ''+symbol));
-      var item = el('Record-value', "...");
 
-      var onEmit = result => {
-        item.innerHTML = '';
+    symbols.forEach((symbol, index) => {
+      var cell = ['cell', 'field', ['text', 'ellipsis', ". . ."]];
+      var field = ['row', 'field', index, [
+        ['text', 'field-name', symbol],
+        ['text', 'field-sym', "→"],
+        cell,
+      ]];
+      items.push(field);
+
+      withValue(record.values[symbol], result => {
         var prim = this.evaluator.getPrim("display %s", [result]);
-        var result = prim.func.call(this, result);
-        if (result) item.appendChild(result);
+        var value = prim.func.call(this, result);
+        cell[2] = value;
         this.emit(r);
-      };
-      if (value && value.isTask) {
-        value.withEmit(onEmit);
-      } else {
-        onEmit(value);
-      }
-
-      field.appendChild(item);
-      r.appendChild(field);
+      });
     });
     this.emit(r);
     return r;
   },
+
   "UI Future <- display List": function(list) {
-    // TODO use ListView
     var items = [];
-    var l = ['block', items];
-    list.forEach((value, index) => {
-      items.push(['text', 'ellipsis', ". . ."]);
-      var onEmit = result => {
-        var prim = this.evaluator.getPrim("display %s", [result]);
-        var result = prim.func.call(this, result);
-        if (result) {
-          items[index] = result;
-        }
-        this.emit(l);
-      };
-      if (value && value.isTask) {
-        value.withEmit(onEmit);
-      } else {
-        onEmit(value);
+    var l = ['table', items];
+
+    var ellipsis = ['text', 'ellipsis', ". . ."];
+
+    if (list.length === 0) {
+      // TODO empty lists
+      this.emit(l);
+      return l;
+    }
+
+    withValue(list[0], first => {
+      var isRecordTable = false;
+      if (first instanceof Record) {
+        var schema = first.schema;
+        var symbols = schema ? schema.symbols : Object.keys(first.values);
+        symbols = symbols.map(text => ['cell', 'header', ['text', 'heading', text]]);
+        items.push(['row', 'header', null, symbols]);
+        isRecordTable = true;
       }
+
+      list.forEach((item, index) => {
+        var type = typeOf(item);
+        if (isRecordTable) {
+          items.push(['row', 'record', index, [ellipsis]]);
+          withValue(item, result => {
+            var values = symbols.map(sym => {
+              var value = result[sym];
+              var prim = this.evaluator.getPrim("display %s", [value]);
+              return ['cell', 'record', prim.func.call(this, value)];
+            });
+            items[index + 1] = ['row', 'record', index, values];
+            this.emit(l);
+          });
+
+        } else if (/List$/.test(type)) {
+          items.push(['row', 'list', index, [ellipsis]]);
+          withValue(item, result => {
+            var values = result.map(item2 => {
+              var prim = this.evaluator.getPrim("display %s", [item2]);
+              return ['cell', 'list', prim.func.call(this, item2)];
+            });
+            items[index] = ['row', 'list', index, values];
+          });
+
+        } else {
+          items.push(['row', 'item', index, [ellipsis]]);
+          withValue(item, result => {
+            var prim = this.evaluator.getPrim("display %s", [result]);
+            var value = ['cell', 'item', prim.func.call(this, result)];
+            items[index] = ['row', 'item', index, [value]];
+          });
+        }
+      });
     });
     this.emit(l);
     return l;
   },
+
   "UI <- display Image": image => {
     return ['image', image.cloneNode()];
   },

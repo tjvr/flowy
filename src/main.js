@@ -1795,7 +1795,7 @@ class Bubble extends Source {
   }
 
   objectFromPoint(x, y) {
-    return opaqueAt(this.context, x * density, y * density) ? this.result : null;
+    return opaqueAt(this.context, x * density, y * density) ? this.result.objectFromPoint(x, y) : null;
   }
 
   replaceWith(other) {
@@ -1904,6 +1904,12 @@ class Result extends Frame {
         || this.view instanceof ImageView;
   }
 
+  objectFromPoint(x, y) {
+    var o = this.view.objectFromPoint(x - this.view.x, y - this.view.y)
+    console.log(o);
+    return o && o.isDraggable ? o : this;
+  }
+
   fixZoom(zoom) {
     return Math.max(1, zoom);
   }
@@ -2010,6 +2016,7 @@ class View extends Drawable {
 
   layoutSelf() {
     this.layoutView(this.width, this.height);
+    this.redraw();
   }
 
   get margin() { return 4; }
@@ -2027,7 +2034,7 @@ class View extends Drawable {
   }
 
   objectFromPoint(x, y) {
-    return containsPoint(this, x, y);
+    return containsPoint(this, x, y) ? this : null;
   }
 
   draw() {}
@@ -2075,6 +2082,11 @@ class TextView extends View {
     this.layoutView(metrics.width, metrics.height * 1.2 | 0);
     this.layout();
   }
+
+  draw() {
+    this.el.style.width = `${this.width}px`;
+    this.el.style.height = `${this.height}px`;
+  }
 }
 TextView.measure = {};
 
@@ -2091,8 +2103,8 @@ class InlineView extends View {
   }
   get isInline() { return true; }
 
-  static fromArgs(children) {
-    return new this(children.map(View.fromJSON));
+  static fromArgs(children, ...rest) {
+    return new this(children.map(View.fromJSON), ...rest);
   }
 
   layoutChildren() {
@@ -2132,6 +2144,17 @@ class InlineView extends View {
       child.moveTo(xs[i], (h - child.height) / 2 | 0);
     }
   }
+
+  objectFromPoint(x, y) {
+    var children = this.children;
+    for (var i = children.length; i-- ; ) {
+      var child = children[i];
+      var o = child.objectFromPoint(x - child.x, y - child.y);
+      if (o) return o;
+    }
+    return containsPoint(this, x, y);
+  }
+
 }
 
 class BlockView extends InlineView {
@@ -2164,7 +2187,7 @@ class BlockView extends InlineView {
     this.width = w;
     this.height = y;
     // TODO layoutView
-    this._margin = Math.max(child.margin, children[0].margin);
+    this._margin = child ? Math.max(child.margin, children[0].margin) : 4;
 
     for (var i=0; i<length; i++) {
       var child = children[i];
@@ -2176,6 +2199,7 @@ class BlockView extends InlineView {
       child.moveTo(x, y);
     }
   }
+
 }
 
 class ImageView extends View {
@@ -2210,18 +2234,141 @@ class ListView extends View {
   get isBlock() { return true; }
 }
 
-class TableView extends ListView {
-  //constructor(recordList) {}
-  get isBlock() { return true; }
+class CellView extends View {
+  constructor(cls, child) {
+    super();
+    this.el = el(`absolute cell ${cls}-cell`);
+    this.child = child;
+    this.el.appendChild(child.el);
+    this.paddingX = 2;
+    this.paddingY = 2;
+  }
+
+  get margin() {
+    return 2;
+  }
+
+  static fromArgs(cls, child) {
+    return new this(cls, View.fromJSON(child));
+  }
+
+  layoutSelf() {
+    this.width = this.child.width;
+    this.height = this.child.height;
+    this.child.moveTo(this.paddingX, this.paddingY);
+    this.redraw();
+  }
+
+  draw() {
+    this.el.style.width = `${this.width}px`;
+    this.el.style.height = `${this.height}px`;
+    this.el.style.padding = `${this.paddingY}px ${this.paddingX}px`
+  }
+
 }
 
-class FieldView extends InlineView {
+class RowView extends InlineView {
+  constructor(cls, index, children) {
+    if (cls === 'header' || cls === 'row') {
+      children = [new TextView('table-index', index === null ? "" : index + 1)].concat(children);
+    } else if (cls !== 'field') {
+      children = [new TextView('item-index', index + 1)].concat(children);
+    }
+    super(children);
+    this.cls = cls;
+    this.el.className += ` absolute row-${cls}`;
+  }
+  get isInline() { return false; }
   get isBlock() { return true; }
+
+  static fromArgs(cls, index, children, ...rest) {
+    return new this(cls, index, children.map(View.fromJSON), ...rest);
+  }
+
+  get margin() {
+    return 0;
+  }
+
+  layoutSelf() {
+    var children = this.children;
+    var length = children.length;
+    var x = 0;
+    var h = 0;
+    var xs = [];
+    for (var i=0; i<length; i++) {
+      var child = children[i];
+      xs.push(x);
+      x += child.width;
+      h = Math.max(h, child.height);
+    }
+    this.width = x;
+    this.height = h;
+  }
+
+  layoutRow(colWidths) {
+    var children = this.children;
+    var length = children.length;
+
+    var x = 0;
+    for (var i=0; i < length; i++) {
+      var child = children[i];
+      var w = colWidths[i];
+      child.setWidth(w);
+      child.moveTo(x, 0);
+      x += w;
+    }
+    this.width = x;
+  }
+
 }
 
-class RecordView extends BlockView {
-  //constructor(record) {}
-  get isBlock() { return true; }
+class TableView extends BlockView {
+
+  layoutSelf() {
+    var rows = this.children;
+    var length = rows.length;
+
+    var y = 0;
+    var ys = [];
+    var colWidths = [];
+    var cols = 0;
+    var lastMargin = 0;
+    for (var i=0; i<length; i++) {
+      var row = rows[i];
+      if (i > 0) y += Math.max(row.margin, lastMargin);
+      ys.push(y);
+      y += row.height;
+
+      var cells = row.children;
+      cols = Math.max(cols, cells.length);
+      for (var j=0; j<cols; j++) {
+        var cell = cells[j];
+        var cw = cell ? cell.width + 8 : 0;
+        colWidths[j] = Math.max(colWidths[j] || 0, cw);
+      }
+    }
+
+    var px = 2;
+    var x = 0;
+    for (var i=0; i < cols; i++) {
+      x += colWidths[i];
+    }
+    this.width = x + 2 * px;
+    this.height = y;
+    // TODO layoutView
+    this._margin = row ? Math.max(row.margin, rows[0].margin) : 2;
+
+    for (var i=0; i<length; i++) {
+      var row = rows[i];
+      row.layoutRow(colWidths);
+      row.moveTo(px, ys[i]);
+    }
+
+    // TODO infinite scrolling
+  }
+
+  // TODO efficient objectFromPoint
+
 }
 
 View.classes = {
@@ -2232,10 +2379,9 @@ View.classes = {
   'inline': InlineView,
   'block': BlockView,
 
-  'list': ListView,
   'table': TableView,
-  'field': FieldView,
-  'record': RecordView,
+  'row': RowView,
+  'cell': CellView,
 };
 
 /*****************************************************************************/
@@ -2526,6 +2672,7 @@ var colors = {
 var ringBlock;
 
 var paletteContents = [];
+var blocksBySpec = {};
 specs.forEach(p => {
   let [category, spec, defaults] = p;
   var def = (defaults || []).slice();
@@ -2579,6 +2726,7 @@ specs.forEach(p => {
 
   var isRing = category === 'ring';
   var b = new Block({spec, category, color, isRing}, parts);
+  blocksBySpec[spec] = b;
 
   if (add) {
     b.count = 1 + def.length;

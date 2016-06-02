@@ -178,51 +178,30 @@ html, body {
   margin: -1px 0 0;
 }
 
-.result-List {
-  margin-left: 2px;
-  display: inline-block;
-  vertical-align: text-top;
-}
-.result-List-item {
-  list-style-position: inside;
-  display: list-item;
-  list-style-type: decimal;
-  font: small-caps 14px/20px Baskerville, Georgia, serif;
-  padding: 0;
-  margin: 0;
-  text-indent: 0;
-}
-
-.result-Record {
-  margin: 0 2px;
-  display: inline-block;
-  vertical-align: top;
-}
-.result-Record-title {
+.record-title {
   display: block;
   text-align: center;
   font: bold 12px/20px Helvetica Neue, Helvetica, Lucida Grande, Verdana, DejaVu Sans, sans-serif;
   color: #555;
   border-bottom: 1px solid #aaa;
 }
-.result-Record-field {
-  display: block;
-}
-.view-Symbol {
-  font: bold 14px/20px Helvetica Neue, Helvetica, Lucida Grande, Verdana, DejaVu Sans, sans-serif;
+
+.view-Symbol,
+.field-name,
+.field-sym,
+.heading {
+  font: bold 14px/20px Noto Sans, Lucida Grande, Verdana, Arial, DejaVu Sans, sans-serif;
   color: #333;
 }
-.result-Record-name:after {
-  content: "→";
-  margin-left: 2px;
-  vertical-align: middle;
-  /*
-  content: "▸";
-  */
+.field-name {
+  text-align: right;
 }
-.result-Record-value {
-  display: inline-block;
-  vertical-align: text-top;
+.field-sym {
+  padding: 0 4px;
+}
+
+.row-header {
+  background: #aaa;
 }
 
 .view-Bool-yes { color: #2a792a; }
@@ -233,16 +212,25 @@ html, body {
   box-sizing: border-box;
 }
 
-.result-Image {
-  margin: 8px;
-  max-width: 256px;
-  max-height: 234px;
+.item-index,
+.row-index {
+  font: small-caps 14px/20px Baskerville, Georgia, serif;
+  text-align: right;
+  padding: 0 2px;
+  box-sizing: border-box;
+}
+.item-index:after {
+  content: ".";
+  display: inline;
 }
 
-.result-Color,
-.result-Image {
-  display: inline-block;
-  vertical-align: middle;
+.list-cell {
+  border-radius: 4px;
+  background: #ccc;
+}
+.item-cell {
+  border-radius: 4px;
+  background: #ccc;
 }
 
 .field {
