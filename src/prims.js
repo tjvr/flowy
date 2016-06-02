@@ -138,9 +138,9 @@ export const specs = [
   ["record", "update %o with %fields"], // TODO remove??
   ["record", "merge %o with %o"],
   ["record", "%q of %o", ["name"]],
-  ["record", "record headings: %l values: %l"],
+  ["record", "table headings: %l rows: %l"],
   ["record", "%o to JSON"],
-  ["record", "record from JSON %s"],
+  ["record", "from JSON %s"],
 
   /* List */
 
@@ -643,13 +643,23 @@ export const functions = {
     if (!(record instanceof Record)) return;
     return record.values[name];
   },
-  "Record <- record headings: List values: List": (headings, values) => {
-    var rec = {};
-    for (var i=0; i<headings.length; i++) {
-      var name = headings[i];
-      rec[name] = values[i];
-    }
-    return new Record(null, rec);
+  "Record Future <- table headings: List rows: List": function(symbols, rows) {
+    var table = [];
+    var init = false;
+    rows.forEach((item, index) => {
+      table.push(null);
+      withValue(item, result => {
+        var rec = {};
+        for (var i=0; i<symbols.length; i++) {
+          var name = symbols[i];
+          rec[name] = result[i];
+        }
+        table[index] = new Record(null, rec);
+        if (init) this.emit(table);
+      });
+    });
+    this.emit(table);
+    init = true;
   },
   "Text <- Any to JSON": record => {
     return JSON.stringify(record);
@@ -661,7 +671,7 @@ export const functions = {
     return JSON.stringify(record);
   },
 
-  "Record <- record from JSON Text": text => {
+  "Record <- from JSON Text": text => {
     try {
       var json = JSON.parse(text);
     } catch (e) {
