@@ -1,6 +1,10 @@
 
 var isMac = /Mac/i.test(navigator.userAgent);
 
+RegExp.escape = function(s) {
+    return s.replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&');
+};
+
 import tinycolor from  "tinycolor2";
 
 function assert(x) {
@@ -1965,11 +1969,11 @@ class Result extends Frame {
   }
 
   layoutSelf() {
-    var px, pt, pb;
+    var px = this.view.marginX;
+    var pt, pb;
     if (this.view.isBlock) {
-      px = pt = pb = this.view.margin;
+      pt = pb = this.view.marginY;
     } else {
-      px = this.view.margin;
       pt = 1;
       pb = -1;
     }
@@ -2055,7 +2059,8 @@ class View extends Drawable {
     this.redraw();
   }
 
-  get margin() { return 4; }
+  get marginX() { return 4; }
+  get marginY() { return 2; }
 
   static fromJSON(args) {
     if (!args) return new TextView("null", "");
@@ -2115,7 +2120,7 @@ class TextView extends View {
       TextView.measure[this.cls] = createMetrics('text ' + this.cls);
     }
     var metrics = TextView.measure[this.cls](text);
-    this.layoutView(metrics.width, metrics.height * 1.2 | 0);
+    this.layoutView(metrics.width, metrics.height | 0);
     this.layout();
   }
 
@@ -2201,7 +2206,7 @@ class BlockView extends InlineView {
   get isInline() { return false; }
   get isBlock() { return true; }
 
-  get margin() { return this._margin; }
+  get marginY() { return this._marginY; }
 
   layoutSelf() {
     var children = this.children;
@@ -2213,7 +2218,8 @@ class BlockView extends InlineView {
     var lastMargin = 0;
     for (var i=0; i<length; i++) {
       var child = children[i];
-      if (i > 0) y += Math.max(child.margin, lastMargin);
+      if (i > 0) y += Math.max(child.marginY, lastMargin);
+      lastMargin = child.marginY;
       ys.push(y);
       y += child.height;
       if (child.width !== null) {
@@ -2223,7 +2229,7 @@ class BlockView extends InlineView {
     this.width = w;
     this.height = y;
     // TODO layoutView
-    this._margin = child ? Math.max(child.margin, children[0].margin) : 4;
+    this._marginY = child ? Math.max(child.marginY, children[0].marginY) : 4;
 
     for (var i=0; i<length; i++) {
       var child = children[i];
@@ -2246,7 +2252,8 @@ class ImageView extends View {
   }
   get isBlock() { return true; }
 
-  get margin() { return 6; }
+  get marginX() { return 6; }
+  get marginY() { return 6; }
 
   layoutSelf() {
     var w = this.el.naturalWidth;
@@ -2277,8 +2284,9 @@ class CellView extends View {
     this.child = child;
     child.parent = this;
     this.el.appendChild(child.el);
-    this.paddingX = 2;
-    this.paddingY = 2;
+    this.isRecord = cls === 'record' || cls === 'header';
+    this.paddingX = this.isRecord ? 6 : 2;
+    this.paddingY = 0;
     this.key = key;
   }
 
@@ -2307,17 +2315,37 @@ class CellView extends View {
     return b;
   }
 
-  get margin() {
-    return 2;
-  }
+  get marginX() { return this.isRecord ? 0 : this.paddingX; }
 
   static fromArgs(cls, child, ...rest) {
     return new this(cls, View.fromJSON(child), ...rest);
   }
 
+  layoutChildren() {
+    this.child.layoutChildren();
+    this.layoutSelf();
+  }
+
+  drawChildren() {
+    this.child.drawChildren();
+    if (this.graphicsDirty) {
+      this.graphicsDirty = false;
+      this.draw();
+    }
+  }
+
+  setWidth(width) {
+    this.child.setWidth(width - 2 * this.paddingX);
+    this.layoutSelf();
+  }
+  setHeight(height) {
+    this.child.setHeight(height - 2 * this.paddingY);
+    this.layoutSelf();
+  }
+
   layoutSelf() {
-    this.width = this.child.width;
-    this.height = this.child.height;
+    this.width = this.child.width + 2 * this.paddingX;
+    this.height = this.child.height + 2 * this.paddingY;
     this.child.moveTo(this.paddingX, this.paddingY);
     this.redraw();
   }
@@ -2351,9 +2379,6 @@ class RowView extends InlineView {
 
   cloneify(cloneify) {
     switch (this.cls) {
-      // case 'field':
-      //   var b = blocksBySpec['%q of %o'].copy();
-      //   break;
       case 'item':
       case 'record':
       case 'list':
@@ -2367,8 +2392,8 @@ class RowView extends InlineView {
     return b;
   }
 
-  get margin() {
-    return 0;
+  get marginY() {
+    return this.cls === 'record' || this.cls === 'header' ? 0 : 4;
   }
 
   layoutSelf() {
@@ -2377,10 +2402,13 @@ class RowView extends InlineView {
     var x = 0;
     var h = 0;
     var xs = [];
+    var lastMargin;
     for (var i=0; i<length; i++) {
       var child = children[i];
+      x += child.marginX;
       xs.push(x);
       x += child.width;
+      x += child.marginX;
       h = Math.max(h, child.height);
     }
     this.width = x;
@@ -2394,17 +2422,34 @@ class RowView extends InlineView {
     var x = 0;
     for (var i=0; i < length; i++) {
       var child = children[i];
-      var w = colWidths[i];
-      child.setWidth(w);
-      child.moveTo(x, 0);
+      var m = child.marginX;
+      var w = colWidths[i] || (child.width + 2 * m);
+      child.setWidth(w - 2 * m);
+      child.moveTo(x + m, 0);
       x += w;
     }
     this.width = x;
   }
 
+  draw() {
+    this.el.style.width = `${this.width}px`;
+    this.el.style.height = `${this.height}px`;
+  }
+
 }
 
 class TableView extends BlockView {
+
+  get marginY() {
+    if (this.children.length) {
+      var first = this.children[0];
+      if (first instanceof RowView && first.cls === 'header') {
+        return 4;
+      }
+      return 4;
+    }
+    return 0;
+  }
 
   layoutSelf() {
     var rows = this.children;
@@ -2414,18 +2459,30 @@ class TableView extends BlockView {
     var ys = [];
     var colWidths = [];
     var cols = 0;
-    var lastMargin = 0;
+    var lastMargin;
+    var cls;
+    var w = 0;
     for (var i=0; i<length; i++) {
       var row = rows[i];
-      if (i > 0) y += Math.max(row.margin, lastMargin);
+      if (i > 0) y += Math.max(row.marginY, lastMargin);
+      lastMargin = row.marginY;
       ys.push(y);
       y += row.height;
+      assert(row instanceof RowView);
+
+      if (!cls) {
+        cls = row.cls === 'header' ? 'record' : row.cls;
+      } else if (row.cls !== cls) {
+        w = Math.max(w, row.width);
+        row.layoutRow([]);
+        continue;
+      }
 
       var cells = row.children;
       cols = Math.max(cols, cells.length);
       for (var j=0; j<cols; j++) {
         var cell = cells[j];
-        var cw = cell ? cell.width + 8 : 0;
+        var cw = cell ? cell.width + 2 * cell.marginX : 0;
         colWidths[j] = Math.max(colWidths[j] || 0, cw);
       }
     }
@@ -2435,10 +2492,10 @@ class TableView extends BlockView {
     for (var i=0; i < cols; i++) {
       x += colWidths[i];
     }
-    this.width = x + 2 * px;
+    this.width = Math.max(w, x + 2 * px);
     this.height = y;
     // TODO layoutView
-    this._margin = row ? Math.max(row.margin, rows[0].margin) : 2;
+    this._marginY = row ? Math.max(row.marginY, rows[0].marginY) : 2;
 
     for (var i=0; i<length; i++) {
       var row = rows[i];
@@ -2914,7 +2971,7 @@ class Palette extends Workspace {
   layout() {}
 
   filter(query) {
-    var words = query.split(/ /g).map(word => new RegExp(word, 'i'));
+    var words = query.split(/ /g).map(word => new RegExp(RegExp.escape(word), 'i'));
     function matches(o) {
       if (!query) return true;
       for (var i=0; i<words.length; i++) {

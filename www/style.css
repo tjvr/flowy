@@ -11,6 +11,10 @@ html, body {
   font: 9px/14px Lucida Grande, Verdana, Arial, DejaVu Sans, sans-serif;
 }
 
+* {
+  box-sizing: border-box;
+}
+
 .absolute {
   position: absolute;
   top: 0;
@@ -147,10 +151,11 @@ html, body {
 
 .view-Text,
 .view-Error {
-  font: 14px/20px Helvetica Neue, Helvetica, Lucida Grande, Verdana, DejaVu Sans, sans-serif;
+  font: 14px/16px Helvetica Neue, Helvetica, Lucida Grande, Verdana, DejaVu Sans, sans-serif;
 }
 .view-Text:before, .view-Text:after {
-  font: bold 16px/20px Baskerville, Georgia, serif;
+  font: bold 14px/20px Baskerville, Georgia, serif;
+  color: rgba(0,0,0, 0.7);
   content: "“";
 }
 .view-Text:after {
@@ -178,17 +183,18 @@ html, body {
   margin: -1px 0 0;
 }
 
-.record-title {
-  display: block;
-  text-align: center;
+.record-title,
+.field-sym {
   font: bold 12px/20px Helvetica Neue, Helvetica, Lucida Grande, Verdana, DejaVu Sans, sans-serif;
+}
+.record-title {
+  text-align: center;
   color: #555;
   border-bottom: 1px solid #aaa;
 }
 
 .view-Symbol,
 .field-name,
-.field-sym,
 .heading {
   font: bold 14px/20px Noto Sans, Lucida Grande, Verdana, Arial, DejaVu Sans, sans-serif;
   color: #333;
@@ -200,16 +206,11 @@ html, body {
   padding: 0 4px;
 }
 
-.row-header {
-  background: #aaa;
-}
-
 .view-Bool-yes { color: #2a792a; }
 .view-Bool-no { color: #914646; }
 
 .view-Color {
   border: 1px solid #888;
-  box-sizing: border-box;
 }
 
 .item-index,
@@ -217,20 +218,38 @@ html, body {
   font: small-caps 14px/20px Baskerville, Georgia, serif;
   text-align: right;
   padding: 0 2px;
-  box-sizing: border-box;
 }
 .item-index:after {
   content: ".";
   display: inline;
 }
 
-.list-cell {
-  border-radius: 4px;
-  background: #ccc;
-}
 .item-cell {
   border-radius: 4px;
-  background: #ccc;
+  background: #e8e8e8;
+}
+.list-cell {
+  border-radius: 4px;
+  background: rgba(239, 111, 46, 0.4);
+}
+
+.row-header {
+  background: #bec0bf;
+}
+.table-index,
+.header-cell {
+  border-right: 1px solid #ababab;
+  height: 20px !important;
+}
+.row-header, .header-cell {
+  border-bottom: 1px solid #626262;
+}
+.row-record {
+  border-bottom: 1px solid #B9B9B9;
+}
+.row-record > .item-index,
+.record-cell {
+  border-right: 1px solid #B9B9B9;
 }
 
 .field {
@@ -249,8 +268,6 @@ html, body {
 
 .text-field {
   padding: 0 4px 0;
-  -moz-box-sizing: border-box;
-  box-sizing: border-box;
   text-align: center;
 }
 

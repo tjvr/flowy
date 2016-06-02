@@ -360,8 +360,8 @@ export const functions = {
       if (first instanceof Record) {
         var schema = first.schema;
         var symbols = schema ? schema.symbols : Object.keys(first.values);
-        symbols = symbols.map(text => ['cell', 'header', ['text', 'heading', text]]);
-        items.push(['row', 'header', null, symbols]);
+        var headings = symbols.map(text => ['cell', 'header', ['text', 'heading', text]]);
+        items.push(['row', 'header', null, headings]);
         isRecordTable = true;
       }
 
@@ -369,11 +369,11 @@ export const functions = {
 
       list.forEach((item, index) => {
         var type = typeOf(item);
-        if (isRecordTable) {
+        if (isRecordTable && /Record/.test(type)) {
           items.push(['row', 'record', index, [ellipsis]]);
           withValue(item, result => {
             var values = symbols.map(sym => {
-              var value = result[sym];
+              var value = result.values[sym];
               var prim = this.evaluator.getPrim("display %s", [value]);
               return ['cell', 'record', prim.func.call(this, value), sym];
             });
@@ -396,7 +396,7 @@ export const functions = {
           withValue(item, result => {
             var prim = this.evaluator.getPrim("display %s", [result]);
             var value = ['cell', 'item', prim.func.call(this, result)];
-            items[index] = ['row', 'item', index, [value]];
+            items[isRecordTable ? index + 1 : index] = ['row', 'item', index, [value]];
           });
         }
       });
