@@ -327,11 +327,6 @@ export class Computed extends Observable {
     this.subscribers.forEach(s => s[0].invalidate(seen));
   }
 
-  invalidateChildren() {
-    var seen = new Set();
-    this.subscribers.forEach(s => s[0].invalidate(seen));
-  }
-
   request() {
     if (!this.thread) throw "oh dear";
     return this.thread;
@@ -368,7 +363,7 @@ class Thread {
     // TODO unevaluated inputs
     var tasks = inputs.filter(task => task.isTask); // TODO
     thread.awaitAll(tasks, compute.bind(thread));
-    
+
     function compute() {
       var func = prim.func;
       var args = inputs.map((obj, index) => {
@@ -378,7 +373,7 @@ class Thread {
         // }
         return obj.result;
       });
-      
+
       if (prim.coercions) {
         for (var i=0; i<prim.coercions.length; i++) {
           var coerce = prim.coercions[i];
@@ -577,27 +572,4 @@ class Thread {
 }
 import {addEvents} from "./events";
 addEvents(Thread, 'emit', 'progress');
-
-/*****************************************************************************/
-
-var compile = function(obj) {
-
-  var source = "";
-  var seen = new Set();
-  var deps = [];
-
-  var thing = function(obj) {
-    seen.add(obj);
-    for (var i=0; i<obj.inputs.length; i++) {
-      if (obj[i].subscribers.length === 1) {
-        thing(obj);
-      } else if (seen.has(obj)) {
-        continue;
-      }
-      deps.push(obj);
-    }
-  };
-
-};
-
 

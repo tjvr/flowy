@@ -1,4 +1,8 @@
-var compile = (function() {
+import {addEvents} from "./events";
+
+import {bySpec, typeOf, literal} from "./prims";
+
+export const compile = (function() {
   'use strict';
 
   var LOG_PRIMITIVES;
@@ -11,11 +15,9 @@ var compile = (function() {
     warnings[message] = (warnings[message] || 0) + 1;
   };
 
-  var compileNode = function(object, script) {
-    //if (!script[0] || EVENT_SELECTORS.indexOf(script[0][0]) === -1) return;
-
+  var compileNode = function(computed) {
     var nextLabel = function() {
-      return object.fns.length + fns.length;
+      return computed.fns.length + fns.length;
     };
 
     var label = function() {
@@ -35,6 +37,7 @@ var compile = (function() {
     };
 
     var request = function(node) {
+      source += 'request(';
       var id = label();
       var tmp = genSym();
       if (node.isObservable) {
@@ -52,13 +55,6 @@ var compile = (function() {
       node.thread.onFirstEmit(this.awake);
       return tmp;
       // source += 'request(' + node + ')';
-    };
-
-    var seq = function(script) {
-      if (!script) return;
-      for (var i = 0; i < script.length; i++) {
-        compile(script[i]);
-      }
     };
 
     var val = function(e, usenum, usebool) {
@@ -164,7 +160,7 @@ var compile = (function() {
       source += 'restore();\n';
     };
 
-    var compile = function(block) {
+    var compileBlock = function(block) {
       if (LOG_PRIMITIVES) {
         source += 'console.log(' + val(block[0]) + ');\n';
       }
@@ -258,13 +254,22 @@ var compile = (function() {
       }
     };
 
+    var compile = function(computed) {
+      for (var i=0; i<computed.inputs; i++) {
+        request(computed[i]);
+      }
+      for (var i=0; i<computed.inputs; i++) {
+        await(computed[i]);
+      }
+      requestAll(computed.inputs);
+      computed.inputs.reqest();
+    };
+
     var source = '';
-    var startfn = object.fns.length;
+    var startfn = computed.fns.length;
     var fns = [0];
 
-    for (var i = 1; i < script.length; i++) {
-      compile(script[i]);
-    }
+    compile(computed);
 
     var createContinuation = function(source) {
       var result = '(function() {\n';
@@ -324,19 +329,11 @@ var compile = (function() {
       return runtime.scopedEval(result);
     };
 
-
-    source += 'if (true) {\n';
-    var id = label();
-    source += 'lol();'
-    source += '} else {\n';
-    queue(id);
-    source += '}\n';
-
     for (var i = 0; i < fns.length; i++) {
-      object.fns.push(createContinuation(source.slice(fns[i])));
+      computed.fns.push(createContinuation(source.slice(fns[i])));
     }
 
-    var f = object.fns[startfn];
+    var f = computed.fns[startfn];
   };
 
 
@@ -349,7 +346,6 @@ var compile = (function() {
     for (var key in warnings) {
       console.warn(key + (warnings[key] > 1 ? ' (repeated ' + warnings[key] + ' times)' : ''));
     }
-
   };
 
 }());
@@ -357,7 +353,7 @@ export {compile};
 
 /*****************************************************************************/
 
-var runtime = (function() {
+export const runtime = (function() {
 
   var self, S, R, STACK, C, WARP, CALLS, BASE, THREAD, IMMEDIATE;
 
@@ -446,7 +442,7 @@ var runtime = (function() {
         }
         if (recursive) {
           self.queue[THREAD] = {
-            sprite: S,
+            parent: S,
             base: BASE,
             fn: procedure.fn,
             calls: CALLS
@@ -472,7 +468,7 @@ var runtime = (function() {
 
   var queue = function(id) {
     self.queue[THREAD] = {
-      sprite: S,
+      parent: S,
       base: BASE,
       fn: S.fns[id],
       calls: CALLS
@@ -483,6 +479,10 @@ var runtime = (function() {
 
   // Internal definition
   class Evaluator {
+    constructor() {
+      this.queue = [];
+    }
+
     get framerate() { return 60; }
 
     initRuntime() {
@@ -490,14 +490,10 @@ var runtime = (function() {
       this.onError = this.onError.bind(this);
     }
 
-    startThread(sprite, base) {
-      var thread = new Thread(sprite, base);
-      for (var i = 0; i < this.queue.length; i++) {
-        var q = this.queue[i];
-        if (q && q.sprite === sprite && q.base === base) {
-          this.queue[i] = thread;
-          return;
-        }
+    startThread(thread) {
+      var index = this.queue.indexOf(thread);
+      if (index !== -1) {
+        this.queue[index] = undefined;
       }
       this.queue.push(thread);
     }
@@ -505,7 +501,7 @@ var runtime = (function() {
     stopThread(thread) {
       var index = this.queue.indexOf(thread);
       if (index !== -1) {
-        this.queue.splice(index, 1);
+        this.queue[index] = undefined;
       }
     }
 
@@ -559,7 +555,7 @@ var runtime = (function() {
         var queue = this.queue;
         for (THREAD = 0; THREAD < queue.length; THREAD++) {
           if (queue[THREAD]) {
-            S = queue[THREAD].sprite;
+            S = queue[THREAD].parent;
             IMMEDIATE = queue[THREAD].fn;
             BASE = queue[THREAD].base;
             CALLS = queue[THREAD].calls;
@@ -581,12 +577,7 @@ var runtime = (function() {
           if (!queue[i]) queue.splice(i, 1);
         }
       } while (Date.now() - start < 1000 / this.framerate && queue.length);
-      this.syncEmissions();
       S = null;
-    }
-
-    syncEmissions() {
-      // TODO process emit queue
     }
 
     onError(e) {
@@ -596,37 +587,238 @@ var runtime = (function() {
     handleError(e) {
       console.error(e.stack);
     }
-
   }
+  var evaluator = new Evaluator();
+  evaluator.start();
+
+  class Graph {
+    constructor(nodes, links) {
+      this.nodes = {};
+    }
+
+    add(node, id) {
+      if (this.nodes.hasOwnProperty(id)) throw "oops";
+      this.nodes[id] = node;
+      node.id = id;
+    }
+
+    get(nodeId) {
+      return this.nodes[nodeId];
+    }
+
+    linkFromJSON(json) {
+      return {from: this.get(json.from), index: json.index, to: this.get(json.to)};
+    }
+
+    onMessage(json) {
+      switch (json.action) {
+        case 'link':
+          var link = this.linkFromJSON(json);
+          link.to.replace(link.index, link.from);
+          return;
+        case 'unlink':
+          var link = this.linkFromJSON(json);
+          link.to.replace(link.index);
+          return;
+        case 'setLiteral':
+          var node = this.get(json.id);
+          node.assign(json.literal);
+          return;
+        case 'setSink':
+          var node = this.get(json.id);
+          node.isSink = json.isSink;
+          return;
+        case 'create':
+          var node = json.hasOwnProperty('literal') ? new Observable(json.literal) : new Computed(json.name);
+          this.add(node, json.id);
+          return;
+        case 'destroy':
+          var node = this.get(json.id);
+          this.remove(node);
+          node.destroy();
+          return;
+        default:
+          throw json;
+      }
+    }
+
+    sendMessage(json) {}
+
+    invalidate(node) {
+      var action = 'invalidate';
+      var id = node.id;
+      var json = {action, id};
+      this.sendMessage(json);
+    }
+
+    emit(node, value) {
+      var action = 'emit';
+      var id = node.id;
+      var json = {action, id, value};
+      this.sendMessage(json);
+    }
+
+    progress(node, loaded, total) {
+      var action = 'progress';
+      var id = node.id;
+      var json = {action, id, loaded, total};
+      this.sendMessage(json);
+    }
+  }
+  var graph = new Graph();
 
   /***************************************************************************/
 
+  class Observable {
+    constructor(value) {
+      this.result = value;
+      this.subscribers = new Set();
+    }
+
+    subscribe(obj) {
+      this.subscribers.add(obj);
+    }
+
+    unsubscribe(obj) {
+      this.subscribers.delete(obj);
+    }
+
+    assign(value) {
+      this.result = value;
+      this.invalidate();
+      this.emit(value);
+    }
+
+    invalidate() {
+      this.subscribers.forEach(s => s.invalidate(this));
+    }
+
+    emit() {
+      this.subscribers.forEach(s => s.update(this));
+    }
+
+    update() {}
+  }
+
+  class Computed extends Observable {
+    constructor(name, inputs) {
+      super(null);
+      this.name = name;
+      this.args = name.split(" ").filter(x => x[0] === '%');
+
+      inputs = inputs || [];
+      this.inputs = inputs;
+      this.deps = new Set(inputs.filter((arg, index) => (this.args[index] !== '%u')));
+      this.fns = [];
+      this.thread = null;
+      this.needed = false;
+    }
+
+    invalidate(arg) {
+      //assert(this.deps.has(arg));
+      if (this.thread === null) {
+        return;
+      }
+      // if (this.thread) {
+      //   this.thread.cancel();
+      // }
+      this.fns = [];
+      this.thread = null;
+      graph.invalidate(this);
+      super.invalidate();
+    }
+
+    update(arg) {
+      assert(this.deps.has(arg));
+      if (this.thread && this.thread.hasStarted) {
+        this.thread.cancel();
+      }
+      this.recompute();
+    }
+
+    recompute() {
+      compile(this);
+      this.thread = new Thread(evaluator, this, this.fns[0]);
+      this.thread.onEmit(result => {
+        this.result = result;
+        graph.emit(this, result);
+
+        this.deps.forEach(dep => dep.unsubscribe(this));
+        this.deps = this.thread.deps;
+        this.deps.forEach(dep => dep.subscribe(this));
+      });
+    }
+
+    replace(index, arg) {
+      var old = this.inputs[index];
+      if (arg === undefined) {
+        delete this.inputs[index];
+      } else {
+        this.inputs[index] = arg;
+      }
+      if (old) {
+        old.unsubscribe(this);
+        if (this.deps.has(old)) {
+          this.deps.delete(arg);
+        }
+      }
+      this.invalidate();
+      this.recompute();
+    }
+
+    request() {
+      if (!this.thread) {
+        this.recompute();
+      }
+      return this.thread;
+    }
+  }
+
+  /*****************************************************************************/
+
   class Thread {
-    constructor(evaluator, sprite, base) {
+    constructor(evaluator, parent, base) {
       this.evaluator = evaluator;
-      this.sprite = sprite,
+      this.parent = parent,
       this.base = base;
       this.fn = base;
       this.calls = [{args: [], stack: [{}]}];
-      this.isRunning = true;
+
+      this.hasStarted = false;
+      this.isDone = false;
+      this.canceled = false;
+      this.deps = [];
+      this.evaluator.startThread(this);
+
+      this.result = null;
+      this.children = [];
+      // TODO composite progress
     }
 
-    stop() {
+    cancel() {
       this.evaluator.stopThread(this);
-      this.isRunning = false;
+      this.canceled = true;
     }
 
+    emit(result) {
+      this.isDone = true;
+      this.result = result;
+      this.dispatchEmit(result);
+    }
   }
+  addEvents(Thread, 'emit', 'progress');
 
   /***************************************************************************/
 
   return {
     scopedEval: function(source) {
       return eval(source);
-    }
+    },
+    evaluator: evaluator,
+    graph: graph,
   };
 
 
 }());
 
-
+export const evaluator = runtime.graph;

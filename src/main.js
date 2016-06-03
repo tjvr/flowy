@@ -99,8 +99,7 @@ function bezel(context, path, thisArg, inset, scale) {
 
 /*****************************************************************************/
 
-import {evaluator, Observable, Computed} from "./eval";
-import {compile} from "./compile";
+import {evaluator, compile} from "./compile";
 window.compile = compile;
 
 evaluator.sendMessage = onMessage;
@@ -113,6 +112,9 @@ function sendMessage(json) {
 function onMessage(json) {
   //console.log(`<= ${json.action}`, json);
   switch (json.action) {
+    case 'invalidate':
+      Node.byId[json.id].invalidate();
+      return;
     case 'emit':
       Node.byId[json.id].emit(json.value);
       return;
@@ -130,6 +132,9 @@ class Node {
     this.isSink = isSink || false;
     this.inputs = [];
     this.outputs = [];
+
+    this.value = null;
+    this.invalid = false;
 
     //sendMessage({action: 'create', id: this.id, name: this.name, literal: this.literal, isSink: this.isSink});
     Node.byId[this.id] = this;
@@ -204,7 +209,13 @@ class Node {
 
   /* * */
 
+  invalidate() {
+    this.invalid = true;
+    this.dispatchInvalidate();
+  }
+
   emit(value) {
+    this.invalid = false;
     this.value = value;
     this.dispatchEmit(value);
   }
@@ -218,7 +229,7 @@ Node.highestId = 0;
 Node.byId = {};
 
 import {addEvents} from "./events";
-addEvents(Node, 'emit', 'progress');
+addEvents(Node, 'emit', 'progress', 'invalidate');
 
 /*****************************************************************************/
 
@@ -1899,6 +1910,7 @@ class Result extends Frame {
     this.view = null;
     this.display();
     setTimeout(() => this.display(this.repr.value));
+    this.repr.onInvalidate(this.onInvalidate.bind(this));
     this.repr.onEmit(this.onEmit.bind(this));
   }
 
@@ -1955,11 +1967,11 @@ class Result extends Frame {
     this.layout();
   }
 
+  onInvalidate() {
+    this.elContents.classList.add('result-invalid');
+  }
+
   onEmit(value) {
-    if (value === null) {
-      this.elContents.classList.add('result-invalid');
-      return;
-    }
     this.elContents.classList.remove('result-invalid');
     this.display(value);
     if (this.fraction === 0) this.fraction = 1;
