@@ -257,20 +257,9 @@ class Imp {
   }
 }
 
-function el(type, content) {
-  return ['text', 'view-' + type, content || '']
-}
-
-function withValue(value, cb) {
-  if (value && value.isTask) {
-    value.withEmit(() => cb(value.result));
-  } else {
-    cb(value);
-  }
-}
-
 export const functions = {
 
+  "UI <- display None": '(display("Error", "None"))',
   "UI <- display Error": '(display("Error", $0.message || $0))',
   "UI <- display Text": '(display("Text", $0))',
   "UI <- display Int": '(display("Int", ""+$0))',
@@ -279,7 +268,7 @@ export const functions = {
     ['rect', '#000', 'auto', 2],
     el('Frac-den', ''+$0.d),
   ]])`,
-  "UI <- display Bool": "(display('Symbol view-Bool-' + x ? 'yes' : 'no', x ? 'yes' : 'no'))",
+  "UI <- display Bool": "(display('Symbol view-Bool-' + $0 ? 'yes' : 'no', $0 ? 'yes' : 'no'))",
   "UI <- display Image": '(["image", $0.cloneNode()])',
   "UI <- display Color": '(["rect", $0.toHexString(), 24, 24, "view-Color"])',
   "UI <- display Uncertain": `(['inline', [
@@ -288,7 +277,7 @@ export const functions = {
     el('Uncertain-stddev', uncertain.s),
   ]])`,
   "UI <- display Float": 'displayFloat',
-  "UI <- display Record": 'displayRecord',
+  //"UI <- display Record": 'displayRecord',
   "UI <- display List": 'displayList',
 
   /* Int */

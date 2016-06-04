@@ -1958,6 +1958,7 @@ class Result extends Frame {
   }
 
   display(value) {
+  // TODO scroll to top on update
     this.elContents.innerHTML = '';
     this.view = View.fromJSON(value);
     this.view.layoutChildren();

@@ -271,6 +271,12 @@ export const type = (function() {
       case 'item %n of %l':
         let [index, list] = inputTypes;
         return list.child;
+
+      case 'list %exp':
+        debugger;
+        // TODO argh
+        return type.list(inputTypes[0]);
+
       // case '%q of %o':
       //   let [symbol, record] = inputTypes;
       //   assert(type.symbol.isSuper(symbol)); // and is immediate!
@@ -288,7 +294,9 @@ export const type = (function() {
     if (!imps) return {};
     var length = imps.length;
 
-    assert(inputTypes.length === 0 || inputTypes[0] instanceof Type);
+    for (var i=0; i<inputTypes.length; i++) {
+      if (inputTypes[i] === null) return {};
+    }
 
     var bestScore = Infinity;
     var best = [];
@@ -315,7 +323,6 @@ export const type = (function() {
         best.push({imp, results});
       }
     }
-    if (!best.length) return {};
 
     var out = typeSpecial(name, inputTypes);
     return {best, out};
@@ -331,12 +338,13 @@ export const type = (function() {
     };
   };
   type.value = cache(ValueType);
-  type.symbol = type.value('Symbol');
   type.list = cache(ListType);
+  type.future = cache(FutureType);
   type.record = function(schema) {
     return new RecordType(null, schema);
   };
-  type.none = new ValueType(null);
+  type.symbol = type.value('Symbol');
+  type.none = new ValueType('None');
   type.any = new AnyType(null);
 
   return type;
@@ -607,6 +615,7 @@ export const compile = (function() {
       if (func[0] === '(') {
         func = func.replace(/\$[0-9]+/g, function(x) { return arg(x.substr(1)); });
         source += 'result = ' + func + ';\n';
+        source += 'emit(result);\n';
         return;
       }
 
@@ -648,32 +657,13 @@ export const compile = (function() {
       // evaluate inputs
 
       body(func, results.length);
+      source += 'emit(result);\n';
     };
 
     var compile = function(name, inputTypes) {
       if (name === '%s') return type.value("Ring"); // TODO rings
       source += 'save();\n';
       source += 'C.name = ' + JSON.stringify(name) + ";\n";
-
-      var {best, out} = type(name, inputTypes);
-      var imps = best;
-      if (!imps) {
-        console.log('no imps for ' + name, inputTypes);
-        debugger;
-      }
-      if (!imps) return type.none;
-
-      // look for typechecks.
-      if (imps.length !== 1) {
-        console.log('multiple imps for ' + name);
-        debugger;
-        return type.none;
-      }
-      var best = imps[0];
-      var imp = best.imp;
-      out = out || imp.output;
-
-      // imp(best.imp.func, best.results);
 
       source += 'C.threads = [];\n';
       var length = inputTypes.length;
@@ -683,6 +673,40 @@ export const compile = (function() {
       for (var i=0; i<length; i++) {
         await('C.threads[' + i + ']');
       }
+
+      switch (name) {
+        // case 'display %s':
+        //   if (inputTypes[0] === null) {
+        //     source += 'emit(null)';
+        //     return null;
+        //   }
+
+        case 'list %exp':
+          source += 'var list = [];\n';
+          for (var i=0; i<length; i++) {
+            source += 'list.push(' + arg(i) + ');\n';
+          }
+          source += 'emit(list);\n';
+          return new type.list(inputTypes[0]);
+      }
+
+      var {best, out} = type(name, inputTypes);
+      var imps = best;
+      if (!imps || !imps.length) {
+        console.log('no imps for', name, inputTypes);
+        return null;
+      }
+
+      // look for typechecks.
+      if (imps.length !== 1) {
+        console.log('multiple imps for', name, inputTypes);
+        return null;
+      }
+      var best = imps[0];
+      var imp = best.imp;
+      out = out || imp.output;
+
+      console.log('got imp for', name);
 
       switch (name) {
         case 'literal %s':
@@ -700,26 +724,24 @@ export const compile = (function() {
           source += 'get(' + arg(0) + ');\n';
           source += 'return;\n';
           break;
-        case 'display %s':
-          emit("['text', 'view-Text', " + arg(0) + "]");
-          break;
         default:
-          recurse(imp.func, length);
-          if (out.isFuture) {
-            out = out.child;
-            save();
-            source += 'R.thread = result;\n';
-            await('result');
-            source += 'result = R.thread.result;\n';
-            restore();
-          }
-          emit('result');
+          body(imp.func, length);
+          source += 'emit(result);\n';
           break;
+
+          // recurse(imp.func, best.results);
+          // if (out.isFuture) {
+          //   out = out.child;
+          //   save();
+          //   source += 'R.thread = result;\n';
+          //   await('result');
+          //   source += 'result = R.thread.result;\n';
+          //   restore();
+          // }
+          // emit('result');
       }
 
       source += 'restore();\n';
-      console.log(imp.output.toString());
-      console.log(source);
       return out;
     };
 
@@ -734,13 +756,18 @@ export const compile = (function() {
           // TODO
           break;
         case '%exp':
+          for (var i=index; i<computed.inputs.length; i++) {
+            var other = computed.inputs[i];
+            other = other ? other.type() : null;
+            inputTypes.push(other);
+          }
           // TODO
           break;
         case '%br': break;
         case '%%': break;
         default:
           var other = computed.inputs[index];
-          other = other ? other.type() : type.any,
+          other = other ? other.type() : null;
           inputTypes.push(other);
       }
     });
@@ -838,6 +865,30 @@ import _tinycolor from  "tinycolor2";
 export const runtime = (function() {
 
   var BigInteger = jsBigInteger.BigInteger;
+
+  class Record {
+    constructor(type, values) {
+      this.type = type || type.record(values);
+      this.values = values;
+    }
+
+    update(newValues) {
+      var values = {};
+      this.type.keys().forEach(name => {
+        values[name] = this.values[name];
+      });
+      Object.keys(newValues).forEach(name => {
+        values[name] = newValues[name];
+      });
+      // TODO maintain order
+      return new Record(type.record(values), values);
+    }
+
+    toJSON() {
+      return this.values;
+    }
+  }
+
   var Fraction = _fraction;
   var tinycolor = _tinycolor;
 
@@ -874,7 +925,7 @@ export const runtime = (function() {
       case 'object':
         // if (value.isObservable) return type.value('Uneval'); // TODO
         if (value instanceof Thread) {
-          return value.outputType;
+          return type.future(value.outputType);
         }
         switch (value.constructor) {
           case Error: return type.value('Error');
@@ -894,6 +945,22 @@ export const runtime = (function() {
 
   var self, S, R, STACK, C, WARP, CALLS, BASE, INDEX, THREAD, IMMEDIATE;
 
+  var display = function(type, content) {
+    return ['text', 'view-' + type, content || ''];
+  };
+
+  function withValue(value, cb) {
+    if (value instanceof Thread) {
+      if (value.isDone) {
+        cb(value.result);
+      } else {
+        value.onFirstEmit(cb);
+      }
+    } else {
+      cb(value);
+    }
+  }
+
   var displayFloat = function(x) {
     var r = ''+x;
     var index = r.indexOf('.');
@@ -904,7 +971,7 @@ export const runtime = (function() {
         r = x.toFixed(3);
       }
     }
-    return el('Float', r);
+    return display('Float', r);
   };
 
   var displayRecord = function(record) {
@@ -1000,6 +1067,11 @@ export const runtime = (function() {
     });
     this.emit(l);
     return l;
+  };
+
+  var displayList = function(list) {
+    if (!list) return;
+    return ['block', list.map(x => ['text', 'Text', x])];
   };
 
   var mod = function(x, y) {
@@ -1507,6 +1579,9 @@ export const runtime = (function() {
         this.thread.cancel();
       }
       if (this.needed) {
+        if (!arg.isComputed) {
+          this._type = null;
+        }
         this.recompute();
       }
     }
@@ -1517,25 +1592,41 @@ export const runtime = (function() {
       }
       this.fns = [];
       this._type = compile(this);
-      assert(this._type);
       return this._type;
     }
 
-    // TODO retype computeds when literal type changes!
-
     recompute() {
-      // this._type = null; // TODO optimise
       console.log('recompute', this.name);
       this.type();
-      var thread = this.thread = new Thread(evaluator, this, this.fns[0]);
-      thread.onFirstEmit(result => {
-        this.result = result;
-        graph.emit(this, result);
-        this.emit(result);
+      if (!this._type) {
+        this.setDeps(new Set(this.inputs.filter((arg, index) => (this.args[index] !== '%u'))));
+        if (this.result !== null) {
+          this.result = null;
+          this.emit(null);
+        }
+      } else {
+        var thread = this.thread = new Thread(evaluator, this, this.fns[0]);
+        thread.onFirstEmit(result => {
+          this.result = result;
+          if (this.name === 'display %s') {
+            graph.emit(this, result);
+          }
+          this.emit(result);
 
-        this.deps.forEach(dep => dep.unsubscribe(this));
-        this.deps = thread.deps;
-        this.deps.forEach(dep => dep.subscribe(this));
+          this.setDeps(thread.deps);
+        });
+      }
+    }
+
+    setDeps(deps) {
+      var oldDeps = this.deps;
+      this.deps = deps;
+
+      oldDeps.forEach(d => {
+        if (!deps.has(d)) d.unsubscribe(this);
+      });
+      deps.forEach(d => {
+        if (!oldDeps.has(d)) d.subscribe(this);
       });
     }
 
