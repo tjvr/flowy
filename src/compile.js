@@ -6,6 +6,193 @@ function assert(x) {
   if (!x) throw "Assertion failed!";
 }
 
+
+export const type = (function() {
+  'use strict';
+
+
+  class Result {
+    constructor(kind, result) {
+      this.kind = kind;
+      this.result = result;
+    }
+
+    static list(child) {
+      var kind = 'list';
+      return {kind, child};
+    }
+
+    static record(schema) {
+      var kind = 'record';
+      return {kind, schema};
+    }
+
+    static vectorise(child) {
+      var kind = 'vectorise';
+      return child === true ? {kind} : {kind, child};
+    }
+
+    static coerce(from, to)  {
+      // if can coerce... TODO
+      // var kind = 'coerce';
+      // return {kind, from, to};
+    }
+
+    static typeCheck(type) {
+      var kind = 'check';
+      return {kind, type};
+    }
+  }
+
+  class Type {
+    isSuper(other) {
+      if (other instanceof AnyType) {
+        return Result.typeCheck(this);
+      }
+      var t;
+      if (t = Result.coerce(other, this)) {
+        return t;
+      }
+      return false;
+    }
+  }
+
+  class ValueType extends Type {
+    constructor(name) {
+      super();
+      assert(!/ /.test(name));
+      this.name = name;
+    }
+    toString() { return this.name.toString(); }
+
+    isSuper(other) {
+      if (other instanceof ValueType && this.name === other.name) {
+        return true;
+      }
+      return super.isSuper(other);
+    }
+  }
+
+  class ListType extends Type {
+    constructor(child) {
+      super();
+      this.child = child || new AnyType();
+    }
+    toString() { return "List of " + this.child.toString(); }
+
+    isSuper(other) {
+      var ts;
+      if (other instanceof ListType && (ts = this.child.isSuper(other.child))) {
+        return ts === true ? true : Result.list(ts);
+      }
+      if (ts = this.child.isSuper(other)) {
+        return Result.vectorise(ts);
+      }
+      return super.isSuper(other);
+    }
+  }
+
+  class RecordType extends Type {
+    constructor(name, schema) {
+      super();
+      this.name = name;
+      this.schema = schema || {};
+    }
+
+    keys() {
+      return Object.keys(this.schema);
+    }
+
+    toString() {
+      if (this.name) return this.name;
+      var r = this.keys().map(symbol => {
+        return symbol + "→ " + this.schema[symbol].toString();
+      }).join(", ");
+      return "Record {" + r + "}";
+    }
+
+    isSuper(other) {
+      if (other instanceof RecordType) {
+        // TODO named records / user-defined types
+        // if (other.name) {
+        //   if (this.name === other.name) {
+        //     return true;
+        //   }
+        // }
+
+        var ts;
+        var schema = this.schema;
+        var otherSchema = other.schema;
+        var symbols = other.keys();
+        var length = symbols.length;
+        for (var i=0; i<length; i++) {
+          var sym = symbols[i];
+          var theirs = otherSchema[sym];
+          if (!theirs) {
+            return super.isSuper(other);
+          }
+          var ours = schema[sym];
+          var t = ours.isSuper(theirs);
+          if (!t) {
+            return super.isSuper(other);
+          }
+          if (t !== true) {
+            ts = ts || {};
+            ts[sym] = t;
+          }
+        }
+        return ts ? Result.record(ts) : true;
+      }
+      return super.isSuper(other);
+    }
+  }
+
+  class AnyType extends Type {
+    toString() { return "Any"; }
+
+    isSuper(other) {
+      return true;
+    }
+  }
+
+
+
+});
+
+
+
+let coercions = [
+  "Text <- Int": x => x.toString(),
+  "Text <- Frac": x => x.toString(),
+  "Text <- Float": x => x.toFixed(2),
+  "Text <- Empty": x => "",
+
+  "Float <- Text": x => +x,
+
+  "List <- Empty": x => [],
+
+  "Frac <- Int": x => new Fraction(x, 1),
+  "Float <- Int": x => +x.toString(),
+
+  "Bool <- List": x => !!x.length,
+
+  //"List <- Record": recordToList,
+  //"List <- Time": recordToList,
+  //"List <- Date": recordToList,
+
+  "Record <- Time": x => x,
+  "Record <- Date": x => x,
+  "Record <- Rgb": x => x,
+  "Record <- Hsv": x => x,
+
+  "Uncertain <- Int": x => new Uncertain(x.toString()),
+  "Uncertain <- Frac": x => new Uncertain(x.n / x.d),
+  "Uncertain <- Float": x => new Uncertain(x),
+];
+type(coercions);
+
+
+
 export const compile = (function() {
   'use strict';
 
