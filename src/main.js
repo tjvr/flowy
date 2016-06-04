@@ -1793,6 +1793,7 @@ class Bubble extends Source {
   get parent() { return this._parent; }
   set parent(value) {
     this._parent = value;
+    if (value === null) return;
     if (this.target) this.target.updateSinky();
   }
 

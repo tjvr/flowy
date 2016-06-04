@@ -443,6 +443,7 @@ var request = function(index) {
   var computed = THREAD.inputs[index];
   THREAD.deps.add(computed);
   if (computed.isComputed) {
+    assert(computed);
     var thread = computed.request();
     assert(computed._type !== null);
     return thread;
@@ -625,7 +626,7 @@ class Graph {
         return;
       case 'setSink':
         var node = this.get(json.id);
-        node.isSink = json.isSink;
+        node.setSink(json.isSink);
         return;
       case 'create':
         var node = json.hasOwnProperty('literal') ? new Observable(json.literal) : new Computed(json.name);
@@ -712,6 +713,8 @@ class Computed extends Observable {
     this.args = name.split(" ").filter(x => x[0] === '%');
 
     inputs = inputs || [];
+    this.isSink = false;
+    this.needed = false;
     this.inputs = inputs;
     this.deps = new Set(inputs.filter((arg, index) => (this.args[index] !== '%u')));
     this.fns = [];
@@ -737,7 +740,7 @@ class Computed extends Observable {
     if (this.thread && this.thread.hasStarted && this.thread.deps.has(arg)) {
       this.thread.cancel();
     }
-    if (this.needed) {
+    if (this.needed || this.isBubble) {
       if (!arg.isComputed || arg._type === null) {
         this._type = null;
       }
@@ -757,6 +760,7 @@ class Computed extends Observable {
   recompute() {
     console.log('recompute', this.name);
     this.type();
+    console.log(this._type, this.name);
     if (!this._type) {
       this.setDeps(new Set(this.inputs.filter((arg, index) => (this.args[index] !== '%u'))));
       if (this.result !== null) {
@@ -765,6 +769,7 @@ class Computed extends Observable {
       }
     } else {
       var thread = this.thread = new Thread(evaluator, this, this.fns[0]);
+      console.log(this.fns[0]);
       thread.onFirstEmit(result => {
         this.result = result;
         graph.emit(this, result);
@@ -789,15 +794,25 @@ class Computed extends Observable {
 
   replace(index, arg) {
     var old = this.inputs[index];
+    assert(old !== arg);
     if (arg === undefined) {
       delete this.inputs[index];
     } else {
       this.inputs[index] = arg;
     }
     if (old) {
-      old.unsubscribe(this);
-      if (this.deps.has(old)) {
-        this.deps.delete(arg);
+      if (arg && this.deps.has(old)) {
+        this.deps.add(arg);
+        this.subscribe(arg);
+      }
+      if (this.inputs.indexOf(old) === -1) {
+        old.unsubscribe(this);
+        this.deps.delete(old);
+      }
+    } else {
+      if (arg && this.needed && this.args[index] !== '%u') {
+        this.deps.add(arg);
+        arg.subscribe(this);
       }
     }
     this.invalidate();
@@ -807,12 +822,37 @@ class Computed extends Observable {
     }
   }
 
-  get needed() {
-    return this.name === 'display %s' || this.subscribers.size;
+  setSink(value) {
+    assert(this.isBubble);
+    if (this.isSink === value) return;
+    this.isSink = value;
+    this.updateNeeded();
+  }
+
+  get isBubble() {
+    return this.name === 'display %s';
+  }
+
+  updateNeeded() {
+    var needed = this.isSink || this.subscribers.size;
+    if (this.needed === needed) return;
+    this.needed = needed;
+    if (needed) {
+      this.deps.forEach(d => d.subscribe(this));
+      this.recompute();
+    } else {
+      this.deps.forEach(d => d.unsubscribe(this));
+    }
   }
 
   subscribe(obj) {
     super.subscribe(obj);
+    this.updateNeeded();
+  }
+
+  unsubscribe(obj) {
+    super.unsubscribe(obj);
+    this.updateNeeded();
   }
 
   request() {
@@ -850,6 +890,7 @@ class Thread {
   }
 
   cancel() {
+        debugger;
     this.evaluator.stopThread(this);
     this.canceled = true;
   }
