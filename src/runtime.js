@@ -767,9 +767,7 @@ class Computed extends Observable {
       var thread = this.thread = new Thread(evaluator, this, this.fns[0]);
       thread.onFirstEmit(result => {
         this.result = result;
-        if (this.name === 'display %s') {
-          graph.emit(this, result);
-        }
+        graph.emit(this, result);
         this.emit(result);
 
         this.setDeps(thread.deps);

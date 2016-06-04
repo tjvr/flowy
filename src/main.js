@@ -150,6 +150,7 @@ class Node {
     var name = "literal _";
     var node = new Node(null, name, literal, false);
     sendMessage({action: 'create', id: node.id, name: name, literal: literal});
+    node.value = literal;
     return node;
   }
   static block(name) {
@@ -1649,7 +1650,6 @@ class Source extends Drawable {
   }
 
   copy() {
-    // TODO this doesn't work
     return Source.value(this.node.value);
   }
 
