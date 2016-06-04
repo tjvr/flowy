@@ -284,6 +284,10 @@ export const compile = (function() {
           wait(arg(0));
           emit(arg(1));
           break;
+        case 'get %s':
+          source += 'get(' + arg(0) + ');\n';
+          source += 'return;\n';
+          break;
         case 'display %s':
           emit("['text', 'view-Text', " + arg(0) + "]");
           break;
@@ -440,6 +444,88 @@ export const runtime = (function() {
         return Math.exp(x * Math.LN10);
     }
     return 0;
+  };
+
+  // TODO Records
+  var jsonToRecords = function(obj) {
+    if (typeof obj === 'object') {
+      if (obj.constructor === Array) {
+        return obj.map(jsonToRecords);
+      } else {
+        var values = {};
+        Object.keys(obj).forEach(key => {
+          values[key] = jsonToRecords(obj[key]);
+        });
+        return new Record(null, values);
+      }
+    } else {
+      return obj;
+    }
+  };
+
+  var get = function(url) {
+    var thread = THREAD;
+
+    // TODO cors proxy
+    //var cors = 'http://crossorigin.me/http://';
+    var cors = 'http://localhost:1337/';
+    url = cors + url.replace(/^https?\:\/\//, "");
+    var xhr = new XMLHttpRequest;
+    xhr.open('GET', url, true);
+    xhr.onprogress = e => {
+      // thread.progress(e.loaded, e.total, e.lengthComputable);
+    };
+    xhr.onload = () => {
+      if (xhr.status === 200) {
+        var r = {
+          contentType: xhr.getResponseHeader('content-type'),
+          response: xhr.response,
+        };
+
+        var mime = r.contentType.split(";")[0];
+        var blob = r.response;
+        if (/^image\//.test(mime)) {
+          var img = new Image();
+          img.addEventListener('load', e => {
+            thread.emit(img);
+          });
+          img.src = URL.createObjectURL(blob);
+        } else if (mime === 'application/json' || mime === 'text/json') {
+          var reader = new FileReader;
+          reader.onloadend = () => {
+            try {
+              var json = JSON.parse(reader.result);
+            } catch (e) {
+              thread.emit(new Error("Invalid JSON"));
+              return;
+            }
+            thread.emit(jsonToRecords(json));
+          };
+          reader.onprogress = function(e) {
+            //future.progress(e.loaded, e.total, e.lengthComputable);
+          };
+          reader.readAsText(blob);
+        } else if (/^text\//.test(mime)) {
+          var reader = new FileReader;
+          reader.onloadend = () => {
+            thread.emit(reader.result);
+          };
+          reader.onprogress = function(e) {
+            //future.progress(e.loaded, e.total, e.lengthComputable);
+          };
+          reader.readAsText(blob);
+        } else {
+          thread.emit(new Error(`Unknown content type: ${mime}`));
+        }
+      } else {
+        thread.emit(new Error('HTTP ' + xhr.status + ': ' + xhr.statusText));
+      }
+    };
+    xhr.onerror = () => {
+      thread.emit(new Error('XHR Error'));
+    };
+    xhr.responseType = 'blob';
+    setTimeout(xhr.send.bind(xhr));
   };
 
   var save = function() {
