@@ -99,14 +99,13 @@ function bezel(context, path, thisArg, inset, scale) {
 
 /*****************************************************************************/
 
-import {evaluator, compile} from "./compile";
-window.compile = compile;
+import {graph} from "./runtime";
 
-evaluator.sendMessage = onMessage;
+graph.sendMessage = onMessage;
 
 function sendMessage(json) {
   //console.log(`=> ${json.action}`, json);
-  evaluator.onMessage(json);
+  graph.onMessage(json);
 }
 
 function onMessage(json) {
