@@ -737,9 +737,6 @@ export const compile = (function() {
         case 'literal %s':
           emit(arg(0));
           break;
-        case '%n + %n':
-          emit(arg(0) + ' + ' + arg(1));
-          break;
         case 'delay %n secs: %s':
           assert(inputTypes.length === 2);
           wait(arg(0));
@@ -1320,7 +1317,9 @@ export const runtime = (function() {
     var computed = THREAD.inputs[index];
     THREAD.deps.add(computed);
     if (computed.isComputed) {
-      return computed.request();
+      var thread = computed.request();
+      assert(computed._type !== null);
+      return thread;
     } else {
       return computed;
     }
@@ -1611,7 +1610,7 @@ export const runtime = (function() {
         this.thread.cancel();
       }
       if (this.needed) {
-        if (!arg.isComputed) {
+        if (!arg.isComputed || arg._type === null) {
           this._type = null;
         }
         this.recompute();
@@ -1619,9 +1618,9 @@ export const runtime = (function() {
     }
 
     type() {
-      if (this._type) {
-        return this._type;
-      }
+      // if (this._type) {
+      //   return this._type;
+      // }
       this.fns = [];
       this._type = compile(this);
       return this._type;
