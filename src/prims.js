@@ -45,24 +45,6 @@ var Date_ = new Schema('Date', ['year', 'month', 'day']);
 var RGB = new Schema('Rgb', ['red', 'green', 'blue']);
 var HSV = new Schema('Hsv', ['hue', 'sat', 'val']);
 
-class Uncertain {
-  constructor(mean, stddev) {
-    this.m = +mean;
-    this.s = +stddev || 0;
-  }
-
-  static add(a, b) {
-    return new Uncertain(a.m + b.m, Math.sqrt(a.s * a.s + b.s * b.s));
-  }
-
-  static mul(x, y) {
-    var a = y.m * x.s;
-    var b = x.m * y.s;
-    return new Uncertain(x.m * y.m, Math.sqrt(a * a + b * b)); // TODO
-  }
-
-}
-
 function jsonToRecords(obj) {
   if (typeof obj === 'object') {
     if (obj.constructor === Array) {
@@ -150,7 +132,7 @@ export const specs = [
   ["list", "%l concat %l"],
   ["list", "length of %l", []],
   ["list", "sum %l"],
-  ["list", "count %l", []],
+  // ["list", "count %l", []],
   ["list", "count %l if %r", []],
   ["list", "keep %r from %l"],
   ["list", "for each %l do %r"],
@@ -426,39 +408,39 @@ export const functions = {
   },
 
   /* Int */
-  "Int <- Int + Int": BigInteger.add,
-  "Int <- Int – Int": BigInteger.subtract,
-  "Int <- Int × Int": BigInteger.multiply,
-  "Int <- Int rem Int": BigInteger.remainder,
-  "Int <- round Int": x => x,
-  "Bool <- Int = Int": (a, b) => BigInteger.compareTo(a, b) === 0,
-  "Bool <- Int < Int": (a, b) => BigInteger.compareTo(a, b) === -1,
-  "Frac <- Int / Int": (a, b) => new Fraction(a, b),
-  "Float <- float Int": x => +x.toString(),
+  "Int <- Int + Int": 'BigInteger.add',
+  "Int <- Int – Int": 'BigInteger.subtract',
+  "Int <- Int × Int": 'BigInteger.multiply',
+  "Int <- Int rem Int": 'BigInteger.remainder',
+  "Int <- round Int": '($0)',
+  "Bool <- Int = Int": '(BigInteger.compareTo($0, $1) === 0)',
+  "Bool <- Int < Int": '(BigInteger.compareTo($0, $1) === -1)',
+  "Frac <- Int / Int": '(new Fraction($0, $1))',
+  "Float <- float Int": '(+$0.toString())',
 
   /* Frac */
-  "Frac <- Frac + Frac": (a, b) => a.add(b),
-  "Frac <- Frac – Frac": (a, b) => a.sub(b),
-  "Frac <- Frac × Frac": (a, b) => a.mul(b),
-  "Frac <- Frac / Frac": (a, b) => a.div(b),
-  "Float <- float Frac": x => x.n / x.d,
-  "Int <- round Frac": x => BigInteger.parseInt(''+Math.round(x.n / x.d)), // TODO
+  "Frac <- Frac + Frac": '($0.add($1))',
+  "Frac <- Frac – Frac": '($0.sub($1))',
+  "Frac <- Frac × Frac": '($0.mul($1))', 
+  "Frac <- Frac / Frac": '($0.div($1))', 
+  "Float <- float Frac": '($0.n / $0.d)',
+  "Int <- round Frac": '(BigInteger.parseInt(""+Math.round($0.n / $0.d)))', // TODO
 
   /* Float */
-  "Float <- Float + Float": (a, b) => a + b,
-  "Float <- Float – Float": (a, b) => a - b,
-  "Float <- Float × Float": (a, b) => a * b,
-  "Float <- Float / Float": (a, b) => a / b,
-  "Float <- Float rem Float": (a, b) => (((a % b) + b) % b),
-  "Int <- round Float": x => BigInteger.parseInt(''+Math.round(x)),
-  "Float <- float Float": x => x,
-  "Bool <- Float = Float": (a, b) => a === b,
-  "Bool <- Float < Float": (a, b) => a < b,
+  "Float <- Float + Float": '($0 + $1)',
+  "Float <- Float – Float": '($0 - $1)',
+  "Float <- Float × Float": '($0 * $1)',
+  "Float <- Float / Float": '($0 / $1)',
+  "Float <- Float rem Float": 'mod',
+  "Int <- round Float": '(BigInteger.parseInt(""+Math.round($0)))',
+  "Float <- float Float": '($0)',
+  "Bool <- Float = Float": '($0 === $1)',
+  "Bool <- Float < Float": '($0 < $1)',
 
-  "Float <- sqrt of Float": x => { return Math.sqrt(x); },
-  "Float <- sin of Float": x => Math.sin(Math.PI / 180 * x),
-  "Float <- cos of Float": x => Math.sin(Math.PI / 180 * x),
-  "Float <- tan of Float": x => Math.sin(Math.PI / 180 * x),
+  "Float <- sqrt of Float": '(Math.sqrt($0))',
+  "Float <- sin of Float": '(Math.sin(Math.PI / 180 * $0))',
+  "Float <- cos of Float": '(Math.cos(Math.PI / 180 * $0))',
+  "Float <- tan of Float": '(Math.tan(Math.PI / 180 * $0))',
 
   /* Complex */
   // TODO
@@ -467,10 +449,10 @@ export const functions = {
   // TODO
 
   /* Uncertain */
-  "Uncertain <- Float ± Float": (mean, stddev) => new Uncertain(mean, stddev),
-  "Int <- round Uncertain": x => x.m | 0,
-  "Float <- float Uncertain": x => x.m,
-  "Bool <- Uncertain = Uncertain": (a, b) => a.m === b.m && a.s === b.s,
+  "Uncertain <- Float ± Float": '(new Uncertain($0, $1))',
+  "Int <- round Uncertain": '($0.m | 0)',
+  "Float <- float Uncertain": '($0.m)',
+  "Bool <- Uncertain = Uncertain": '($0.m === $1.m && $0.s === $1.s)',
 
   "Uncertain <- mean List": list => {
     if (!list.length) return;
@@ -493,17 +475,17 @@ export const functions = {
     // TODO be actually correct
     return new Uncertain(mean, Math.sqrt(variance));
   },
-  "Float <- mean Uncertain": x => x.m,
-  "Float <- stddev Uncertain": x => x.s,
-  "Uncertain <- Uncertain + Uncertain": Uncertain.add,
-  "Uncertain <- Uncertain × Uncertain": Uncertain.mul,
+  "Float <- mean Uncertain": '($0.m)',
+  "Float <- stddev Uncertain": '($0.s)',
+  "Uncertain <- Uncertain + Uncertain": 'Uncertain.add',
+  "Uncertain <- Uncertain × Uncertain": 'Uncertain.mul',
 
   /* Bool */
-  "Bool <- Bool and Bool": (a, b) => a && b,
-  "Bool <- Bool or Bool": (a, b) => a || b,
-  "Bool <- not Bool": x => !x,
-  "Bool <- Bool": x => !!x,
-  "Bool <- Bool = Bool": (a, b) => a === b,
+  "Bool <- Bool and Bool": '($0 && $1)',
+  "Bool <- Bool or Bool": '($0 || $1)',
+  "Bool <- not Bool": '(!$0)',
+  "Bool <- Bool": '($0)',
+  "Bool <- Bool = Bool": '($0 === $1)',
 
   "Any Future <- Uneval if Bool else Uneval": function(tv, cond, fv) {
     var ignore = cond ? fv : tv;
@@ -535,12 +517,12 @@ export const functions = {
 
 
   /* Text */
-  "Text <- literal Text": x => x,
-  "Int <- literal Int": x => x,
-  "Frac <- literal Frac": x => x,
-  "Float <- literal Float": x => x,
+  "Text <- literal Text": '($0)',
+  "Int <- literal Int": '($0)',
+  "Frac <- literal Frac": '($0)',
+  "Float <- literal Float": '($0)',
 
-  "Bool <- Text = Text": (a, b) => a === b,
+  "Bool <- Text = Text": '($0 === $1)',
   "Text <- join Variadic": function(...args) {
     var arrays = [];
     var vectorise = [];
@@ -574,52 +556,28 @@ export const functions = {
     this.awaitAll(threads, () => {});
     return threads;
   },
-  "Text <- join List with Text": (l, x) => l.join(x),
-  // "Text <- join words List": x => x.join(" "),
-  "Text List <- split Text by Text": (x, y) => x.split(y),
-  // "Text List <- split words Text": x => x.trim().split(/\s+/g),
-  //"Text List <- split lines Text": x => x.split(/\r|\n|\r\n/g),
-  "Text <- replace Text with Text in Text": (a, b, c) => {
-    return c.replace(a, b);
-  },
+  "Text <- join List with Text": '($0.join($1))',
+  "Text List <- split Text by Text": '($0.split($1))',
+  "Text <- replace Text with Text in Text": '($2.replace($0, $1))',
 
   /* List */
 
   "List <- list Variadic": (...rest) => {
     return rest;
   },
-  "List <- List concat List": (a, b) => {
-    return a.concat(b);
-  },
-  "List <- range Int to Int": (from, to) => {
-    var result = [];
-    for (var i=from; i<=to; i++) {
-      result.push(i);
-    }
-    return result;
-  },
+  "List <- List concat List": '($0.concat($1))',
+  "List <- range Int to Int": 'range',
 
-  "Any Future <- item Int of List": function(index, list) {
-    var value = list[index - 1];
-    if (value && value.isTask) {
-      this.awaitAll([value], () => {
-        this.emit(value.result);
-      });
-    } else {
-      this.emit(value);
-    }
-  },
+  "Any Future <- item Int of List": '($1[$0])',
 
   "Int <- sum List": function(list) {
     // TODO
   },
 
-  "Int <- length of List": function(list) {
-    return list.length;
-  },
-  "Int <- count List": function(list) {
-    return list.filter(x => !!x).length;
-  },
+  "Int <- length of List": '($0.length)',
+  // "Int <- count List": function(list) {
+  //   return list.filter(x => !!x).length;
+  // },
 
   /* Record */
   "Record <- record with Variadic": (...pairs) => {
@@ -874,39 +832,14 @@ let coercions = {
 
   "List <- Empty": x => [],
 
-  // "List <- Int": x => [x],
-  // "List <- Frac": x => [x],
-  // "List <- Float": x => [x],
-  // "List <- Bool": x => [x],
-  // "List <- Text": x => [x],
-  // "List <- Image": x => [x],
-  // "List <- Uncertain": x => [x],
-
   "Frac <- Int": x => new Fraction(x, 1),
   "Float <- Int": x => +x.toString(),
 
   "Bool <- List": x => !!x.length,
 
-  "Any <- Int": x => x,
-  "Any <- Frac": x => x,
-  "Any <- Float": x => x,
-  "Any <- Bool": x => x,
-  "Any <- Empty": x => x,
-  "Any <- Text": x => x,
-  "Any <- Image": x => x,
-  "Any <- Uncertain": x => x,
-  "Any <- Record": x => x,
-  "Any <- Time": x => x,
-  "Any <- Date": x => x,
-
-  "List <- Record": recordToList,
-  "List <- Time": recordToList,
-  "List <- Date": recordToList,
-
-  "Record <- Time": x => x,
-  "Record <- Date": x => x,
-  "Record <- Rgb": x => x,
-  "Record <- Hsv": x => x,
+  //"List <- Record": recordToList,
+  //"List <- Time": recordToList,
+  //"List <- Date": recordToList,
 
   "Uncertain <- Int": x => new Uncertain(x.toString()),
   "Uncertain <- Frac": x => new Uncertain(x.n / x.d),
@@ -920,7 +853,7 @@ function recordToList(record) {
 };
 
 
-var coercionsByType = {};
+export const coercionsByType = {};
 Object.keys(coercions).forEach(spec => {
   var info = parseSpec(spec);
   assert(info.inputs.length === 1);
@@ -1011,93 +944,21 @@ function parseSpec(spec) {
 }
 
 var bySpec = {};
-
-function coercify(inputs) {
-  if (inputs.length === 0) {
-    return [{inputs: [], coercions: []}];
-  };
-  inputs = inputs.slice();
-  var last = inputs.pop();
-  var others = coercify(inputs);
-  var results = [];
-  others.forEach(x => {
-    let {inputs, coercions} = x;
-
-    results.push({
-      inputs: inputs.concat([last]),
-      coercions: coercions.concat([null]),
-    });
-
-    var byInput = coercionsByType[last] || [];
-    byInput.forEach(c => {
-      let [input, coercion] = c;
-      results.push({
-        inputs: inputs.concat([input]),
-        coercions: coercions.concat([coercion]),
-      });
-    });
-  });
-  return results;
-}
-
+var byName = {};
 Object.keys(functions).forEach(function(spec) {
   var info = parseSpec(spec);
-  var byInputs = bySpec[info.spec] = bySpec[info.spec] || {};
+  var byInputs = bySpec[info.spec] = bySpec[info.spec] || [];
 
-  coercify(info.inputs).forEach((c, index) => {
-    let {inputs, coercions} = c;
-    var hash = inputs.join(", ");
-    hash = /Variadic/.test(hash) ? "Variadic" : hash;
-    if (byInputs[hash] && index > 0) {
-      return;
-    }
-    byInputs[hash] = {
-      inputs: inputs,
-      output: info.output,
-      func: functions[spec],
-      coercions: coercions,
-    };
+  var func = functions[spec];
+  byInputs.push({
+    inputs: info.inputs,
+    output: info.output,
+    func: func,
   });
+
+  byName[func.name] = func;
 
 });
 
 export {bySpec};
-
-export const typeOf = (value => {
-  if (value === undefined) return '';
-  if (value === null) return '';
-  switch (typeof value) {
-    case 'number':
-      if (/^-?[0-9]+$/.test(''+value)) return 'Int';
-      return 'Float';
-    case 'string':
-      if (value === '') return 'Empty';
-      return 'Text';
-    case 'boolean':
-      return 'Bool';
-    case 'object':
-      if (value.isObservable) return 'Uneval'; // TODO
-      if (value.isTask) { // TODO
-        if (value.isDone) {
-          return typeOf(value.result);
-        }
-        return value.prim ? `${value.prim.output}` : 'Future';
-      }
-      switch (value.constructor) {
-        case Error: return 'Error';
-        case BigInteger: return 'Int';
-        case Array: return 'List';
-        case Image: return 'Image';
-        case Uncertain: return 'Uncertain';
-        case Record: return value.schema ? value.schema.name : 'Record';
-      }
-      if (value instanceof Fraction) return 'Frac'; // TODO
-      if (value instanceof tinycolor) return 'Color'; // TODO
-  }
-  throw "Unknown type: " + value;
-});
-
-console.log(bySpec);
-
-
 

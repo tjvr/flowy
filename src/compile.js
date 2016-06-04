@@ -1,6 +1,7 @@
 import {addEvents} from "./events";
 
-import {bySpec, typeOf, literal} from "./prims";
+import {bySpec, coercionsByType, literal} from "./prims";
+import {byName} from "./prims"; // TODO
 
 function assert(x) {
   if (!x) throw "Assertion failed!";
@@ -9,6 +10,16 @@ function assert(x) {
 
 export const type = (function() {
   'use strict';
+
+  var coercions = new Map();
+  Object.keys(coercionsByType).forEach(out => {
+    var map;
+    coercions.set(out, map = new Map());
+    coercionsByType[out].forEach(p => {
+      let [input, coercion] = p;
+      map.set(input, coercion);
+    });
+  });
 
 
   class Result {
@@ -33,10 +44,20 @@ export const type = (function() {
     }
 
     static coerce(from, to)  {
-      // if can coerce... TODO
-      // var kind = 'coerce';
-      // return {kind, from, to};
+      var map = coercions.get(to);
+      if (map) {
+        var coercion = map.get(from);
+        if (coercion) {
+          var kind = 'coerce';
+          return {kind, from, to, coercion};
+        }
+      }
     }
+
+    // static resolve(child)  {
+    //   var kind = 'resolve';
+    //   return child === true ? {kind} : {kind, child};
+    // }
 
     static typeCheck(type) {
       var kind = 'check';
@@ -45,6 +66,33 @@ export const type = (function() {
   }
 
   class Type {
+    static fromString(name) {
+      assert(!(name instanceof Type));
+      if (/ Future$/.test(name)) {
+        //return new FutureType(Type.fromString(name.replace(/ Future$/, "")));
+        return Type.fromString(name.replace(/ Future$/, ""));
+      }
+      if (/ List$/.test(name)) {
+        return new ListType(Type.fromString(name.replace(/ List$/, "")));
+      }
+      assert(!/ /.test(name));
+      switch (name) {
+        case 'Any':
+        case 'Future':
+          return new AnyType();
+        //   return new FutureType();
+        case 'List':
+          return new ListType();
+        case 'Record':
+          return new RecordType();
+        case 'Date':
+        case 'Time':
+          return new RecordType(name, {}); // TODO
+        default:
+          return new ValueType(name);
+      }
+    }
+
     isSuper(other) {
       if (other instanceof AnyType) {
         return Result.typeCheck(this);
@@ -72,6 +120,25 @@ export const type = (function() {
       return super.isSuper(other);
     }
   }
+
+  //class FutureType extends Type {
+  //  constructor(child) {
+  //    super();
+  //    this.child = child || new AnyType();
+  //  }
+  //  toString() { return "Future" + this.child.toString(); }
+
+  //  isSuper(other) {
+  //    if (other instanceof FutureType && this.child.isSuper(other.child)) {
+  //      return true;
+  //    }
+  //    var t;
+  //    if (t = this.child.isSuper(other)) {
+  //      return Result.resolve(t);
+  //    }
+  //    return super.isSuper(other);
+  //  }
+  //}
 
   class ListType extends Type {
     constructor(child) {
@@ -156,40 +223,123 @@ export const type = (function() {
   }
 
 
+  var prims = {};
+  Object.keys(bySpec).forEach(name => {
+    var imps = bySpec[name];
+    prims[name] = [];
+    imps.forEach(p => {
+      let {inputs, output, func} = p;
+      var inputTypes = inputs.map(Type.fromString);
+      var outputType = Type.fromString(output);
+      prims[name].push({
+        wants: inputTypes,
+        output: outputType,
+        func: func,
+      });
+    });
+  });
 
-});
+  function isValid(result) {
+    if (result.kind === 'vectorise') {
+      if (!result.child) return true;
+      return !containsVectorise(result.child);
+    } else {
+      return !containsVectorise(result);
+    }
+  }
 
+  function containsVectorise(result) {
+    switch (result.kind) {
+      case 'vectorise':
+        return true;
+      case 'list':
+      //case 'resolve':
+        return containsVectorise(result.child);
+      case 'record':
+        for (var key in result.schema) {
+          if (containsVectorise(result.schema[key])) return true;
+        }
+        return false;
+      case 'check':
+      case 'coerce':
+        return false;
+    }
+  }
 
+  var typeSpecial = function(name, inputTypes) {
+    switch (name) {
+      case 'item %n of %l':
+        let [index, list] = inputTypes;
+        return list.child;
+      case '%q of %o':
+        let [symbol, record] = inputTypes;
+        assert(type.symbol.isSuper(symbol)); // and is immediate!
+        // var value = TODO get actual symbol value
+        // return record.schema[value];
+      // TODO concat...
+      // TODO record type
+      // TODO list type
+    }
+  };
 
-let coercions = [
-  "Text <- Int": x => x.toString(),
-  "Text <- Frac": x => x.toString(),
-  "Text <- Float": x => x.toFixed(2),
-  "Text <- Empty": x => "",
+  var type = function(name, inputTypes) {
+    var imps = prims[name];
+    if (!imps) return {};
+    var length = imps.length;
 
-  "Float <- Text": x => +x,
+    assert(inputTypes.length === 0 || inputTypes[0] instanceof Type);
 
-  "List <- Empty": x => [],
+    var bestScore = Infinity;
+    var best = [];
+    for (var i=0; i<length; i++) {
+      var imp = imps[i];
+      var wants = imp.wants;
+      var results = [];
+      var score = 0;
+      for (var j=0; j<wants.length; j++) {
+        var result = wants[j].isSuper(inputTypes[j]);
+        if (!result || !isValid(result)) break;
+        if (result !== true) {
+          score++;
+        }
+        results.push(result);
+      }
+      if (j < wants.length) continue;
 
-  "Frac <- Int": x => new Fraction(x, 1),
-  "Float <- Int": x => +x.toString(),
+      if (score < bestScore) {
+        best = [];
+        bestScore = score;
+      }
+      if (score === bestScore) {
+        best.push({imp, results});
+      }
+    }
 
-  "Bool <- List": x => !!x.length,
+    var out = typeSpecial(name, inputTypes);
+    return {best, out};
+  };
 
-  //"List <- Record": recordToList,
-  //"List <- Time": recordToList,
-  //"List <- Date": recordToList,
+  var cache = function(cls) {
+    var cache = new Map();
+    return function(key) {
+      if (!cache.has(key)) {
+        cache.set(key, new cls(key));
+      }
+      return cache.get(key);
+    };
+  };
+  type.value = cache(ValueType);
+  type.symbol = type.value('Symbol');
+  type.List = cache(ListType);
+  type.record = function(schema) {
+    return new RecordType(null, schema);
+  };
+  type.none = new ValueType(null);
+  type.any = new AnyType(null);
 
-  "Record <- Time": x => x,
-  "Record <- Date": x => x,
-  "Record <- Rgb": x => x,
-  "Record <- Hsv": x => x,
+  return type;
 
-  "Uncertain <- Int": x => new Uncertain(x.toString()),
-  "Uncertain <- Frac": x => new Uncertain(x.n / x.d),
-  "Uncertain <- Float": x => new Uncertain(x),
-];
-type(coercions);
+}());
 
 
 
@@ -447,9 +597,50 @@ export const compile = (function() {
       return 'C.threads[' + index + '].result';
     };
 
+    var body = function(func, length) {
+      if (typeof func === 'function') return; // TODO
+      if (typeof func === 'object') return; // TODO
+
+      if (func[0] === '(') {
+        func = func.replace(/\$[0-9]+/g, function(x) { return arg(x.substr(1)); });
+        emit(func);
+        return;
+      }
+
+      switch (func) {
+        default:
+          var args = [];
+          for (var i=0; i<length; i++) {
+            args.push(arg(i));
+          }
+          emit('(' + func + '(' + args.join(', ') + ')' + ')');
+      }
+    };
+
     var compile = function(name, inputTypes) {
+      if (name === '%s') return type.value("Ring"); // TODO rings
       source += 'save();\n';
       source += 'C.name = ' + JSON.stringify(name) + ";\n";
+
+      var {best, out} = type(name, inputTypes);
+      var imps = best;
+      if (!imps) return type.none;
+
+      // look for typechecks.
+      if (imps.length !== 1) {
+        return type.none;
+      }
+      var best = imps[0];
+      var imp = best.imp;
+      // TODO
+
+      // vectorise.
+      // TODO
+
+      // apply coercions.
+      // TODO
+
+      // TODO unevaluated inputs
       source += 'C.threads = [];\n';
       var length = inputTypes.length;
       for (var i=0; i<length; i++) {
@@ -479,23 +670,37 @@ export const compile = (function() {
           emit("['text', 'view-Text', " + arg(0) + "]");
           break;
         default:
-          emit('"fred"');
-          break;
+          body(imp.func, length);
       }
 
       source += 'restore();\n';
-      var outputType = 'Any';
-      return outputType;
+      console.log(imp.output.toString());
+      console.log(source);
+      return out || imp.output;
     };
 
     var source = '';
     var startfn = computed.fns.length;
     var fns = [0];
 
-    var outputType = compile(computed.name, computed.args.map((inp, index) => {
-      var other = computed.inputs[index]
-      return other ? other.type() : "Any";
-    }));
+    var inputTypes = [];
+    computed.args.forEach((spec, index) => {
+      switch (spec) {
+        case '%fields':
+          // TODO
+          break;
+        case '%exp':
+          // TODO
+          break;
+        case '%br': break;
+        case '%%': break;
+        default:
+          var other = computed.inputs[index];
+          other = other ? other.type() : type.any,
+          inputTypes.push(other);
+      }
+    });
+    var outputType = compile(computed.name, inputTypes);
 
     for (var i = 0; i < fns.length; i++) {
       computed.fns.push(createContinuation(source.slice(fns[i])));
@@ -583,13 +788,66 @@ export {compile};
 
 /*****************************************************************************/
 
+import jsBigInteger from "js-big-integer";
+import _fraction from "fraction.js";
+import _tinycolor from  "tinycolor2";
+
 export const runtime = (function() {
 
-  var self, S, R, STACK, C, WARP, CALLS, BASE, INDEX, THREAD, IMMEDIATE;
+  var BigInteger = jsBigInteger.BigInteger;
+  var Fraction = _fraction;
+  var tinycolor = _tinycolor;
 
-  var bool = function(v) {
-    return +v !== 0 && v !== '' && v !== 'false' && v !== false;
+  class Uncertain {
+    constructor(mean, stddev) {
+      this.m = +mean;
+      this.s = +stddev || 0;
+    }
+
+    static add(a, b) {
+      return new Uncertain(a.m + b.m, Math.sqrt(a.s * a.s + b.s * b.s));
+    }
+
+    static mul(x, y) {
+      var a = y.m * x.s;
+      var b = x.m * y.s;
+      return new Uncertain(x.m * y.m, Math.sqrt(a * a + b * b)); // TODO
+    }
+  }
+
+
+  var typeOf = function(value) {
+    if (value === undefined) return '';
+    if (value === null) return '';
+    switch (typeof value) {
+      case 'number':
+        if (/^-?[0-9]+$/.test(''+value)) return type.value('Int');
+        return 'Float';
+      case 'string':
+        if (value === '') return type.value('Empty');
+        return type.value('Text');
+      case 'boolean':
+        return type.value('Bool');
+      case 'object':
+        // if (value.isObservable) return type.value('Uneval'); // TODO
+        if (value instanceof Thread) {
+          return value.outputType;
+        }
+        switch (value.constructor) {
+          case Error: return type.value('Error');
+          case BigInteger: return type.value('Int');
+          case Array: return type.value('List');
+          case Image: return type.value('Image');
+          case Uncertain: return type.value('Uncertain');
+          // case Record: return value.schema ? value.schema.name : 'Record'; // TODO
+        }
+        if (value instanceof Fraction) return type.value('Frac'); // TODO
+        if (value instanceof tinycolor) return type.value('Color'); // TODO
+    }
+    throw "Unknown type: " + value;
   };
+
+  var self, S, R, STACK, C, WARP, CALLS, BASE, INDEX, THREAD, IMMEDIATE;
 
   var mod = function(x, y) {
     var r = x % y;
@@ -597,6 +855,14 @@ export const runtime = (function() {
       r += y;
     }
     return r;
+  };
+
+  var range = function(from, to) {
+    var result = [];
+    for (var i=from; i<=to; i++) {
+      result.push(i);
+    }
+    return result;
   };
 
   var mathFunc = function(f, x) {
@@ -1102,6 +1368,8 @@ export const runtime = (function() {
       return this._type;
     }
 
+    // TODO retype computeds when literal type changes!
+
     recompute() {
       console.log('recompute', this.name);
       this.type();
@@ -1166,6 +1434,7 @@ export const runtime = (function() {
 
       this.fns = parent.fns;
       this.inputs = parent.inputs;
+      this.outputType = parent._type;
 
       this.hasStarted = false;
       this.isDone = false;
@@ -1208,3 +1477,4 @@ export const runtime = (function() {
 }());
 
 export const evaluator = runtime.graph;
+
