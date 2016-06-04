@@ -289,7 +289,9 @@ class Drawable {
     var t = '';
     t += `translate(${this.x + (this._flip ? 1 : 0)}px, ${this.y}px)`;
     if (this._zoom !== 1) t += ` scale(${this._zoom})`;
-    t += ' translateZ(0)';
+    if (this.parent && (this.parent.isWorld || this.parent.isApp)) {
+      t += ' translateZ(0)';
+    }
     this.el.style.transform = t;
   }
 
@@ -414,7 +416,7 @@ class Frame {
     this.inertiaX = 0;
     this.inertiaY = 0;
     this.scrolling = false;
-    setInterval(this.tick.bind(this), 1000 / 60);
+    this.interval = null;
 
     this.contentsLeft = 0;
     this.contentsTop = 0;
@@ -458,9 +460,12 @@ class Frame {
     if (!this.scrolling) {
       this.inertiaX = 0;
       this.inertiaY = 0;
+      if (!this.interval) {
+        this.interval = setInterval(this.tick.bind(this), 1000 / 60);
+      }
+      this.scrolling = true;
     }
     this.scrollBy(-dx, -dy);
-    this.scrolling = true;
   }
 
   fingerScrollEnd() {
@@ -480,6 +485,10 @@ class Frame {
         this.inertiaY *= 0.95;
         if (Math.abs(this.inertiaX) < 0.01) this.inertiaX = 0;
         if (Math.abs(this.inertiaY) < 0.01) this.inertiaY = 0;
+        if (this.inertiaX === 0 && this.inertiaY === 0) {
+          clearInterval(this.interval);
+          this.interval = null;
+        }
       }
     }
   }
