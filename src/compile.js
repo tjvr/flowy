@@ -2,6 +2,10 @@ import {addEvents} from "./events";
 
 import {bySpec, typeOf, literal} from "./prims";
 
+function assert(x) {
+  if (!x) throw "Assertion failed!";
+}
+
 export const compile = (function() {
   'use strict';
 
@@ -36,25 +40,22 @@ export const compile = (function() {
       source += 'return;\n';
     };
 
-    var request = function(node) {
-      source += 'request(';
+    var forceQueue = function(id) {
+      source += 'forceQueue(' + id + ');\n';
+      source += 'return;\n';
+    };
+
+    var await = function(thread) {
+      var id = nextLabel();
+      source += 'if (await(' + thread + ', ' + id + ')) return;\n';
+      fns.push(source.length);
+    };
+
+
+    var emit = function(value) {
+      source += 'emit(' + value + ');\n';
       var id = label();
-      var tmp = genSym();
-      if (node.isObservable) {
-        source += `${tmp} = ${node}.value\n`;
-        return tmp;
-      }
-      if (node.thread) {
-        if (node.thread.isDone) {
-          source += `${tmp} = ${node}.thread.result\n`;
-          return tmp;
-        }
-      } else {
-        node.request();
-      }
-      node.thread.onFirstEmit(this.awake);
-      return tmp;
-      // source += 'request(' + node + ')';
+      //forceQueue(id);
     };
 
     var val = function(e, usenum, usebool) {
@@ -254,98 +255,151 @@ export const compile = (function() {
       }
     };
 
+    /*
     var compile = function(computed) {
-      for (var i=0; i<computed.inputs; i++) {
-        request(computed[i]);
+      var inputs = computed.inputs;
+      var length = inputs.length;
+
+      var threads = [];
+      for (var i=0; i<length; i++) {
+        // if (!inputs[i].isComputed) {
+        //   continue; // don't need to request Observables
+        // }
+        var name = 'thread' + i;
+        source += 'var ' + name + ' = request(THREAD.inputs[' + i + ']);\n';
+        threads.push(name);
       }
-      for (var i=0; i<computed.inputs; i++) {
-        await(computed[i]);
+      for (var i=0; i<length; i++) {
+        var name = threads[i];
+        await(name);
       }
-      requestAll(computed.inputs);
-      computed.inputs.reqest();
+
+      var args = [];
+      for (var i=0; i<length; i++) {
+        var name = 'x' + i;
+        args.push(name);
+        source += 'var ' + name + ' = ' + 'THREAD.inputs[' + i + '].result;\n';
+      }
+      source += 'console.log(4);\n';
+      source += 'THREAD.emit(' + args[0] + ');\n';
+      //source += 'debugger;\n';
+    };
+    */
+
+    var compile = function(name, inputTypes) {
+      source += 'save();\n';
+      source += 'R.name = ' + JSON.stringify(name) + ";\n";
+      source += 'R.args = [];\n';
+      var length = inputTypes.length;
+      for (var i=0; i<length; i++) {
+        source += 'R.args[' + i + '] = request(' + i + ');\n';
+      }
+      for (var i=0; i<length; i++) {
+        await('R.args[' + i + ']');
+      }
+
+      switch (name) {
+        case 'literal %s':
+          emit('R.args[0].result');
+          break;
+        case 'display %s':
+          emit(`['text', 'view-Text', R.args[0].result]`);
+          break;
+        default:
+          emit('"fred"');
+          break;
+      }
+
+      source += 'restore();\n';
+      var outputType = 'Any';
+      return outputType;
     };
 
     var source = '';
     var startfn = computed.fns.length;
     var fns = [0];
 
-    compile(computed);
-
-    var createContinuation = function(source) {
-      var result = '(function() {\n';
-      var brackets = 0;
-      var delBrackets = 0;
-      var shouldDelete = false;
-      var here = 0;
-      var length = source.length;
-      while (here < length) {
-        var i = source.indexOf('{', here);
-        var j = source.indexOf('}', here);
-        if (i === -1 && j === -1) {
-          if (!shouldDelete) {
-            result += source.slice(here);
-          }
-          break;
-        }
-        if (i === -1) i = length;
-        if (j === -1) j = length;
-        if (shouldDelete) {
-          if (i < j) {
-            delBrackets++;
-            here = i + 1;
-          } else {
-            delBrackets--;
-            if (!delBrackets) {
-              shouldDelete = false;
-            }
-            here = j + 1;
-          }
-        } else {
-          if (i < j) {
-            result += source.slice(here, i + 1);
-            brackets++;
-            here = i + 1;
-          } else {
-            result += source.slice(here, j);
-            here = j + 1;
-            if (source.substr(j, 8) === '} else {') {
-              if (brackets > 0) {
-                result += '} else {';
-                here = j + 8;
-              } else {
-                shouldDelete = true;
-                delBrackets = 0;
-              }
-            } else {
-              if (brackets > 0) {
-                result += '}';
-                brackets--;
-              }
-            }
-          }
-        }
-      }
-      result += '})';
-      return runtime.scopedEval(result);
-    };
+    var outputType = compile(computed.name, computed.inputs.map(inp => inp.type()));
 
     for (var i = 0; i < fns.length; i++) {
       computed.fns.push(createContinuation(source.slice(fns[i])));
     }
 
     var f = computed.fns[startfn];
+    //if (computed.fns.length === 1) debugger;
+
+    return outputType;
   };
 
+  var createContinuation = function(source) {
+    var result = '(function() {\n';
+    var brackets = 0;
+    var delBrackets = 0;
+    var shouldDelete = false;
+    var here = 0;
+    var length = source.length;
+    while (here < length) {
+      var i = source.indexOf('{', here);
+      var j = source.indexOf('}', here);
+      if (i === -1 && j === -1) {
+        if (!shouldDelete) {
+          result += source.slice(here);
+        }
+        break;
+      }
+      if (i === -1) i = length;
+      if (j === -1) j = length;
+      if (shouldDelete) {
+        if (i < j) {
+          delBrackets++;
+          here = i + 1;
+        } else {
+          delBrackets--;
+          if (!delBrackets) {
+            shouldDelete = false;
+          }
+          here = j + 1;
+        }
+      } else {
+        if (i < j) {
+          result += source.slice(here, i + 1);
+          brackets++;
+          here = i + 1;
+        } else {
+          result += source.slice(here, j);
+          here = j + 1;
+          if (source.substr(j, 8) === '} else {') {
+            if (brackets > 0) {
+              result += '} else {';
+              here = j + 8;
+            } else {
+              shouldDelete = true;
+              delBrackets = 0;
+            }
+          } else {
+            if (brackets > 0) {
+              result += '}';
+              brackets--;
+            }
+          }
+        }
+      }
+    }
+    result += '})';
+    return runtime.scopedEval(result);
+  };
 
   return function(node) {
 
     warnings = Object.create(null);
 
-    compileNode(node, []);
+    var type = compileNode(node, []);
 
     for (var key in warnings) {
       console.warn(key + (warnings[key] > 1 ? ' (repeated ' + warnings[key] + ' times)' : ''));
     }
+
+    return type;
   };
 
 }());
@@ -355,7 +409,7 @@ export {compile};
 
 export const runtime = (function() {
 
-  var self, S, R, STACK, C, WARP, CALLS, BASE, THREAD, IMMEDIATE;
+  var self, S, R, STACK, C, WARP, CALLS, BASE, INDEX, THREAD, IMMEDIATE;
 
   var bool = function(v) {
     return +v !== 0 && v !== '' && v !== 'false' && v !== false;
@@ -441,7 +495,7 @@ export const runtime = (function() {
           }
         }
         if (recursive) {
-          self.queue[THREAD] = {
+          self.queue[INDEX] = {
             parent: S,
             base: BASE,
             fn: procedure.fn,
@@ -467,12 +521,45 @@ export const runtime = (function() {
   };
 
   var queue = function(id) {
-    self.queue[THREAD] = {
-      parent: S,
-      base: BASE,
-      fn: S.fns[id],
-      calls: CALLS
-    };
+    //assert(THREAD.parent === S);
+    IMMEDIATE = S.fns[id];
+    // TODO warp??
+  };
+
+  var forceQueue = function(id) {
+    self.queue[INDEX] = THREAD;
+    //assert(THREAD.parent === S);
+    THREAD.fn = S.fns[id];
+  };
+
+  var request = function(index) {
+    var computed = THREAD.inputs[index];
+    THREAD.deps.add(computed);
+    if (computed.isComputed) {
+      return computed.request();
+    } else {
+      return computed;
+    }
+  };
+
+  var await = function(thread, id) {
+    if (thread instanceof Observable) return;
+    var wake = THREAD;
+    if (!thread.isDone) {
+      thread.onFirstEmit(function(result) {
+        awake(wake, id);
+      });
+      return true;
+    }
+  };
+
+  var awake = function(thread, id) {
+    self.queue.push(thread);
+    thread.fn = thread.parent.fns[id];
+  }
+
+  var emit = function(result) {
+    THREAD.emit(result);
   };
 
   /***************************************************************************/
@@ -553,19 +640,21 @@ export const runtime = (function() {
       var start = Date.now();
       do {
         var queue = this.queue;
-        for (THREAD = 0; THREAD < queue.length; THREAD++) {
-          if (queue[THREAD]) {
-            S = queue[THREAD].parent;
-            IMMEDIATE = queue[THREAD].fn;
-            BASE = queue[THREAD].base;
-            CALLS = queue[THREAD].calls;
+        for (INDEX = 0; INDEX < queue.length; INDEX++) {
+          THREAD = queue[INDEX];
+          if (THREAD) {
+            S = THREAD.parent;
+            IMMEDIATE = THREAD.fn;
+            BASE = THREAD.base;
+            CALLS = THREAD.calls;
             C = CALLS.pop();
             STACK = C.stack;
             R = STACK.pop();
-            queue[THREAD] = undefined;
+            queue[INDEX] = undefined;
             WARP = 0;
             while (IMMEDIATE) {
               var fn = IMMEDIATE;
+              assert(THREAD.fns.indexOf(fn) !== -1);
               IMMEDIATE = null;
               fn();
             }
@@ -698,6 +787,10 @@ export const runtime = (function() {
     }
 
     update() {}
+
+    type() {
+      return typeOf(this.result);
+    }
   }
 
   class Computed extends Observable {
@@ -713,6 +806,7 @@ export const runtime = (function() {
       this.thread = null;
       this.needed = false;
     }
+    get isComputed() { return true; }
 
     invalidate(arg) {
       //assert(this.deps.has(arg));
@@ -722,7 +816,6 @@ export const runtime = (function() {
       // if (this.thread) {
       //   this.thread.cancel();
       // }
-      this.fns = [];
       this.thread = null;
       graph.invalidate(this);
       super.invalidate();
@@ -730,18 +823,36 @@ export const runtime = (function() {
 
     update(arg) {
       assert(this.deps.has(arg));
-      if (this.thread && this.thread.hasStarted) {
+      if (this.thread && this.thread.hasStarted && this.thread.deps.has(arg)) {
         this.thread.cancel();
       }
+      // TODO what if a thread grabs a dep, and then it changes before the thread finishes??
       this.recompute();
     }
 
+    retype() {
+      this._type = null;
+      this.type();
+    }
+
+    type() {
+      if (this._type) {
+        return this._type;
+      }
+      this.fns = [];
+      this._type = compile(this);
+      assert(this._type);
+      return this._type;
+    }
+
     recompute() {
-      compile(this);
+      console.log('recompute', this.name);
+      this.type();
       this.thread = new Thread(evaluator, this, this.fns[0]);
-      this.thread.onEmit(result => {
+      this.thread.onFirstEmit(result => {
         this.result = result;
         graph.emit(this, result);
+        this.emit(result);
 
         this.deps.forEach(dep => dep.unsubscribe(this));
         this.deps = this.thread.deps;
@@ -763,6 +874,7 @@ export const runtime = (function() {
         }
       }
       this.invalidate();
+      this.retype();
       this.recompute();
     }
 
@@ -783,11 +895,15 @@ export const runtime = (function() {
       this.base = base;
       this.fn = base;
       this.calls = [{args: [], stack: [{}]}];
+      assert(base);
+
+      this.fns = parent.fns;
+      this.inputs = parent.inputs;
 
       this.hasStarted = false;
       this.isDone = false;
       this.canceled = false;
-      this.deps = [];
+      this.deps = new Set();
       this.evaluator.startThread(this);
 
       this.result = null;
@@ -801,12 +917,15 @@ export const runtime = (function() {
     }
 
     emit(result) {
-      this.isDone = true;
       this.result = result;
+      if (!this.isDone) {
+        this.isDone = true;
+        this.dispatchFirstEmit(result);
+      }
       this.dispatchEmit(result);
     }
   }
-  addEvents(Thread, 'emit', 'progress');
+  addEvents(Thread, 'firstEmit', 'emit', 'progress');
 
   /***************************************************************************/
 

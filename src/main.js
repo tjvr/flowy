@@ -1968,11 +1968,11 @@ class Result extends Frame {
   }
 
   onInvalidate() {
-    this.elContents.classList.add('result-invalid');
+    this.el.classList.add('result-invalid');
   }
 
   onEmit(value) {
-    this.elContents.classList.remove('result-invalid');
+    this.el.classList.remove('result-invalid');
     this.display(value);
     if (this.fraction === 0) this.fraction = 1;
     this.parent.drawProgress();
