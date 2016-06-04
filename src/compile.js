@@ -273,7 +273,6 @@ export const type = (function() {
         return list.child;
 
       case 'list %exp':
-        debugger;
         // TODO argh
         return type.list(inputTypes[0]);
 
@@ -626,38 +625,63 @@ export const compile = (function() {
       source += 'result = ' + func + '(' + args.join(', ') + ');\n';
     };
 
-    var recurse = function(func, results) {
-      // vectorise
-      var vectorise = [];
-      for (var i=0; i<results.length; i++) {
-        if (results[i].kind === 'vectorise') vectorise.push(i);
-      }
-      if (vectorise.length) {
-        debugger;
-        results = results.map(result => {
-          return result.kind === 'vectorise' ? result.child : result;
-        });
-        // TODO fast vectorise if prim is immediate
-        // TODO parallel map
-        save();
-        source += 'R.length = ' + arg(vectorise[0]) + '.length;\n';
-        source += 'R.index = 0;\n';
-        source += 'R.results = [];\n';
-        var id = label();
-        recurse(func, results);
-        source += 'R.index += 1;\n';
-        source += 'if (R.index < R.length) {\n';
-        queue(id);
-        source += '}\n';
-        return;
-      }
-
+    var party = function(func, length) {
       // apply coercions
       // resolve Futures
       // evaluate inputs
 
-      body(func, results.length);
+      body(func, length);
+    };
+
+    var recurse = function(func, out, results) {
+      // vectorise
+      var vectorise = [];
+      for (var i=0; i<results.length; i++) {
+        if (results[i] !== true && results[i].kind === 'vectorise') vectorise.push(i);
+      }
+      if (vectorise.length) {
+        results = results.map(result => {
+          return result !== true && result.kind === 'vectorise' ? result.child || true : result;
+        });
+        // TODO fast vectorise if prim is immediate
+        // TODO parallel map
+        source += 'save();\n';
+        source += 'R.length = ' + arg(vectorise[0]) + '.length;\n';
+        if (vectorise.length > 1) {
+          var cond = [];
+          for (var i=1; i<vectorise.length; i++) {
+            cond.push(arg(vectorise[i]) + '.length !== R.length');
+          }
+          source += 'if (' + cond.join(' || ') + ') {\n';
+            emit('new Error("Poop")');
+            source += '}\n';
+        }
+        source += 'if (R.length === 0) {\n';
+        emit('[]');
+        source += 'return;\n';
+        source += '}\n';
+        source += 'R.index = 0;\n';
+        source += 'R.results = [];\n';
+        source += 'R.arrays = C.threads;\n';
+        source += 'C.threads = R.arrays.slice();\n';
+        var id = label();
+        for (var i=0; i<vectorise.length; i++) {
+          source += 'C.threads[' + vectorise[i] + '] = {result: R.arrays[' + vectorise[i] + '].result[R.index]};\n';
+        }
+        party(func, results.length);
+        source += 'R.results.push(result);\n';
+        source += 'R.index += 1;\n';
+        source += 'if (R.index < R.length) {\n';
+        queue(id);
+        source += '}\n';
+        source += 'emit(R.results);\n';
+        source += 'restore();\n';
+        return type.list(out);
+      }
+
+      party(func, results.length);
       source += 'emit(result);\n';
+      return out;
     };
 
     var compile = function(name, inputTypes) {
@@ -675,11 +699,12 @@ export const compile = (function() {
       }
 
       switch (name) {
-        // case 'display %s':
-        //   if (inputTypes[0] === null) {
-        //     source += 'emit(null)';
-        //     return null;
-        //   }
+        case 'display %s':
+          source += 'if (' + arg(0) + ' === null) {\n';
+          emit('null');
+          source += 'return;\n'
+          source += '}\n';
+          break;
 
         case 'list %exp':
           source += 'var list = [];\n';
@@ -725,11 +750,8 @@ export const compile = (function() {
           source += 'return;\n';
           break;
         default:
-          body(imp.func, length);
-          source += 'emit(result);\n';
-          break;
+          out = recurse(imp.func, out, best.results);
 
-          // recurse(imp.func, best.results);
           // if (out.isFuture) {
           //   out = out.child;
           //   save();
@@ -868,7 +890,7 @@ export const runtime = (function() {
 
   class Record {
     constructor(type, values) {
-      this.type = type || type.record(values);
+      //this.type = type || type.record(values);
       this.values = values;
     }
 
@@ -881,7 +903,7 @@ export const runtime = (function() {
         values[name] = newValues[name];
       });
       // TODO maintain order
-      return new Record(type.record(values), values);
+      //return new Record(type.record(values), values);
     }
 
     toJSON() {
@@ -1214,6 +1236,16 @@ export const runtime = (function() {
   var restore = function() {
     R = STACK.pop();
   };
+
+  var saveCall = function() {
+    CALLS.push(C);
+    C = {};
+  };
+
+  var restoreCall = function() {
+    C = CALLS.pop();
+  };
+
 
   // var lastCalls = [];
   var call = function(spec, id, values) {

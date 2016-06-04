@@ -270,7 +270,7 @@ export const functions = {
   ]])`,
   "UI <- display Bool": "(display('Symbol view-Bool-' + $0 ? 'yes' : 'no', $0 ? 'yes' : 'no'))",
   "UI <- display Image": '(["image", $0.cloneNode()])',
-  "UI <- display Color": '(["rect", $0.toHexString(), 24, 24, "view-Color"])',
+  // "UI <- display Color": '(["rect", $0.toHexString(), 24, 24, "view-Color"])',
   "UI <- display Uncertain": `(['inline', [
     el('Uncertain-mean', uncertain.m),
     el('Uncertain-sym', "±"),
