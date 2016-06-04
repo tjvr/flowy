@@ -271,141 +271,25 @@ function withValue(value, cb) {
 
 export const functions = {
 
-  "UI <- display Error": x => el('Error', x.message || x),
-  "UI <- display Text": x => el('Text', x),
-  "UI <- display Int": x => el('Int', ''+x),
-  "UI <- display Float": x => {
-    var r = ''+x;
-    var index = r.indexOf('.');
-    if (index === -1) {
-      r += '.';
-    } else if (index !== -1 && !/e/.test(r)) {
-      if (r.length - index > 3) {
-        r = x.toFixed(3);
-      }
-    }
-    return el('Float', r);
-  },
-  "UI <- display Frac": frac => {
-    return ['block', [
-      el('Frac-num', ''+frac.n),
-      ['rect', '#000', 'auto', 2],
-      el('Frac-den', ''+frac.d),
-    ]];
-  },
-  "UI <- display Bool": x => {
-    var val = x ? 'yes' : 'no';
-    return el(`Symbol view-Bool-${val}`, val);
-  },
-
-  "UI Future <- display Record": function(record) {
-    // TODO use RecordView
-    var schema = record.schema;
-    var symbols = schema ? schema.symbols : Object.keys(record.values);
-    var items = [];
-    var r = ['table', items];
-    if (schema) {
-      r = ['block', [
-        ['text', 'record-title', schema.name, 'auto'],
-        r,
-      ]];
-    }
-
-    symbols.forEach((symbol, index) => {
-      var cell = ['cell', 'field', ['text', 'ellipsis', ". . ."]];
-      var field = ['row', 'field', index, [
-        ['text', 'field-name', symbol],
-        ['text', 'field-sym', "→"],
-        cell,
-      ]];
-      items.push(field);
-
-      withValue(record.values[symbol], result => {
-        var prim = this.evaluator.getPrim("display %s", [result]);
-        var value = prim.func.call(this, result);
-        cell[2] = value;
-        this.emit(r);
-      });
-    });
-    this.emit(r);
-    return r;
-  },
-
-  "UI Future <- display List": function(list) {
-    var items = [];
-    var l = ['table', items];
-
-    var ellipsis = ['text', 'ellipsis', ". . ."];
-
-    if (list.length === 0) {
-      // TODO empty lists
-      this.emit(l);
-      return l;
-    }
-
-    withValue(list[0], first => {
-      var isRecordTable = false;
-      if (first instanceof Record) {
-        var schema = first.schema;
-        var symbols = schema ? schema.symbols : Object.keys(first.values);
-        var headings = symbols.map(text => ['cell', 'header', ['text', 'heading', text], text]);
-        items.push(['row', 'header', null, headings]);
-        isRecordTable = true;
-      }
-
-      // TODO header row for list lists
-
-      list.forEach((item, index) => {
-        var type = typeOf(item);
-        if (isRecordTable && /Record/.test(type)) {
-          items.push(['row', 'record', index, [ellipsis]]);
-          withValue(item, result => {
-            var values = symbols.map(sym => {
-              var value = result.values[sym];
-              var prim = this.evaluator.getPrim("display %s", [value]);
-              return ['cell', 'record', prim.func.call(this, value), sym];
-            });
-            items[index + 1] = ['row', 'record', index, values];
-            this.emit(l);
-          });
-
-        } else if (/List$/.test(type)) {
-          items.push(['row', 'list', index, [ellipsis]]);
-          withValue(item, result => {
-            var values = result.map((item2, index2) => {
-              var prim = this.evaluator.getPrim("display %s", [item2]);
-              return ['cell', 'list', prim.func.call(this, item2), index2 + 1];
-            });
-            items[index] = ['row', 'list', index, values];
-          });
-
-        } else {
-          items.push(['row', 'item', index, [ellipsis]]);
-          withValue(item, result => {
-            var prim = this.evaluator.getPrim("display %s", [result]);
-            var value = ['cell', 'item', prim.func.call(this, result)];
-            items[isRecordTable ? index + 1 : index] = ['row', 'item', index, [value]];
-          });
-        }
-      });
-    });
-    this.emit(l);
-    return l;
-  },
-
-  "UI <- display Image": image => {
-    return ['image', image.cloneNode()];
-  },
-  "UI <- display Color": color => {
-    return ['rect', color.toHexString(), 24, 24, 'view-Color'];
-  },
-  "UI <- display Uncertain": uncertain => {
-    return ['inline', [
-      el('Uncertain-mean', uncertain.m),
-      el('Uncertain-sym', "±"),
-      el('Uncertain-stddev', uncertain.s),
-    ]];
-  },
+  "UI <- display Error": '(display("Error", $0.message || $0))',
+  "UI <- display Text": '(display("Text", $0))',
+  "UI <- display Int": '(display("Int", ""+$0))',
+  "UI <- display Frac": `(['block', [
+    el('Frac-num', ''+$0.n),
+    ['rect', '#000', 'auto', 2],
+    el('Frac-den', ''+$0.d),
+  ]])`,
+  "UI <- display Bool": "(display('Symbol view-Bool-' + x ? 'yes' : 'no', x ? 'yes' : 'no'))",
+  "UI <- display Image": '(["image", $0.cloneNode()])',
+  "UI <- display Color": '(["rect", $0.toHexString(), 24, 24, "view-Color"])',
+  "UI <- display Uncertain": `(['inline', [
+    el('Uncertain-mean', uncertain.m),
+    el('Uncertain-sym', "±"),
+    el('Uncertain-stddev', uncertain.s),
+  ]])`,
+  "UI <- display Float": 'displayFloat',
+  "UI <- display Record": 'displayRecord',
+  "UI <- display List": 'displayList',
 
   /* Int */
   "Int <- Int + Int": 'BigInteger.add',
@@ -566,9 +450,9 @@ export const functions = {
     return rest;
   },
   "List <- List concat List": '($0.concat($1))',
-  "List <- range Int to Int": 'range',
+  "Int List <- range Int to Int": 'range',
 
-  "Any Future <- item Int of List": '($1[$0])',
+  "Any <- item Int of List": '($1[$0])',
 
   "Int <- sum List": function(list) {
     // TODO

@@ -54,10 +54,10 @@ export const type = (function() {
       }
     }
 
-    // static resolve(child)  {
-    //   var kind = 'resolve';
-    //   return child === true ? {kind} : {kind, child};
-    // }
+    static resolve(child)  {
+      var kind = 'resolve';
+      return child === true ? {kind} : {kind, child};
+    }
 
     static typeCheck(type) {
       var kind = 'check';
@@ -69,7 +69,7 @@ export const type = (function() {
     static fromString(name) {
       assert(!(name instanceof Type));
       if (/ Future$/.test(name)) {
-        //return new FutureType(Type.fromString(name.replace(/ Future$/, "")));
+        return new FutureType(Type.fromString(name.replace(/ Future$/, "")));
         return Type.fromString(name.replace(/ Future$/, ""));
       }
       if (/ List$/.test(name)) {
@@ -78,9 +78,9 @@ export const type = (function() {
       assert(!/ /.test(name));
       switch (name) {
         case 'Any':
-        case 'Future':
           return new AnyType();
-        //   return new FutureType();
+        case 'Future':
+          return new FutureType();
         case 'List':
           return new ListType();
         case 'Record':
@@ -96,6 +96,9 @@ export const type = (function() {
     isSuper(other) {
       if (other instanceof AnyType) {
         return Result.typeCheck(this);
+      }
+      if (other instanceof ListType && (t = this.isSuper(other.child))) {
+        return Result.vectorise(t);
       }
       var t;
       if (t = Result.coerce(other, this)) {
@@ -121,24 +124,24 @@ export const type = (function() {
     }
   }
 
-  //class FutureType extends Type {
-  //  constructor(child) {
-  //    super();
-  //    this.child = child || new AnyType();
-  //  }
-  //  toString() { return "Future" + this.child.toString(); }
+  class FutureType extends Type {
+    constructor(child) {
+      super();
+      this.child = child || new AnyType();
+    }
+    toString() { return "Future " + this.child.toString(); }
 
-  //  isSuper(other) {
-  //    if (other instanceof FutureType && this.child.isSuper(other.child)) {
-  //      return true;
-  //    }
-  //    var t;
-  //    if (t = this.child.isSuper(other)) {
-  //      return Result.resolve(t);
-  //    }
-  //    return super.isSuper(other);
-  //  }
-  //}
+    isSuper(other) {
+      var t;
+      if (other instanceof FutureType && (t = this.isSuper(other.child))) {
+        return t;
+      }
+      if (t = this.child.isSuper(other)) {
+        return Result.resolve(t);
+      }
+      return super.isSuper(other);
+    }
+  }
 
   class ListType extends Type {
     constructor(child) {
@@ -148,12 +151,9 @@ export const type = (function() {
     toString() { return "List of " + this.child.toString(); }
 
     isSuper(other) {
-      var ts;
-      if (other instanceof ListType && (ts = this.child.isSuper(other.child))) {
-        return ts === true ? true : Result.list(ts);
-      }
-      if (ts = this.child.isSuper(other)) {
-        return Result.vectorise(ts);
+      var t;
+      if (other instanceof ListType && (t = this.child.isSuper(other.child))) {
+        return t === true ? true : Result.list(t);
       }
       return super.isSuper(other);
     }
@@ -271,11 +271,12 @@ export const type = (function() {
       case 'item %n of %l':
         let [index, list] = inputTypes;
         return list.child;
-      case '%q of %o':
-        let [symbol, record] = inputTypes;
-        assert(type.symbol.isSuper(symbol)); // and is immediate!
-        // var value = TODO get actual symbol value
-        // return record.schema[value];
+      // case '%q of %o':
+      //   let [symbol, record] = inputTypes;
+      //   assert(type.symbol.isSuper(symbol)); // and is immediate!
+      //   var value = TODO get actual symbol value
+      //   return record.schema[value];
+
       // TODO concat...
       // TODO record type
       // TODO list type
@@ -314,6 +315,7 @@ export const type = (function() {
         best.push({imp, results});
       }
     }
+    if (!best.length) return {};
 
     var out = typeSpecial(name, inputTypes);
     return {best, out};
@@ -330,7 +332,7 @@ export const type = (function() {
   };
   type.value = cache(ValueType);
   type.symbol = type.value('Symbol');
-  type.List = cache(ListType);
+  type.list = cache(ListType);
   type.record = function(schema) {
     return new RecordType(null, schema);
   };
@@ -598,23 +600,54 @@ export const compile = (function() {
     };
 
     var body = function(func, length) {
+      source += 'var result;\n';
       if (typeof func === 'function') return; // TODO
       if (typeof func === 'object') return; // TODO
 
       if (func[0] === '(') {
         func = func.replace(/\$[0-9]+/g, function(x) { return arg(x.substr(1)); });
-        emit(func);
+        source += 'result = ' + func + ';\n';
         return;
       }
 
-      switch (func) {
-        default:
-          var args = [];
-          for (var i=0; i<length; i++) {
-            args.push(arg(i));
-          }
-          emit('(' + func + '(' + args.join(', ') + ')' + ')');
+      var args = [];
+      for (var i=0; i<length; i++) {
+        args.push(arg(i));
       }
+      source += 'result = ' + func + '(' + args.join(', ') + ');\n';
+    };
+
+    var recurse = function(func, results) {
+      // vectorise
+      var vectorise = [];
+      for (var i=0; i<results.length; i++) {
+        if (results[i].kind === 'vectorise') vectorise.push(i);
+      }
+      if (vectorise.length) {
+        debugger;
+        results = results.map(result => {
+          return result.kind === 'vectorise' ? result.child : result;
+        });
+        // TODO fast vectorise if prim is immediate
+        // TODO parallel map
+        save();
+        source += 'R.length = ' + arg(vectorise[0]) + '.length;\n';
+        source += 'R.index = 0;\n';
+        source += 'R.results = [];\n';
+        var id = label();
+        recurse(func, results);
+        source += 'R.index += 1;\n';
+        source += 'if (R.index < R.length) {\n';
+        queue(id);
+        source += '}\n';
+        return;
+      }
+
+      // apply coercions
+      // resolve Futures
+      // evaluate inputs
+
+      body(func, results.length);
     };
 
     var compile = function(name, inputTypes) {
@@ -624,23 +657,24 @@ export const compile = (function() {
 
       var {best, out} = type(name, inputTypes);
       var imps = best;
+      if (!imps) {
+        console.log('no imps for ' + name, inputTypes);
+        debugger;
+      }
       if (!imps) return type.none;
 
       // look for typechecks.
       if (imps.length !== 1) {
+        console.log('multiple imps for ' + name);
+        debugger;
         return type.none;
       }
       var best = imps[0];
       var imp = best.imp;
-      // TODO
+      out = out || imp.output;
 
-      // vectorise.
-      // TODO
+      // imp(best.imp.func, best.results);
 
-      // apply coercions.
-      // TODO
-
-      // TODO unevaluated inputs
       source += 'C.threads = [];\n';
       var length = inputTypes.length;
       for (var i=0; i<length; i++) {
@@ -670,13 +704,23 @@ export const compile = (function() {
           emit("['text', 'view-Text', " + arg(0) + "]");
           break;
         default:
-          body(imp.func, length);
+          recurse(imp.func, length);
+          if (out.isFuture) {
+            out = out.child;
+            save();
+            source += 'R.thread = result;\n';
+            await('result');
+            source += 'result = R.thread.result;\n';
+            restore();
+          }
+          emit('result');
+          break;
       }
 
       source += 'restore();\n';
       console.log(imp.output.toString());
       console.log(source);
-      return out || imp.output;
+      return out;
     };
 
     var source = '';
@@ -707,7 +751,6 @@ export const compile = (function() {
     }
 
     var f = computed.fns[startfn];
-    //if (computed.fns.length === 1) debugger;
 
     return outputType;
   };
@@ -847,7 +890,117 @@ export const runtime = (function() {
     throw "Unknown type: " + value;
   };
 
+
+
   var self, S, R, STACK, C, WARP, CALLS, BASE, INDEX, THREAD, IMMEDIATE;
+
+  var displayFloat = function(x) {
+    var r = ''+x;
+    var index = r.indexOf('.');
+    if (index === -1) {
+      r += '.';
+    } else if (index !== -1 && !/e/.test(r)) {
+      if (r.length - index > 3) {
+        r = x.toFixed(3);
+      }
+    }
+    return el('Float', r);
+  };
+
+  var displayRecord = function(record) {
+    // TODO use RecordView
+    var schema = record.schema;
+    var symbols = schema ? schema.symbols : Object.keys(record.values);
+    var items = [];
+    var r = ['table', items];
+    if (schema) {
+      r = ['block', [
+        ['text', 'record-title', schema.name, 'auto'],
+        r,
+      ]];
+    }
+
+    symbols.forEach((symbol, index) => {
+      var cell = ['cell', 'field', ['text', 'ellipsis', ". . ."]];
+      var field = ['row', 'field', index, [
+        ['text', 'field-name', symbol],
+        ['text', 'field-sym', "→"],
+        cell,
+      ]];
+      items.push(field);
+
+      withValue(record.values[symbol], result => {
+        var prim = this.evaluator.getPrim("display %s", [result]);
+        var value = prim.func.call(this, result);
+        cell[2] = value;
+        this.emit(r);
+      });
+    });
+    this.emit(r);
+    return r;
+  };
+
+  var displayList = function(list) {
+    var items = [];
+    var l = ['table', items];
+
+    var ellipsis = ['text', 'ellipsis', ". . ."];
+
+    if (list.length === 0) {
+      // TODO empty lists
+      this.emit(l);
+      return l;
+    }
+
+    withValue(list[0], first => {
+      var isRecordTable = false;
+      if (first instanceof Record) {
+        var schema = first.schema;
+        var symbols = schema ? schema.symbols : Object.keys(first.values);
+        var headings = symbols.map(text => ['cell', 'header', ['text', 'heading', text], text]);
+        items.push(['row', 'header', null, headings]);
+        isRecordTable = true;
+      }
+
+      // TODO header row for list lists
+
+      list.forEach((item, index) => {
+        var type = typeOf(item);
+        if (isRecordTable && /Record/.test(type)) {
+          items.push(['row', 'record', index, [ellipsis]]);
+          withValue(item, result => {
+            var values = symbols.map(sym => {
+              var value = result.values[sym];
+              var prim = this.evaluator.getPrim("display %s", [value]);
+              return ['cell', 'record', prim.func.call(this, value), sym];
+            });
+            items[index + 1] = ['row', 'record', index, values];
+            this.emit(l);
+          });
+
+        } else if (/List$/.test(type)) {
+          items.push(['row', 'list', index, [ellipsis]]);
+          withValue(item, result => {
+            var values = result.map((item2, index2) => {
+              var prim = this.evaluator.getPrim("display %s", [item2]);
+              return ['cell', 'list', prim.func.call(this, item2), index2 + 1];
+            });
+            items[index] = ['row', 'list', index, values];
+          });
+
+        } else {
+          items.push(['row', 'item', index, [ellipsis]]);
+          withValue(item, result => {
+            var prim = this.evaluator.getPrim("display %s", [result]);
+            var value = ['cell', 'item', prim.func.call(this, result)];
+            items[isRecordTable ? index + 1 : index] = ['row', 'item', index, [value]];
+          });
+        }
+      });
+    });
+    this.emit(l);
+    return l;
+  };
 
   var mod = function(x, y) {
     var r = x % y;
@@ -1371,6 +1524,7 @@ export const runtime = (function() {
     // TODO retype computeds when literal type changes!
 
     recompute() {
+      // this._type = null; // TODO optimise
       console.log('recompute', this.name);
       this.type();
       var thread = this.thread = new Thread(evaluator, this, this.fns[0]);
