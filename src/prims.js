@@ -441,7 +441,7 @@ export const functions = {
   "List <- List concat List": '($0.concat($1))',
   "Int List <- range Int to Int": 'range',
 
-  "Any <- item Int of List": '($1[$0])',
+  "Any <- item Int of List": '($1[$0 - 1])',
 
   "Int <- sum List": function(list) {
     // TODO
@@ -574,68 +574,7 @@ export const functions = {
 
   /* Async tests */
 
-  "WebPage Future <- get Text": function(url) {
-    // TODO cors proxy
-    //var cors = 'http://crossorigin.me/http://';
-    var cors = 'http://localhost:1337/';
-    url = cors + url.replace(/^https?\:\/\//, "");
-    var xhr = new XMLHttpRequest;
-    xhr.open('GET', url, true);
-    xhr.onprogress = e => {
-      this.progress(e.loaded, e.total, e.lengthComputable);
-    };
-    xhr.onload = () => {
-      if (xhr.status === 200) {
-        var r = {
-          contentType: xhr.getResponseHeader('content-type'),
-          response: xhr.response,
-        };
-
-        var mime = r.contentType.split(";")[0];
-        var blob = r.response;
-        if (/^image\//.test(mime)) {
-          var img = new Image();
-          img.addEventListener('load', e => {
-            this.emit(img);
-          });
-          img.src = URL.createObjectURL(blob);
-        } else if (mime === 'application/json' || mime === 'text/json') {
-          var reader = new FileReader;
-          reader.onloadend = () => {
-            try {
-              var json = JSON.parse(reader.result);
-            } catch (e) {
-              this.emit(new Error("Invalid JSON"));
-              return;
-            }
-            this.emit(jsonToRecords(json));
-          };
-          reader.onprogress = function(e) {
-            //future.progress(e.loaded, e.total, e.lengthComputable);
-          };
-          reader.readAsText(blob);
-        } else if (/^text\//.test(mime)) {
-          var reader = new FileReader;
-          reader.onloadend = () => {
-            this.emit(reader.result);
-          };
-          reader.onprogress = function(e) {
-            //future.progress(e.loaded, e.total, e.lengthComputable);
-          };
-          reader.readAsText(blob);
-        } else {
-          this.emit(new Error(`Unknown content type: ${mime}`));
-        }
-      } else {
-        this.emit(new Error('HTTP ' + xhr.status + ': ' + xhr.statusText));
-      }
-    };
-    xhr.onerror = () => {
-      this.emit(new Error('XHR Error'));
-    };
-    xhr.responseType = 'blob';
-    setTimeout(xhr.send.bind(xhr));
-  },
+  "WebPage Future <- get Text": 'get',
 
   "Time Future <- time": function() {
     var update = () => {

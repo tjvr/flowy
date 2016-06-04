@@ -130,6 +130,7 @@ export const type = (function() {
       this.child = child || new AnyType();
     }
     toString() { return "Future " + this.child.toString(); }
+    get isFuture() { return true; }
 
     isSuper(other) {
       var t;
@@ -630,7 +631,16 @@ export const compile = (function() {
       // resolve Futures
       // evaluate inputs
 
-      body(func, length);
+      switch (func) {
+        case 'delay %n secs: %s':
+          assert(inputTypes.length === 2);
+          wait(arg(0));
+          emit(arg(1));
+          break;
+
+        default:
+          body(func, length);
+      }
     };
 
     var recurse = function(func, out, results) {
@@ -680,7 +690,17 @@ export const compile = (function() {
       }
 
       party(func, results.length);
-      source += 'emit(result);\n';
+      if (func === 'get') return;
+
+      if (out.isFuture) {
+        out = out.child;
+        source += 'save();\n';
+        source += 'R.thread = result;\n';
+        await('result');
+        source += 'result = R.thread.result;\n';
+        source += 'restore();\n';
+      }
+      emit('result');
       return out;
     };
 
@@ -731,34 +751,9 @@ export const compile = (function() {
       var imp = best.imp;
       out = out || imp.output;
 
-      console.log('got imp for', name);
+      console.log('got imp for', name, '->', out);
 
-      switch (name) {
-        case 'literal %s':
-          emit(arg(0));
-          break;
-        case 'delay %n secs: %s':
-          assert(inputTypes.length === 2);
-          wait(arg(0));
-          emit(arg(1));
-          break;
-        case 'get %s':
-          source += 'get(' + arg(0) + ');\n';
-          source += 'return;\n';
-          break;
-        default:
-          out = recurse(imp.func, out, best.results);
-
-          // if (out.isFuture) {
-          //   out = out.child;
-          //   save();
-          //   source += 'R.thread = result;\n';
-          //   await('result');
-          //   source += 'result = R.thread.result;\n';
-          //   restore();
-          // }
-          // emit('result');
-      }
+      out = recurse(imp.func, out, best.results);
 
       source += 'restore();\n';
       return out;
