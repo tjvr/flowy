@@ -240,7 +240,7 @@ export const specs = [
   ["sensing", "date"],
 
   // ["sensing", "error"],
-  // ["sensing", "delay %s by %n secs", ["", 1]],
+  ["sensing", "delay %n secs: %s", [1, ""]],
 
 ];
 

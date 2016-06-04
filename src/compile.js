@@ -155,8 +155,9 @@ export const compile = (function() {
       var id = label();
       source += 'if (self.now() - R.start < R.duration * 1000 || R.first) {\n';
       source += '  R.first = false;\n';
-      queue(id);
+      forceQueue(id);
       source += '}\n';
+      source += 'console.log(self.now() - R.start);\n';
 
       source += 'restore();\n';
     };
@@ -255,55 +256,36 @@ export const compile = (function() {
       }
     };
 
-    /*
-    var compile = function(computed) {
-      var inputs = computed.inputs;
-      var length = inputs.length;
-
-      var threads = [];
-      for (var i=0; i<length; i++) {
-        // if (!inputs[i].isComputed) {
-        //   continue; // don't need to request Observables
-        // }
-        var name = 'thread' + i;
-        source += 'var ' + name + ' = request(THREAD.inputs[' + i + ']);\n';
-        threads.push(name);
-      }
-      for (var i=0; i<length; i++) {
-        var name = threads[i];
-        await(name);
-      }
-
-      var args = [];
-      for (var i=0; i<length; i++) {
-        var name = 'x' + i;
-        args.push(name);
-        source += 'var ' + name + ' = ' + 'THREAD.inputs[' + i + '].result;\n';
-      }
-      source += 'console.log(4);\n';
-      source += 'THREAD.emit(' + args[0] + ');\n';
-      //source += 'debugger;\n';
+    var arg = function(index) {
+      return 'C.threads[' + index + '].result';
     };
-    */
 
     var compile = function(name, inputTypes) {
       source += 'save();\n';
-      source += 'R.name = ' + JSON.stringify(name) + ";\n";
-      source += 'R.args = [];\n';
+      source += 'C.name = ' + JSON.stringify(name) + ";\n";
+      source += 'C.threads = [];\n';
       var length = inputTypes.length;
       for (var i=0; i<length; i++) {
-        source += 'R.args[' + i + '] = request(' + i + ');\n';
+        source += 'C.threads[' + i + '] = request(' + i + ');\n';
       }
       for (var i=0; i<length; i++) {
-        await('R.args[' + i + ']');
+        await('C.threads[' + i + ']');
       }
 
       switch (name) {
         case 'literal %s':
-          emit('R.args[0].result');
+          emit(arg(0));
+          break;
+        case '%n + %n':
+          emit(arg(0) + ' + ' + arg(1));
+          break;
+        case 'delay %n secs: %s':
+          assert(inputTypes.length === 2);
+          wait(arg(0));
+          emit(arg(1));
           break;
         case 'display %s':
-          emit(`['text', 'view-Text', R.args[0].result]`);
+          emit("['text', 'view-Text', " + arg(0) + "]");
           break;
         default:
           emit('"fred"');
@@ -319,7 +301,10 @@ export const compile = (function() {
     var startfn = computed.fns.length;
     var fns = [0];
 
-    var outputType = compile(computed.name, computed.inputs.map(inp => inp.type()));
+    var outputType = compile(computed.name, computed.args.map((inp, index) => {
+      var other = computed.inputs[index]
+      return other ? other.type() : "Any";
+    }));
 
     for (var i = 0; i < fns.length; i++) {
       computed.fns.push(createContinuation(source.slice(fns[i])));
@@ -521,15 +506,18 @@ export const runtime = (function() {
   };
 
   var queue = function(id) {
-    //assert(THREAD.parent === S);
-    IMMEDIATE = S.fns[id];
+    IMMEDIATE = THREAD.fns[id];
+    assert(THREAD.fns.indexOf(IMMEDIATE) !== -1);
     // TODO warp??
   };
 
   var forceQueue = function(id) {
     self.queue[INDEX] = THREAD;
-    //assert(THREAD.parent === S);
-    THREAD.fn = S.fns[id];
+    THREAD.fn = THREAD.fns[id];
+
+    // assert(THREAD.parent === S);
+    // assert(THREAD.fns === S.fns);
+    assert(THREAD.fns.indexOf(THREAD.fn) !== -1);
   };
 
   var request = function(index) {
@@ -568,6 +556,7 @@ export const runtime = (function() {
   class Evaluator {
     constructor() {
       this.queue = [];
+      this.baseNow = 0;
     }
 
     get framerate() { return 60; }
@@ -804,7 +793,6 @@ export const runtime = (function() {
       this.deps = new Set(inputs.filter((arg, index) => (this.args[index] !== '%u')));
       this.fns = [];
       this.thread = null;
-      this.needed = false;
     }
     get isComputed() { return true; }
 
@@ -826,13 +814,9 @@ export const runtime = (function() {
       if (this.thread && this.thread.hasStarted && this.thread.deps.has(arg)) {
         this.thread.cancel();
       }
-      // TODO what if a thread grabs a dep, and then it changes before the thread finishes??
-      this.recompute();
-    }
-
-    retype() {
-      this._type = null;
-      this.type();
+      if (this.needed) {
+        this.recompute();
+      }
     }
 
     type() {
@@ -848,14 +832,14 @@ export const runtime = (function() {
     recompute() {
       console.log('recompute', this.name);
       this.type();
-      this.thread = new Thread(evaluator, this, this.fns[0]);
-      this.thread.onFirstEmit(result => {
+      var thread = this.thread = new Thread(evaluator, this, this.fns[0]);
+      thread.onFirstEmit(result => {
         this.result = result;
         graph.emit(this, result);
         this.emit(result);
 
         this.deps.forEach(dep => dep.unsubscribe(this));
-        this.deps = this.thread.deps;
+        this.deps = thread.deps;
         this.deps.forEach(dep => dep.subscribe(this));
       });
     }
@@ -874,8 +858,18 @@ export const runtime = (function() {
         }
       }
       this.invalidate();
-      this.retype();
-      this.recompute();
+      this._type = null;
+      if (this.needed) {
+        this.recompute();
+      }
+    }
+
+    get needed() {
+      return this.name === 'display %s' || this.subscribers.size;
+    }
+
+    subscribe(obj) {
+      super.subscribe(obj);
     }
 
     request() {
