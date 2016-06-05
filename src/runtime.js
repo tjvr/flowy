@@ -286,7 +286,7 @@ var displayList = function(list) {
 
 var displayList = function(list) {
   if (!list) return;
-  return ['block', list.map(x => ['text', 'Text', x])];
+  return ['block', list.map(x => ['text', 'view-Int', x])];
 };
 
 var mod = function(x, y) {
