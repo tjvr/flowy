@@ -88,6 +88,72 @@ var typeOf = function(value) {
 
 
 
+export const coercions = (function(coercions) {
+  var c = new Map();
+  Object.keys(coercions).map(out => {
+    var outType = type.fromString(out);
+    var d;
+    c.set(outType, d = new Map());
+    Object.keys(coercions[out]).map(inp => {
+      var inpType = type.fromString(inp);
+      d.set(inpType, coercions[out][inp]);
+    });
+  });
+  return c;
+}({
+  Text: {
+    Int: '($0.toString())',
+    Frac: '($0.toString())',
+    Float: '($0.toFixed(3))',
+    Empty: '("")',
+  },
+  Float: {
+    Text: '(+$0)',
+  },
+  List: {
+    Empty: '([])',
+  },
+  Frac: {
+    Int: '(new Fraction($0, 1))',
+  },
+  Float: {
+    Int: '(+$0.toString())',
+  },
+  Bool: {
+    List: '(!!$0.length)',
+  },
+  Uncertain: {
+    Int: '(new Uncertain($0.toString()))',
+    Frac: '(new Uncertain($0.n / $0.d))',
+    Float: '(new Uncertain($0))',
+  },
+}));
+
+import {parseSpec} from "./type";
+import {functions, byHash} from "./prims";
+
+export const prims = {};
+Object.keys(functions).forEach(function(spec) {
+  var func = functions[spec];
+  var info = parseSpec(spec);
+
+  var spec = byHash[info.hash];
+  if (!spec) throw info.hash;
+
+  var inputs = info.inputs;
+  var output = info.output;
+
+  var inputTypes = inputs.map(type.fromString);
+  var outputType = type.fromString(output);
+  prims[spec] = prims[spec] || [];
+  prims[spec].push({
+    wants: inputTypes,
+    output: outputType,
+    func: func,
+  });
+});
+
+
 var self, S, R, STACK, C, WARP, CALLS, BASE, INDEX, THREAD, IMMEDIATE;
 
 var display = function(type, content) {

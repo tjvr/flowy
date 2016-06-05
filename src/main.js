@@ -3685,5 +3685,5 @@ class App {
 
 window.app = new App();
 
-window.onbeforeunload = e => "AAAAA";
+//window.onbeforeunload = e => "AAAAA";
 

@@ -226,7 +226,7 @@ export const specs = [
 
 ];
 
-var byHash = {};
+export const byHash = {};
 specs.forEach(p => {
   let [category, spec, defaults] = p;
   var hash = spec.split(" ").map(word => {
@@ -634,29 +634,6 @@ export const functions = {
 
 };
 
-let coercions = {
-  "Text <- Int": x => x.toString(),
-  "Text <- Frac": x => x.toString(),
-  "Text <- Float": x => x.toFixed(2),
-  "Text <- Empty": x => "",
-
-  "Float <- Text": x => +x,
-
-  "List <- Empty": x => [],
-
-  "Frac <- Int": x => new Fraction(x, 1),
-  "Float <- Int": x => +x.toString(),
-
-  "Bool <- List": x => !!x.length,
-
-  //"List <- Record": recordToList,
-  //"List <- Time": recordToList,
-  //"List <- Date": recordToList,
-
-  "Uncertain <- Int": x => new Uncertain(x.toString()),
-  "Uncertain <- Frac": x => new Uncertain(x.n / x.d),
-  "Uncertain <- Float": x => new Uncertain(x),
-};
 function recordToList(record) {
   var schema = record.schema;
   var values = record.values;
@@ -665,101 +642,17 @@ function recordToList(record) {
 };
 
 
-export const coercionsByType = {};
-Object.keys(coercions).forEach(spec => {
-  var info = parseSpec(spec);
-  assert(info.inputs.length === 1);
-  let inp = info.inputs[0];
-  let out = info.output;
-  var byInput = coercionsByType[out] = coercionsByType[out] || [];
-  byInput.push([inp, coercions[spec]]);
-});
-
-function parseSpec(spec) {
-  var words = spec.split(/([A-Za-z:]+|[()]|<-)|\s+/g).filter(x => !!x);
-  var tok = words[0];
-  var i = 0;
-  function next() { tok = words[++i]; }
-  function peek() { return words[i + 1]; }
-
-  var isType = (tok => /^[A-Z_][a-z]+/.test(tok));
-
-  function pSpec() {
-    var words = [];
-    while (tok && tok !== '<-') {
-      words.push(tok);
-      next();
-    }
-    var outputType = words.join(" ");
-
-    assert(tok === '<-');
-    next();
-
-    var words = [];
-    var inputTypes = [];
-    while (tok) {
-      if (tok === '(' || isType(tok)) {
-        var type = pType();
-        assert(type);
-        inputTypes.push(type);
-        words.push("_");
-      } else {
-        words.push(tok);
-        next();
-      }
-    }
-
-    var hash = words.join(" ")
-    var spec = byHash[hash];
-    if (!spec) throw hash;
-    return {
-      spec: spec,
-      inputs: inputTypes,
-      output: outputType,
-    }
-  }
-
-  function pType() {
-    if (isType(tok)) {
-      var type = tok;
-      next();
-      assert(type);
-      return type; //[type];
-    } else if (tok === '(') {
-      next();
-      var words = [];
-      while (tok !== ')') {
-        if (tok === '<-') {
-          words = [words];
-          words.push("<-");
-          next();
-          var type = pType();
-          assert(type);
-          words.push(type);
-          break;
-        } else if (tok === '*') {
-          words.push('*');
-          next();
-          break;
-        }
-        var type = pType();
-        assert(type);
-        words.push(type);
-      }
-      assert(tok === ')');
-      next();
-      return words;
-    }
-  }
-
-  return pSpec();
-}
+import {parseSpec} from "./type";
 
 var bySpec = {};
-var byName = {};
 Object.keys(functions).forEach(function(spec) {
   var info = parseSpec(spec);
+
+  var spec = byHash[info.hash];
+  if (!spec) throw info.hash;
+
   var byInputs = bySpec[info.spec] = bySpec[info.spec] || [];
+  
 
   var func = functions[spec];
   byInputs.push({
@@ -767,9 +660,6 @@ Object.keys(functions).forEach(function(spec) {
     output: info.output,
     func: func,
   });
-
-  byName[func.name] = func;
-
 });
 
 export {bySpec};

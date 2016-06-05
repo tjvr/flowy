@@ -354,7 +354,31 @@ var compileNode = function(computed) {
     return out;
   };
 
-  var compile = function(name, inputTypes) {
+  var typeSpecial = function(name, inputTypes) {
+    switch (name) {
+      case 'item %n of %l':
+        let [index, list] = inputTypes;
+        return list.child;
+
+      case 'list %exp':
+        // TODO argh
+        return type.list(inputTypes[0]);
+
+      // case '%q of %o':
+      //   let [symbol, record] = inputTypes;
+      //   assert(type.symbol.isSuper(symbol)); // and is immediate!
+      //   var value = TODO get actual symbol value
+      //   return record.schema[value];
+
+      // TODO concat...
+      // TODO record type
+      // TODO list type
+
+      default:
+    }
+  };
+
+  var specialise = function(name, inputTypes) {
     if (name === '%s') return type.value("Ring"); // TODO rings
     source += 'save();\n';
     source += 'C.name = ' + JSON.stringify(name) + ";\n";
@@ -385,8 +409,7 @@ var compileNode = function(computed) {
         return new type.list(inputTypes[0]);
     }
 
-    var {best, out} = type(name, inputTypes);
-    var imps = best;
+    var imps = type(name, inputTypes);
     if (!imps || !imps.length) {
       console.log('no imps for', name, inputTypes);
       return null;
@@ -399,7 +422,7 @@ var compileNode = function(computed) {
     }
     var best = imps[0];
     var imp = best.imp;
-    out = out || imp.output;
+    var out = imp.output;
 
     console.log('got imp for', name, '->', out);
 
@@ -435,7 +458,7 @@ var compileNode = function(computed) {
         inputTypes.push(other);
     }
   });
-  var outputType = compile(computed.name, inputTypes);
+  var outputType = specialise(computed.name, inputTypes);
 
   for (var i = 0; i < fns.length; i++) {
     computed.fns.push(createContinuation(source.slice(fns[i])));
