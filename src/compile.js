@@ -154,7 +154,6 @@ var compileNode = function(computed) {
     source += '  R.first = false;\n';
     forceQueue(id);
     source += '}\n';
-    source += 'console.log(self.now() - R.start);\n';
 
     source += 'restore();\n';
   };
@@ -282,10 +281,18 @@ var compileNode = function(computed) {
     // evaluate inputs
 
     switch (func) {
-      case 'delay %n secs: %s':
-        assert(inputTypes.length === 2);
+      case 'delay':
+        assert(length === 2);
         wait(arg(0));
         emit(arg(1));
+        break;
+
+      case 'get':
+        source += 'save();\n';
+        await('R.future = getURL(' + arg(0) + ')');
+        await('R.future = readFile(R.future.result)');
+        source += 'emit(R.future.result);\n';
+        source += 'restore();\n';
         break;
 
       default:
@@ -340,7 +347,7 @@ var compileNode = function(computed) {
     }
 
     party(func, results.length);
-    if (func === 'get') return;
+    if (func === 'get' || func === 'delay') return type.any;
 
     if (out.isFuture) {
       out = out.child;
@@ -428,7 +435,9 @@ var compileNode = function(computed) {
 
     out = recurse(imp.func, out, best.results);
 
+
     source += 'restore();\n';
+    console.log(source);
     return out;
   };
 

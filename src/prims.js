@@ -488,7 +488,9 @@ export const functions = {
 
   /* Async tests */
 
-  "WebPage Future <- get Text": 'get',
+  "Any Future <- get Text": 'get',
+
+  "Any Future <- delay Int secs: Any": 'delay',
 
   "Time Future <- time": function() {
     var update = () => {

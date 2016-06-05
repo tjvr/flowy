@@ -363,69 +363,80 @@ var recordToList = function(record) {
   return symbols.map(name => values[name]);
 };
 
-var get = function(url) {
-  var thread = THREAD;
-
-  // TODO cors proxy
-  //var cors = 'http://crossorigin.me/http://';
+var getURL = function(url) {
+  var f = new Future();
+  // var cors = 'http://crossorigin.me/http://';
   var cors = 'http://localhost:1337/';
   url = cors + url.replace(/^https?\:\/\//, "");
   var xhr = new XMLHttpRequest;
   xhr.open('GET', url, true);
   xhr.onprogress = e => {
-    // thread.progress(e.loaded, e.total, e.lengthComputable);
+    // f.progress(e.loaded, e.total, e.lengthComputable);
   };
   xhr.onload = () => {
     if (xhr.status === 200) {
-      var r = {
+      f.emit({
         contentType: xhr.getResponseHeader('content-type'),
         response: xhr.response,
-      };
-
-      var mime = r.contentType.split(";")[0];
-      var blob = r.response;
-      if (/^image\//.test(mime)) {
-        var img = new Image();
-        img.addEventListener('load', e => {
-          thread.emit(img);
-        });
-        img.src = URL.createObjectURL(blob);
-      } else if (mime === 'application/json' || mime === 'text/json') {
-        var reader = new FileReader;
-        reader.onloadend = () => {
-          try {
-            var json = JSON.parse(reader.result);
-          } catch (e) {
-            thread.emit(new Error("Invalid JSON"));
-            return;
-          }
-          thread.emit(jsonToRecords(json));
-        };
-        reader.onprogress = function(e) {
-          //future.progress(e.loaded, e.total, e.lengthComputable);
-        };
-        reader.readAsText(blob);
-      } else if (/^text\//.test(mime)) {
-        var reader = new FileReader;
-        reader.onloadend = () => {
-          thread.emit(reader.result);
-        };
-        reader.onprogress = function(e) {
-          //future.progress(e.loaded, e.total, e.lengthComputable);
-        };
-        reader.readAsText(blob);
-      } else {
-        thread.emit(new Error(`Unknown content type: ${mime}`));
-      }
+      });
     } else {
-      thread.emit(new Error('HTTP ' + xhr.status + ': ' + xhr.statusText));
+      f.emit(new Error('HTTP ' + xhr.status + ': ' + xhr.statusText));
     }
   };
   xhr.onerror = () => {
-    thread.emit(new Error('XHR Error'));
+    f.emit(new Error('XHR Error'));
   };
   xhr.responseType = 'blob';
   setTimeout(xhr.send.bind(xhr));
+  return f;
+};
+
+var readFile = function(r) {
+  var f = new Future();
+  if (r instanceof Error) {
+    f.emit(r);
+    return f;
+  }
+  var mime = r.contentType.split(";")[0];
+  var blob = r.response;
+
+  if (/^image\//.test(mime)) {
+    var img = new Image();
+    img.addEventListener('load', e => {
+      f.emit(img);
+    });
+    img.src = URL.createObjectURL(blob);
+
+  } else if (mime === 'application/json' || mime === 'text/json') {
+    var reader = new FileReader;
+    reader.onloadend = () => {
+      try {
+        var json = JSON.parse(reader.result);
+      } catch (e) {
+        f.emit(new Error("Invalid JSON"));
+        return;
+      }
+      f.emit(jsonToRecords(json));
+    };
+    reader.onprogress = function(e) {
+      //f.progress(e.loaded, e.total, e.lengthComputable);
+    };
+    reader.readAsText(blob);
+
+  } else if (/^text\//.test(mime)) {
+    var reader = new FileReader;
+    reader.onloadend = () => {
+      f.emit(reader.result);
+    };
+    reader.onprogress = function(e) {
+      //f.progress(e.loaded, e.total, e.lengthComputable);
+    };
+    reader.readAsText(blob);
+
+  } else {
+    f.emit(new Error(`Unknown content type: ${mime}`));
+  }
+  return f;
 };
 
 var save = function() {
@@ -532,6 +543,7 @@ var request = function(index) {
 var await = function(thread, id) {
   if (thread instanceof Observable) return;
   var wake = THREAD;
+  THREAD.children.push(thread);
   if (!thread.isDone) {
     thread.onFirstEmit(function(result) {
       awake(wake, id);
@@ -942,8 +954,35 @@ class Computed extends Observable {
 
 /*****************************************************************************/
 
-class Thread {
+import {addEvents} from "./events";
+
+
+class Future {
+  constructor() {
+    this.isDone = false;
+    this.canceled = false;
+    this.result = null;
+  }
+
+  emit(result) {
+    this.result = result;
+    if (!this.isDone) {
+      this.isDone = true;
+      this.dispatchFirstEmit(result);
+    }
+    this.dispatchEmit(result);
+  }
+
+  cancel() {
+  }
+}
+addEvents(Future, 'firstEmit', 'emit', 'progress');
+
+
+class Thread extends Future {
   constructor(evaluator, parent, base) {
+    super();
+
     this.evaluator = evaluator;
     this.parent = parent,
     this.base = base;
@@ -956,18 +995,14 @@ class Thread {
     this.outputType = parent._type;
 
     this.hasStarted = false;
-    this.isDone = false;
-    this.canceled = false;
     this.deps = new Set();
     this.evaluator.startThread(this);
 
-    this.result = null;
     this.children = [];
     // TODO composite progress
   }
 
   cancel() {
-        debugger;
     this.evaluator.stopThread(this);
     this.canceled = true;
   }
@@ -981,9 +1016,6 @@ class Thread {
     this.dispatchEmit(result);
   }
 }
-
-import {addEvents} from "./events";
-addEvents(Thread, 'firstEmit', 'emit', 'progress');
 
 /***************************************************************************/
 
