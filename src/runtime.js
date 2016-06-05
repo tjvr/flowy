@@ -10,6 +10,8 @@ import _fraction from "fraction.js";
 import _tinycolor from  "tinycolor2";
 
 var BigInteger = jsBigInteger.BigInteger;
+var Fraction = _fraction;
+var tinycolor = _tinycolor;
 
 class Record {
   constructor(type, values) {
@@ -34,8 +36,10 @@ class Record {
   }
 }
 
-var Fraction = _fraction;
-var tinycolor = _tinycolor;
+var Time = type.schema('Time', ['hour', 'mins', 'secs']);
+var Date_ = type.schema('Date', ['year', 'month', 'day']);
+var RGB = type.schema('Rgb', ['red', 'green', 'blue']);
+var HSV = type.schema('Hsv', ['hue', 'sat', 'val']);
 
 class Uncertain {
   constructor(mean, stddev) {
@@ -350,6 +354,13 @@ var jsonToRecords = function(obj) {
   } else {
     return obj;
   }
+};
+
+var recordToList = function(record) {
+  var schema = record.schema;
+  var values = record.values;
+  var symbols = schema ? schema.symbols : Object.keys(values);
+  return symbols.map(name => values[name]);
 };
 
 var get = function(url) {

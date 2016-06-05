@@ -1,67 +1,5 @@
 
-function assert(x) {
-  if (!x) throw "Assertion failed!";
-}
-
 import {BigInteger} from "js-big-integer";
-import Fraction from "fraction.js";
-import tinycolor from  "tinycolor2";
-
-window.BigInteger = BigInteger;
-
-class Record {
-  constructor(schema, values) {
-    this.schema = schema;
-    this.values = values;
-  }
-
-  update(newValues) {
-    var values = {};
-    Object.keys(this.values).forEach(name => {
-      values[name] = this.values[name];
-    });
-    Object.keys(newValues).forEach(name => {
-      values[name] = newValues[name];
-    });
-    // TODO maintain order
-    return new Record(null, values);
-  }
-
-  toJSON() {
-    return this.values;
-  }
-}
-
-class Schema {
-  constructor(name, symbols) {
-    this.name = name;
-    this.symbols = symbols;
-    this.symbolSet = new Set(symbols);
-    // TODO validation function
-  }
-}
-var Time = new Schema('Time', ['hour', 'mins', 'secs']);
-var Date_ = new Schema('Date', ['year', 'month', 'day']);
-var RGB = new Schema('Rgb', ['red', 'green', 'blue']);
-var HSV = new Schema('Hsv', ['hue', 'sat', 'val']);
-
-function jsonToRecords(obj) {
-  if (typeof obj === 'object') {
-    if (obj.constructor === Array) {
-      return obj.map(jsonToRecords);
-    } else {
-      var values = {};
-      Object.keys(obj).forEach(key => {
-        values[key] = jsonToRecords(obj[key]);
-      });
-      return new Record(null, values);
-    }
-  } else {
-    return obj;
-  }
-}
-
-
 
 var literals = [
   ["Int", /^-?[0-9]+$/, BigInteger.parseInt],
@@ -99,13 +37,12 @@ export const literal = (value, types) => {
   return ''+value;
 };
 
+/*****************************************************************************/
 
 
 export const specs = [
 
   // TODO auto-ringification
-  // TODO multi-line
-  // TODO variadic
   // TODO optional arguments
 
   ["ring", "%s", []],
@@ -238,24 +175,7 @@ specs.forEach(p => {
   byHash[hash] = spec;
 });
 
-
-class Input {
-}
-
-class Spec {
-  constructor(category, words, defaults) {
-    this.category = category;
-    this.words = words;
-    // this.inputs = words.filter(x => x.isInput);
-    this.defaults = defaults;
-  }
-}
-
-class Imp {
-  constructor(spec, types, func) {
-
-  }
-}
+/*****************************************************************************/
 
 export const functions = {
 
@@ -519,7 +439,7 @@ export const functions = {
 
   /* Color */
   // TODO re-implement in-engine
-  "Bool <- Color = Color": tinycolor.equals,
+  "Bool <- Color = Color": 'tinycolor.equals',
   "Color <- Color": x => x,
   "Color <- color Color": x => x,
   "Color <- color Text": x => {
@@ -540,12 +460,6 @@ export const functions = {
     return color;
   },
   "Color <- mix Color with Float % of Color": (a, mix, b) => tinycolor.mix(a, b, mix),
-  //"Color <- r Int g Int b Int": (r, g, b) => {
-  //  return tinycolor({r, g, b});
-  //},
-  //"Color <- h Int s Int v Int": (h, s, v) => {
-  //  return tinycolor({h, s, v});
-  //},
   "Float <- brightness of Color": x => x.getBrightness(),
   "Float <- luminance of Color": x => x.getLuminance(),
   "Color <- spin Color by Int": (color, amount) => color.spin(amount),
@@ -623,44 +537,5 @@ export const functions = {
     return x.year < y.year && x.month < y.month && x.day < y.day;
   },
 
-
-
-  // "A Future <- delay A by Float secs": (value, time) => {
-  //   // TODO
-  // },
-  // "B Future List <- do (B <- A) for each (A Future List)": (ring, list) => {
-  //   return runtime.map(ring, list); // TODO
-  // },
-
 };
-
-function recordToList(record) {
-  var schema = record.schema;
-  var values = record.values;
-  var symbols = schema ? schema.symbols : Object.keys(values);
-  return symbols.map(name => values[name]);
-};
-
-
-import {parseSpec} from "./type";
-
-var bySpec = {};
-Object.keys(functions).forEach(function(spec) {
-  var info = parseSpec(spec);
-
-  var spec = byHash[info.hash];
-  if (!spec) throw info.hash;
-
-  var byInputs = bySpec[info.spec] = bySpec[info.spec] || [];
-  
-
-  var func = functions[spec];
-  byInputs.push({
-    inputs: info.inputs,
-    output: info.output,
-    func: func,
-  });
-});
-
-export {bySpec};
 
