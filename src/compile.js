@@ -127,7 +127,7 @@ var coerce = function(child, type, coercion) {
 var apply = function(func, inputTypes, coercions) {
   var args = [];
   for (var i=0; i<inputTypes.length; i++) {
-    args.push(coerce(new Resolve(new Arg(i)), inputTypes[i], coercions[i]));
+    args.push(coerce(new Arg(i), inputTypes[i], coercions[i]));
   }
   assert(all(coercions, c => c === true));
   for (var i=0; i<func.wants.length; i++) {
@@ -232,7 +232,7 @@ var warn = function(message) {
   warnings[message] = (warnings[message] || 0) + 1;
 };
 
-var generate = function(func, gen) {
+var generate = function(func, gen, node) {
   var nextLabel = function() {
     return func.fns.length + fns.length;
   };
@@ -342,14 +342,29 @@ var generate = function(func, gen) {
     return source.replace(/\$[0-9]+/g, function(x) { return args[+x.substr(1)]; });
   };
 
-  var val = function(gen, inputs) {
-    assert(!gen.canYield);
-    assert(gen instanceof Apply);
+  var literal = function(e) {
+    if (typeof e === 'number' || typeof e === 'boolean') {
+      return '' + e;
 
+    } else if (typeof e === 'string') {
+      return '"' + e
+        .replace(/\\/g, '\\\\')
+        .replace(/\n/g, '\\n')
+        .replace(/\r/g, '\\r')
+        .replace(/"/g, '\\"')
+        .replace(/\{/g, '\\x7b')
+        .replace(/\}/g, '\\x7d') + '"';
+    }
+    assert(false);
+  };
+
+  var val = function(gen, args) {
+    assert(!gen.canYield);
     switch (gen.name) {
       case 'apply':
-        var src = gen.func;
-        var args = gen.args.map(val);
+        var src = gen.func.source;
+        var args = gen.args.map(a => val(a, args));
+        assert(typeof src  === 'string');
         if (src[0] === '(') {
           return subs(src, args);
         } else {
@@ -357,7 +372,7 @@ var generate = function(func, gen) {
         }
 
       case 'arg':
-        return inputs[gen.index];
+        return args[gen.index];
       case 'resolve':
         assert(false);
         break;
@@ -449,7 +464,24 @@ var generate = function(func, gen) {
     if (gen.canYield) {
       emit(apply(gen));
     } else {
-      emit(val(gen));
+      var args = [];
+      source += 'C.threads = [\n';
+      for (var i=0; i<node.inputs.length; i++) {
+        //assert(node.inputs[i] instanceof Observable);
+        source += 'request(' + i + '),\n';
+      }
+      source += '];\n';
+      for (var i=0; i<node.inputs.length; i++) {
+        source += 'await(C.threads[' + i + ']);\n';
+
+        var arg = node.inputs[i];
+        if (arg.isComputed) {
+          args.push('C.threads[' + i + '].result');
+        } else {
+          args.push(literal(arg.result));
+        }
+      }
+      emit(val(gen, args));
     }
   };
 

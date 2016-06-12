@@ -60,12 +60,12 @@ class Uncertain {
 
 
 var typeOf = function(value) {
-  if (value === undefined) return '';
-  if (value === null) return '';
+  if (value === undefined) return;
+  if (value === null) return;
   switch (typeof value) {
     case 'number':
       if (/^-?[0-9]+$/.test(''+value)) return type.value('Int');
-      return 'Float';
+      return type.value('Float');
     case 'string':
       if (value === '') return type.value('Empty');
       return type.value('Text');
@@ -92,19 +92,7 @@ var typeOf = function(value) {
 
 
 
-export const coercions = (function(coercions) {
-  var c = new Map();
-  Object.keys(coercions).map(out => {
-    var outType = type.fromString(out);
-    var d;
-    c.set(outType, d = new Map());
-    Object.keys(coercions[out]).map(inp => {
-      var inpType = type.fromString(inp);
-      d.set(inpType, coercions[out][inp]);
-    });
-  });
-  return c;
-}({
+export const coercions = {
   Text: {
     Int: '($0.toString())',
     Frac: '($0.toString())',
@@ -113,9 +101,6 @@ export const coercions = (function(coercions) {
   },
   Float: {
     Text: '(+$0)',
-  },
-  List: {
-    Empty: '([])',
   },
   Frac: {
     Int: '(new Fraction($0, 1))',
@@ -131,7 +116,7 @@ export const coercions = (function(coercions) {
     Frac: '(new Uncertain($0.n / $0.d))',
     Float: '(new Uncertain($0))',
   },
-}));
+};
 
 import {parseSpec} from "./type";
 import {functions, byHash} from "./prims";
