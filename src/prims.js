@@ -197,7 +197,7 @@ export const functions = {
     el('Uncertain-stddev', uncertain.s),
   ]])`,
   "UI <- display Float": 'displayFloat',
-  //"UI <- display Record": 'displayRecord',
+  "UI <- display Record": 'displayRecord',
   "UI <- display List": 'displayList',
 
   /* Int */
@@ -214,8 +214,8 @@ export const functions = {
   /* Frac */
   "Frac <- Frac + Frac": '($0.add($1))',
   "Frac <- Frac – Frac": '($0.sub($1))',
-  "Frac <- Frac × Frac": '($0.mul($1))', 
-  "Frac <- Frac / Frac": '($0.div($1))', 
+  "Frac <- Frac × Frac": '($0.mul($1))',
+  "Frac <- Frac / Frac": '($0.div($1))',
   "Float <- float Frac": '($0.n / $0.d)',
   "Int <- round Frac": '(BigInteger.parseInt(""+Math.round($0.n / $0.d)))', // TODO
 
@@ -492,24 +492,7 @@ export const functions = {
 
   "Any Future <- delay Int secs: Any": 'delay',
 
-  "Time Future <- time": function() {
-    var update = () => {
-      if (this.isStopped) {
-        clearInterval(interval);
-        return;
-      }
-      var d = new Date();
-      this.emit(new Record(Time, {
-        hour: d.getHours(),
-        mins: d.getMinutes(),
-        secs: d.getSeconds(),
-      }));
-      this.target.invalidateChildren();
-    };
-    var interval = setInterval(update, 1000);
-    update();
-  },
-
+  "Time Future <- time": 'time',
   "Date Future <- date": function() {
     var update = () => {
       if (this.isStopped) {

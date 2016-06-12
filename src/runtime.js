@@ -289,6 +289,10 @@ var displayList = function(list) {
   return ['block', list.map(x => ['text', 'view-Int', x])];
 };
 
+var displayRecord = function(record) {
+  return display('Record', JSON.stringify(record));
+};
+
 var mod = function(x, y) {
   var r = x % y;
   if (r / y < 0) {
@@ -361,6 +365,31 @@ var recordToList = function(record) {
   var values = record.values;
   var symbols = schema ? schema.symbols : Object.keys(values);
   return symbols.map(name => values[name]);
+};
+
+var delay = function(duration, value) {
+  var f = new Future();
+  setTimeout(function() {
+    f.emit(value);
+  }, duration * 1000);
+  return f;
+};
+
+var time = function() {
+  var f = new Future();
+  var interval = setInterval(update, 1000);
+  function update() {
+    var d = new Date();
+    f.emit(new Record(Time, {
+      hour: d.getHours(),
+      mins: d.getMinutes(),
+      secs: d.getSeconds(),
+    }));
+  }
+  f.onCancel(function() {
+    clearInterval(interval);
+  });
+  return f;
 };
 
 var getURL = function(url) {
@@ -806,7 +835,7 @@ class Computed extends Observable {
     this.needed = false;
     this.inputs = inputs;
     this.deps = new Set(inputs.filter((arg, index) => (this.args[index] !== '%u')));
-    this.fns = [];
+    this.base = null;
     this.thread = null;
   }
   get isComputed() { return true; }
@@ -841,8 +870,13 @@ class Computed extends Observable {
     // if (this._type) {
     //   return this._type;
     // }
-    this.fns = [];
-    this._type = compile(this);
+    var x = compile(this);
+    if (x) {
+      var {type, op, base} = x;
+      this.fns = op.fns;
+      this.base = base;
+      this._type = type;
+    }
     return this._type;
   }
 
@@ -857,8 +891,7 @@ class Computed extends Observable {
         this.emit(null);
       }
     } else {
-      var thread = this.thread = new Thread(evaluator, this, this.fns[0]);
-      console.log(this.fns[0]);
+      var thread = this.thread = new Thread(evaluator, this, this.base);
       thread.onFirstEmit(result => {
         this.result = result;
         graph.emit(this, result);
@@ -976,7 +1009,7 @@ class Future {
   cancel() {
   }
 }
-addEvents(Future, 'firstEmit', 'emit', 'progress');
+addEvents(Future, 'firstEmit', 'emit', 'progress', 'cancel');
 
 
 class Thread extends Future {
@@ -1004,7 +1037,13 @@ class Thread extends Future {
 
   cancel() {
     this.evaluator.stopThread(this);
-    this.canceled = true;
+    if (!this.canceled) {
+      this.canceled = true;
+      this.children.forEach(child => {
+        child.cancel();
+      });
+      this.dispatchCancel();
+    }
   }
 
   emit(result) {
