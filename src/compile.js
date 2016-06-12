@@ -170,10 +170,11 @@ var typeCheck = function(name, inputTypes) {
     var best = imps[0];
     if (any(best.coercions, c => c.kind === 'vectorise')) {
       var g = vectorise(best, inputTypes, best.coercions)
+      g.type = type.list(best.output);
     } else {
       var g = apply(best, inputTypes, best.coercions);
+      g.type = best.output;
     }
-    g.type = best.output;
     return g;
 
   } else if (imps.length > 1) {
@@ -185,9 +186,7 @@ var typeCheck = function(name, inputTypes) {
   }
 };
 
-var typePrim = function(name, inputs) {
-  var inputTypes = inputs.map(x => x.type());
-
+var typePrim = function(name, inputTypes) {
   switch (name) {
     case 'item %n of %l':
       let [index, list] = inputTypes;
@@ -228,23 +227,10 @@ var isMine = function(node, other) {
 };
 
 var compileNode = function(node) {
-  var g = typePrim(node.name, node.inputs);
-  if (!g) return;
+  var inputTypes = node.inputs.map(x => x.type());
 
-  var t = g;
-  if (g instanceof Vectorise) {
-    t = g.child;
-  }
-  assert(t instanceof Apply);
-  var inputs = node.inputs;
-  for (var i=0; i<inputs.length; i++) {
-    var other = inputs[i];
-    if (!other.isComputed) {
-      t.sub(i, new Literal(other.result));
-    } else if (isMine(node, other)) {
-      t.sub(i, compileNode(other));
-    }
-  }
+  var g = typePrim(node.name, inputTypes);
+  if (!g) return;
 
   return g;
 };
@@ -256,8 +242,8 @@ var compile = function(node) {
 
   var op = Func.cache(node.name);
   var base = generate(op, g, node);
-
   console.log(base);
+
   return {type, op, base};
 };
 
@@ -442,7 +428,7 @@ var generate = function(func, gen, node) {
     var func = gen.child.func;
     var args = gen.child.args;
 
-    var childInputs = inputs.slice(); 
+    var childInputs = inputs.slice();
     for (var i=0; i<indexes.length; i++) {
       var index = indexes[i];
       var name = 'vec_' + index;
@@ -450,7 +436,6 @@ var generate = function(func, gen, node) {
       inputs[index] = name;
       childInputs[index] = name + '[index]';
     }
-    console.log(inputs, childInputs);
 
     source += 'save();\n';
     source += 'var length = ' + inputs[indexes[0]] + '.length;\n';
@@ -478,6 +463,7 @@ var generate = function(func, gen, node) {
 
     source += '}\n';
     source += 'restore();\n';
+    return 'l';
   };
 
   var generate = function(gen) {
