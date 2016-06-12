@@ -163,19 +163,23 @@ var vectorise = function(func, inputTypes, coercions) {
   return new Vectorise(g, indexes);
 };
 
+var intermediate = function(imp, inputTypes) {
+  if (any(imp.coercions, c => c.kind === 'vectorise')) {
+    var g = vectorise(imp, inputTypes, imp.coercions)
+      g.type = type.list(imp.output);
+  } else {
+    var g = apply(imp, inputTypes, imp.coercions);
+    g.type = imp.output;
+  }
+  return g;
+};
+
 var typeCheck = function(name, inputTypes) {
   var imps = type(name, inputTypes);
 
   if (imps.length === 1) {
     var best = imps[0];
-    if (any(best.coercions, c => c.kind === 'vectorise')) {
-      var g = vectorise(best, inputTypes, best.coercions)
-      g.type = type.list(best.output);
-    } else {
-      var g = apply(best, inputTypes, best.coercions);
-      g.type = best.output;
-    }
-    return g;
+    return intermediate(best, inputTypes);
 
   } else if (imps.length > 1) {
     return new RuntimeCheck(name);
@@ -188,6 +192,16 @@ var typeCheck = function(name, inputTypes) {
 
 var typePrim = function(name, inputTypes) {
   switch (name) {
+    case 'join %exp':
+      // TODO how to type variadics?
+      var wants = [];
+      for (var i=0; i<inputTypes.length; i++) {
+        wants.push(type.string);
+      }
+      return intermediate({
+        wants: wants,
+      }, inputTypes);
+
     case 'item %n of %l':
       let [index, list] = inputTypes;
       g.type = list.child;
