@@ -941,7 +941,7 @@ class Computed extends Observable {
   }
 
   updateNeeded() {
-    var needed = this.isSink || this.subscribers.size || this.isBubble;
+    var needed = this.isSink || !!this.subscribers.size || this.isBubble;
     if (this.needed === needed) return;
     this.needed = needed;
     if (needed) {

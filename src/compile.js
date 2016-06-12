@@ -62,6 +62,18 @@ class Apply extends Gen {
     this.func = func;
     this.args = args;
   }
+
+  sub(index, arg) {
+    this.args[index] = arg;
+    this.canYield = this.func.canYield || any(this.args, g => g.canYield);
+  }
+}
+
+class Literal extends Gen {
+  constructor(value) {
+    super('literal', false);
+    this.value = value;
+  }
 }
 
 class Arg extends Gen {
@@ -141,7 +153,8 @@ var vectorise = function(func, inputTypes, coercions) {
   for (var i=0; i<coercions.length; i++) {
     if (coercions[i].kind === 'vectorise') {
       indexes.push(i);
-      coercions[i] = coercions[i].child;
+      coercions[i] = coercions[i].child || true;
+      inputTypes[i] = inputTypes[i].child;
     }
   }
   assert(indexes.length);
@@ -202,14 +215,42 @@ var typePrim = function(name, inputs) {
   }
 };
 
-var compile = function(node) {
-  // if (!node.isComputed) {
-  //   var value = node.result;
-  //   // TODO
-  //   return;
-  // }
+var isMine = function(node, other) {
+  // TODO needed is wrong
+  var subs = other.subscribers;
+  var mine = true;
+  subs.forEach(s => {
+    if (s !== node && s.needed && !(s.isBubble && !s.isSink)) {
+      mine = false;
+    }
+  });
+  return mine
+};
 
+var compileNode = function(node) {
   var g = typePrim(node.name, node.inputs);
+  if (!g) return;
+
+  var t = g;
+  if (g instanceof Vectorise) {
+    t = g.child;
+  }
+  assert(t instanceof Apply);
+  var inputs = node.inputs;
+  for (var i=0; i<inputs.length; i++) {
+    var other = inputs[i];
+    if (!other.isComputed) {
+      t.sub(i, new Literal(other.result));
+    } else if (isMine(node, other)) {
+      t.sub(i, compileNode(other));
+    }
+  }
+
+  return g;
+};
+
+var compile = function(node) {
+  var g = compileNode(node);
   if (!g) return;
   var type = g.type;
 
@@ -271,73 +312,6 @@ var generate = function(func, gen, node) {
     source += 'emit(' + value + ');\n';
   };
 
-
-  var vectorise = function(name, inputTypes, coercions) {
-    var vectorise = [];
-    for (var i=0; i<results.length; i++) {
-      if (results[i] !== true && results[i].kind === 'vectorise') vectorise.push(i);
-    }
-    assert(vectorise.length);
-
-    coercions = coercions.map(thing => thing.map(result => {
-      return result !== true && result.kind === 'vectorise' ? result.child || true : result;
-    }));
-
-
-      results = results.map(result => {
-        return result !== true && result.kind === 'vectorise' ? result.child || true : result;
-      });
-      // TODO fast vectorise if prim is immediate
-      // TODO parallel map
-      source += 'save();\n';
-      source += 'R.length = ' + arg(vectorise[0]) + '.length;\n';
-      if (vectorise.length > 1) {
-        var cond = [];
-        for (var i=1; i<vectorise.length; i++) {
-          cond.push(arg(vectorise[i]) + '.length !== R.length');
-        }
-        source += 'if (' + cond.join(' || ') + ') {\n';
-          emit('new Error("Poop")');
-          source += '}\n';
-      }
-      source += 'if (R.length === 0) {\n';
-      emit('[]');
-      source += 'return;\n';
-      source += '}\n';
-      source += 'R.index = 0;\n';
-      source += 'R.results = [];\n';
-      source += 'R.arrays = C.threads;\n';
-      source += 'C.threads = R.arrays.slice();\n';
-      var id = label();
-      for (var i=0; i<vectorise.length; i++) {
-        source += 'C.threads[' + vectorise[i] + '] = {result: R.arrays[' + vectorise[i] + '].result[R.index]};\n';
-      }
-      party(func, results.length);
-      source += 'R.results.push(result);\n';
-      source += 'R.index += 1;\n';
-      source += 'if (R.index < R.length) {\n';
-      queue(id);
-      source += '}\n';
-      source += 'emit(R.results);\n';
-      source += 'restore();\n';
-      return type.list(out);
-
-    // ...
-
-    coerce(name, inputTypes, coercions);
-
-    // ...
-    return type.list(out);
-
-    // vectorise
-    var vectorise = [];
-    for (var i=0; i<results.length; i++) {
-      if (results[i] !== true && results[i].kind === 'vectorise') vectorise.push(i);
-    }
-    if (vectorise.length) {
-    }
-  };
-
   var subs = function(source, args) {
     return source.replace(/\$[0-9]+/g, function(x) { return args[+x.substr(1)]; });
   };
@@ -358,12 +332,12 @@ var generate = function(func, gen, node) {
     assert(false);
   };
 
-  var val = function(gen, args) {
+  var val = function(gen, inputs) {
     assert(!gen.canYield);
     switch (gen.name) {
       case 'apply':
         var src = gen.func.source;
-        var args = gen.args.map(a => val(a, args));
+        var args = gen.args.map(a => val(a, inputs));
         assert(typeof src  === 'string');
         if (src[0] === '(') {
           return subs(src, args);
@@ -371,14 +345,23 @@ var generate = function(func, gen, node) {
           return '(' + src + '(' + args.join(', ') + '))';
         }
 
+      case 'literal':
+        return literal(gen.value);
       case 'arg':
-        return args[gen.index];
+        return inputs[gen.index];
       case 'resolve':
         assert(false);
         break;
       case 'coerce':
         var value = arg(gen.child);
         return subs(gen.coercion, [value]);
+
+      case 'vectorise':
+        var name = gensym();
+        vectorise(gen, inputs);
+        source += 'var ' + name + ' = l;\n';
+        return name;
+
       case 'list':
       case 'record':
       default:
@@ -452,11 +435,77 @@ var generate = function(func, gen, node) {
     return name;
   };
 
+  var vectorise = function(gen, inputs) {
+    var indexes = gen.indexes;
+    var child = gen.child;
+    assert(child instanceof Apply);
+    var func = gen.child.func;
+    var args = gen.child.args;
+
+    var childInputs = inputs.slice(); 
+    for (var i=0; i<indexes.length; i++) {
+      var index = indexes[i];
+      var name = 'vec_' + index;
+      source += 'var ' + name + ' = ' + (inputs[index] || '[]') + ';\n';
+      inputs[index] = name;
+      childInputs[index] = name + '[index]';
+    }
+    console.log(inputs, childInputs);
+
+    source += 'save();\n';
+    source += 'var length = ' + inputs[indexes[0]] + '.length;\n';
+    if (indexes.length > 1) {
+      var cond = [];
+      for (var i=1; i<indexes.length; i++) {
+        cond.push(inputs[indexes[i]] + '.length !== R.length');
+      }
+      source += 'if (' + cond.join(' || ') + ') {\n';
+      emit('new Error("Poop")');
+      source += '}\n';
+    }
+    source += 'var l = [];\n';
+    source += 'for (var index = 0; index < length; index++) {\n';
+
+    if (child.canYield) {
+      // parallel map
+      // TODO
+      debugger;
+
+    } else {
+      // fast vectorise
+      source += 'l.push(' + val(child, childInputs) + ');\n';
+    }
+
+    source += '}\n';
+    source += 'restore();\n';
+  };
+
   var generate = function(gen) {
     if (gen instanceof RuntimeCheck) {
+      // TODO
+      source += 'debugger;\n';
       source += 'var x = compile(S);\n';
       source += 'IMMEDIATE = x.base();\n';
       source += 'return;\n';
+      return;
+    }
+
+    if (gen instanceof Vectorise) {
+      var args = [];
+      source += 'C.threads = [\n';
+      for (var i=0; i<node.inputs.length; i++) {
+        //assert(node.inputs[i] instanceof Observable);
+        source += 'request(' + i + '),\n';
+      }
+      source += '];\n';
+      for (var i=0; i<node.inputs.length; i++) {
+        source += 'await(C.threads[' + i + ']);\n';
+
+        var arg = node.inputs[i];
+        args.push('C.threads[' + i + '].result');
+      }
+
+      emit(vectorise(gen, args));
       return;
     }
 
@@ -475,11 +524,7 @@ var generate = function(func, gen, node) {
         source += 'await(C.threads[' + i + ']);\n';
 
         var arg = node.inputs[i];
-        if (arg.isComputed) {
-          args.push('C.threads[' + i + '].result');
-        } else {
-          args.push(literal(arg.result));
-        }
+        args.push('C.threads[' + i + '].result');
       }
       emit(val(gen, args));
     }
