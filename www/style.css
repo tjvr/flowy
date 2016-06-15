@@ -68,8 +68,8 @@ html, body {
 .world {
   position: absolute;
   top: 0;
-  left: 258px;
-  right: 0;
+  left: 0;
+  right: 258px;
   bottom: 0;
 }
 
@@ -77,11 +77,23 @@ html, body {
   position: fixed;
   top: 0;
   bottom: 0;
-  left: 0;
+  right: 0;
   width: 256px;
   z-index: 101;
-  border-right: 2px solid #aaa;
+  border-left: 2px solid #aaa;
   background: #fff;
+}
+
+.tag {
+  position: fixed;
+  top: 0;
+  left: 0;
+  height: 48px;
+  width: 256px;
+  border-right: 2px solid #aaa;
+  border-bottom: 2px solid #aaa;
+  background: #fff;
+  border-radius: 0 0 16px 0;
 }
 
 .search {

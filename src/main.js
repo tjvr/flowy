@@ -2870,6 +2870,12 @@ var paletteContents = [];
 var blocksBySpec = {};
 specs.forEach(p => {
   let [category, spec, defaults] = p;
+  var block = makeBlock(category, spec, defaults);
+  if (!block) return;
+  paletteContents.push(block);
+});
+
+function makeBlock(category, spec, defaults) {
   var def = (defaults || []).slice();
   var color = colors[category] || '#555';
   var words = spec.split(/ /g);
@@ -2978,8 +2984,8 @@ specs.forEach(p => {
   if (category === 'hidden') {
     return;
   }
-  paletteContents.push(b);
-});
+  return b;
+}
 
 class Search extends Drawable {
   constructor(parent) {
@@ -3088,6 +3094,35 @@ class Palette extends Workspace {
   get isPalette() { return true; }
 }
 
+class Tag extends Workspace {
+  constructor() {
+    super();
+    this.el.className += ' tag';
+
+    //this.block = paletteContents[18].copy();
+  }
+  get isScrollable() { return false; }
+  get isTag() { return true; }
+  get isPalette() { return true; }
+
+  get block() { return this._block; }
+  set block(o) {
+    this._block = o;
+    this.add(o);
+    this.layout();
+    o.moveTo(8, 8);
+  }
+
+  layout() {
+    this.width = this.block.width + 8 + 10;
+    this.el.style.width = `${this.width}px`;
+  }
+
+  // objectFromPoint(x, y) {
+  //   return this;
+  // }
+}
+
 /*****************************************************************************/
 
 class World extends Workspace {
@@ -3118,15 +3153,20 @@ class App {
 
     this.world = new World(this.elWorld = el(''));
     this.palette = new Palette(this.elPalette = el(''));
-    this.workspaces = [this.world, this.palette];
+    this.tag = new Tag(this.elTag = el(''));
+    this.workspaces = [this.world, this.palette, this.tag];
     this.el.appendChild(this.world.el);
     this.el.appendChild(this.palette.el);
+    this.el.appendChild(this.tag.el);
 
     this.world.app = this; // TODO
 
     this.resize();
     this.palette.filter("");
     this.palette.search.el.focus();
+
+    //this.tag.block = makeBlock('custom', 'potato');
+    this.tag.block = makeBlock('custom', 'fib %n', [5]);
 
     this.fingers = [];
     this.feedbackPool = [];
@@ -3429,7 +3469,7 @@ class App {
       }
     }
 
-    if (g.pressed && g.shouldDrag && !g.dragging) {
+    if (g.pressed && g.shouldDrag && !g.dragging) { //&& !g.pressObject.dragObject.workspace.isTag) {
       this.drop(g);
       g.shouldScroll = false;
       var obj = g.pressObject.dragObject;

@@ -161,6 +161,8 @@ export const specs = [
   // ["sensing", "error"],
   ["sensing", "delay %n secs: %s", [1, ""]],
 
+  ["custom", "return %s"],
+
 ];
 
 export const byHash = {};
