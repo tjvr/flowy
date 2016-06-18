@@ -1335,6 +1335,19 @@ class Block extends Drawable {
     return this;
   }
 
+  click() {
+    if (this.isDoubleTap()) {
+      console.log('hi');
+      if (this.workspace.app && this.world) {
+        var b = this.copy();
+        b.world = this.world;
+        this.workspace.app.startEditing(b);
+      }
+      return;
+    }
+    super.click();
+  }
+
   copy() {
     var b = new Block(this.info, this.parts.map(c => c.copy()));
     b.inputs = this.inputs.map(part => {
@@ -1346,6 +1359,7 @@ class Block extends Drawable {
     });
     b.count = this.count;
     b.wrap = this.wrap;
+    b.world = this.world;
     return b;
   }
 
@@ -2837,6 +2851,24 @@ class Workspace extends Frame {
 
 /*****************************************************************************/
 
+class World extends Workspace {
+  constructor() {
+    super();
+    this.el.className += ' world';
+    this.elContents.className += ' world-contents';
+  }
+
+  get isWorld() { return true; }
+  get isInfinite() { return true; }
+  get isZoomable() { return true; }
+
+  fixZoom(zoom) {
+    return Math.min(4.0, this.zoom);
+  }
+
+}
+
+/*****************************************************************************/
 
 import {literal, specs} from "./prims";
 
@@ -2985,6 +3017,9 @@ function makeBlock(category, spec, defaults) {
   if (category === 'hidden') {
     return;
   }
+  if (category === 'custom') {
+    b.world = new World(el(''));
+  }
   return b;
 }
 
@@ -3098,7 +3133,7 @@ class Palette extends Workspace {
 class Header extends Workspace {
   constructor() {
     super();
-    this.el.className += ' tag';
+    this.el.className += ' header';
 
     //this.block = paletteContents[18].copy();
   }
@@ -3108,6 +3143,9 @@ class Header extends Workspace {
 
   get block() { return this._block; }
   set block(o) {
+    if (this._block) {
+      this.remove(this._block);
+    }
     this._block = o;
     this.add(o);
     this.layout();
@@ -3128,25 +3166,6 @@ class Header extends Workspace {
 
 /*****************************************************************************/
 
-class World extends Workspace {
-  constructor() {
-    super();
-    this.el.className += ' world';
-    this.elContents.className += ' world-contents';
-  }
-
-  get isWorld() { return true; }
-  get isInfinite() { return true; }
-  get isZoomable() { return true; }
-
-  fixZoom(zoom) {
-    return Math.min(4.0, this.zoom);
-  }
-
-}
-
-/*****************************************************************************/
-
 class App {
   constructor() {
     this.el = el('app');
@@ -3154,22 +3173,21 @@ class App {
     document.body.appendChild(this.el);
     document.body.appendChild(this.elScripts = el('absolute dragging'));
 
-    this.world = new World(this.elWorld = el(''));
+    this.root = this.world = new World(this.elWorld = el(''));
     this.palette = new Palette(this.elPalette = el(''));
-    this.tag = new Header(this.elHeader = el(''));
-    this.workspaces = [this.world, this.palette, this.tag];
+    this.header = new Header(this.elHeader = el(''));
+    this.header.el.classList.add('out');
+    this.workspaces = [this.world, this.palette, this.header];
     this.el.appendChild(this.world.el);
     this.el.appendChild(this.palette.el);
-    this.el.appendChild(this.tag.el);
+    this.el.appendChild(this.header.el);
 
     this.world.app = this; // TODO
+    this.palette.app = this; // TODO
 
     this.resize();
     this.palette.filter("");
     this.palette.search.el.focus();
-
-    //this.tag.block = makeBlock('custom', 'potato');
-    this.tag.block = makeBlock('custom', 'fib %n', [5]);
 
     this.fingers = [];
     this.feedbackPool = [];
@@ -3199,6 +3217,46 @@ class App {
   get isApp() { return true; }
   get app() { return this; }
 
+  get isEditing() {
+    return this.world !== this.root;
+  }
+
+  startEditing(block) {
+    assert(block.world);
+    if (this.isEditing) {
+      this.el.removeChild(this.world.el);
+    }
+    this.header.block = block;
+
+    var world = block.world;
+    this.world = world;
+    world.app = this;
+    world.resize();
+    this.workspaces.push(world);
+
+    this.el.appendChild(world.el);
+    this.el.appendChild(this.header.el);
+
+    this.world.el.classList.add('out');
+    this.header.el.classList.add('out');
+    setTimeout(() => {
+      this.world.el.classList.remove('out');
+      this.header.el.classList.remove('out');
+    }, 1);
+  }
+  endEditing() {
+    assert(this.isEditing);
+    var world = this.world;
+    assert(this.workspaces.pop() === world);
+    world.app = null;
+    world.el.classList.add('out');
+    this.header.el.classList.add('out');
+    setTimeout(() => {
+      this.el.removeChild(world.el);
+    }, 300);
+    this.world = this.root;
+  }
+
   layout() {}
 
   resize(e) {
@@ -3216,8 +3274,11 @@ class App {
     }
 
     if (e.target === document.body) {
-      if (e.keyCode === 8) {
+      if (e.keyCode === 8) { // return
         e.preventDefault();
+      } else if (e.keyCode === 27 && this.isEditing) { // escape
+        e.preventDefault();
+        this.endEditing();
       }
     }
   }
