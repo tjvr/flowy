@@ -59,8 +59,8 @@ export const specs = [
   ["record", "merge %o with %o"],
   ["record", "%q of %o", ["name"]],
   ["record", "table headings: %l %br rows: %l"],
-  ["record", "%o to JSON"],
-  ["record", "from JSON %s"],
+  // ["record", "%o to JSON"],
+  // ["record", "from JSON %s"],
 
   /* List */
 
@@ -424,24 +424,24 @@ export const functions = {
     this.emit(table);
     init = true;
   },
-  "Text <- Any to JSON": record => {
-    return JSON.stringify(record);
-  },
-  "Text <- List to JSON": record => {
-    return JSON.stringify(record);
-  },
-  "Text <- Record to JSON": record => {
-    return JSON.stringify(record);
-  },
+  // "Text <- Any to JSON": record => {
+  //   return JSON.stringify(record);
+  // },
+  // "Text <- List to JSON": record => {
+  //   return JSON.stringify(record);
+  // },
+  // "Text <- Record to JSON": record => {
+  //   return JSON.stringify(record);
+  // },
 
-  "Record <- from JSON Text": text => {
-    try {
-      var json = JSON.parse(text);
-    } catch (e) {
-      return new Error("Invalid JSON");
-    }
-    return jsonToRecords(json);
-  },
+  // "Record <- from JSON Text": text => {
+  //   try {
+  //     var json = JSON.parse(text);
+  //   } catch (e) {
+  //     return new Error("Invalid JSON");
+  //   }
+  //   return jsonToRecords(json);
+  // },
 
 
   /* Color */
