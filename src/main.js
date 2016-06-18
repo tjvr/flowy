@@ -1532,7 +1532,7 @@ class Block extends Drawable {
   pathBlock(context) {
     var w = this.ownWidth;
     var h = this.ownHeight;
-    var r = 4 * density;
+    var r = 6 * density;
 
     context.moveTo(0, r + .5);
     context.arc(r, r + .5, r, PI, PI32, false);
