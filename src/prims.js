@@ -70,10 +70,10 @@ export const specs = [
   ["list", "length of %l", []],
   ["list", "sum %l"],
   // ["list", "count %l", []],
-  ["list", "count %l if %r", []],
-  ["list", "keep %r from %l"],
-  ["list", "for each %l do %r"],
-  ["list", "combine %l with %r"],
+  // ["list", "count %l if %r", []],
+  // ["list", "keep %r from %l"],
+  // ["list", "for each %l do %r"],
+  // ["list", "combine %l with %r"],
 
   // TODO
 

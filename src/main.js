@@ -3083,11 +3083,17 @@ class Palette extends Workspace {
     this.search = new Search(this);
     this.elContents.appendChild(this.search.el);
 
+    this.makeBtn = el('button', 'button');
+    this.makeBtn.textContent = "Make a block";
+    this.elContents.appendChild(this.makeBtn);
+    this.makeBtn.addEventListener('click', e => this.make());
+
     this.blocks = paletteContents;
     this.blocks.forEach(o => {
       this.add(o);
     });
   }
+  get isPalette() { return true; }
 
   layout() {}
 
@@ -3119,9 +3125,23 @@ class Palette extends Workspace {
         o.hidden = true;
       }
     });
+
+    this.makeBtn.style.transform = `translate(10px, ${y}px)`;
+    y += 20;
+    y += 16;
+
     this.contentsBottom = y;
     this.contentsRight = w + 16;
+    this.scrollToTop();
+  }
+
+  scrollToTop() {
     this.scrollY = 0;
+    this.makeBounds();
+    this.transform();
+  }
+  scrollToBottom() {
+    this.scrollY = this.contentsBottom - this.height;
     this.makeBounds();
     this.transform();
   }
@@ -3141,7 +3161,15 @@ class Palette extends Workspace {
     return this;
   }
 
-  get isPalette() { return true; }
+  make() {
+    var spec = window.prompt("Block spec?");
+    var b = makeBlock('custom', spec, []);
+    this.add(b);
+    paletteContents.push(b);
+    this.filter(this.search.el.value);
+    this.scrollToBottom();
+  }
+
 }
 
 class Header extends Workspace {
