@@ -141,7 +141,7 @@ var apply = function(func, inputTypes, coercions) {
   for (var i=0; i<inputTypes.length; i++) {
     args.push(coerce(new Arg(i), inputTypes[i], coercions[i]));
   }
-  assert(all(coercions, c => c === true));
+  //assert(all(coercions, c => c === true));
   for (var i=0; i<func.wants.length; i++) {
     assert(func.wants[i].isSuper(inputTypes[i]));
   }
@@ -200,6 +200,7 @@ var typePrim = function(name, inputTypes) {
       }
       return intermediate({
         wants: wants,
+        coercions: [true],
       }, inputTypes);
 
     case 'item %n of %l':
@@ -353,7 +354,7 @@ var generate = function(func, gen, node) {
         assert(false);
         break;
       case 'coerce':
-        var value = arg(gen.child);
+        var value = val(gen.child, inputs);
         return subs(gen.coercion, [value]);
 
       case 'vectorise':
