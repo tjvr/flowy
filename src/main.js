@@ -3294,6 +3294,7 @@ class App {
     assert(block.defWorld);
     if (this.isEditing) {
       this.el.removeChild(this.world.el);
+      this.workspaces[0] = this.root;
     }
     this.header.block = block;
     this.header.el.classList.add('out');
