@@ -123,25 +123,25 @@ export const specs = [
 
   /* Color */
 
-  ["color", "%c", []],
-  ["color", "color %s", ["blue"]],
-  // ["color", "color %s", ["#0cb6f7"]],
-  ["color", "mix %c with %n %% of %c", ['', 50, '']],
-  // ["color", "r %n g %n b %n", [0, 127, 255]],
-  // ["color", "h %n s %n v %n", [0, 127, 255]],
-  ["color", "brightness of %c", []],
-  ["color", "luminance of %c", []],
-
-  ["color", "%c to hex"],
-  ["color", "%c to rgb"],
-  ["color", "%c to hsv"],
-  ["color", "spin %c by %n"],
-  // TODO menus
-  ["color", "analogous colors %c"],
-  ["color", "triad colors %c"],
-  ["color", "monochromatic colors %c"],
-  ["color", "invert %c"],
-  ["color", "complement %c"],
+//  ["color", "%c", []],
+//  ["color", "color %s", ["blue"]],
+//  // ["color", "color %s", ["#0cb6f7"]],
+//  ["color", "mix %c with %n %% of %c", ['', 50, '']],
+//  // ["color", "r %n g %n b %n", [0, 127, 255]],
+//  // ["color", "h %n s %n v %n", [0, 127, 255]],
+//  ["color", "brightness of %c", []],
+//  ["color", "luminance of %c", []],
+//
+//  ["color", "%c to hex"],
+//  ["color", "%c to rgb"],
+//  ["color", "%c to hsv"],
+//  ["color", "spin %c by %n"],
+//  // TODO menus
+//  ["color", "analogous colors %c"],
+//  ["color", "triad colors %c"],
+//  ["color", "monochromatic colors %c"],
+//  ["color", "invert %c"],
+//  ["color", "complement %c"],
 
   /* Image */
 
@@ -442,51 +442,51 @@ export const functions = {
 
   /* Color */
   // TODO re-implement in-engine
-  "Bool <- Color = Color": 'tinycolor.equals',
-  "Color <- Color": x => x,
-  "Color <- color Color": x => x,
-  "Color <- color Text": x => {
-    var color = tinycolor(x);
-    if (!color.isValid()) return;
-    return color;
-  },
-  "Color <- color Rgb": record => {
-    var values = record.values;
-    var color = tinycolor({ r: values.red, g: values.green, b: values.blue });
-    if (!color.isValid()) return;
-    return color;
-  },
-  "Color <- color Hsv": record => {
-    var values = record.values;
-    var color = tinycolor({ h: values.hue, s: values.sat, v: values.val });
-    if (!color.isValid()) return;
-    return color;
-  },
-  "Color <- mix Color with Float % of Color": (a, mix, b) => tinycolor.mix(a, b, mix),
-  "Float <- brightness of Color": x => x.getBrightness(),
-  "Float <- luminance of Color": x => x.getLuminance(),
-  "Color <- spin Color by Int": (color, amount) => color.spin(amount),
-  "Color <- complement Color": x => x.complement(),
-  "Color <- invert Color": x => {
-    var {r, g, b} = x.toRgb();
-    return tinycolor({r: 255 - r, g: 255 - g, b: 255 - b});
-  },
-
-  // TODO menus
-  "Record <- Color to hex": x => x.toHexString(),
-  "Record <- Color to rgb": x => {
-    var o = x.toRgb();
-    return new Record(RGB, { red: o.r, green: o.g, blue: o.b });
-  },
-  "Record <- Color to hsv": x => {
-    var o = x.toHsv();
-    return new Record(HSV, { hue: o.h, sat: o.s, val: o.v });
-  },
-
-  // TODO menus
-  "List <- analogous colors Color": x => x.analogous(),
-  "List <- triad colors Color": x => x.triad(),
-  "List <- monochromatic colors Color": x => x.monochromatic(),
+//  "Bool <- Color = Color": 'tinycolor.equals',
+//  "Color <- Color": x => x,
+//  "Color <- color Color": x => x,
+//  "Color <- color Text": x => {
+//    var color = tinycolor(x);
+//    if (!color.isValid()) return;
+//    return color;
+//  },
+//  "Color <- color Rgb": record => {
+//    var values = record.values;
+//    var color = tinycolor({ r: values.red, g: values.green, b: values.blue });
+//    if (!color.isValid()) return;
+//    return color;
+//  },
+//  "Color <- color Hsv": record => {
+//    var values = record.values;
+//    var color = tinycolor({ h: values.hue, s: values.sat, v: values.val });
+//    if (!color.isValid()) return;
+//    return color;
+//  },
+//  "Color <- mix Color with Float % of Color": (a, mix, b) => tinycolor.mix(a, b, mix),
+//  "Float <- brightness of Color": x => x.getBrightness(),
+//  "Float <- luminance of Color": x => x.getLuminance(),
+//  "Color <- spin Color by Int": (color, amount) => color.spin(amount),
+//  "Color <- complement Color": x => x.complement(),
+//  "Color <- invert Color": x => {
+//    var {r, g, b} = x.toRgb();
+//    return tinycolor({r: 255 - r, g: 255 - g, b: 255 - b});
+//  },
+//
+//  // TODO menus
+//  "Record <- Color to hex": x => x.toHexString(),
+//  "Record <- Color to rgb": x => {
+//    var o = x.toRgb();
+//    return new Record(RGB, { red: o.r, green: o.g, blue: o.b });
+//  },
+//  "Record <- Color to hsv": x => {
+//    var o = x.toHsv();
+//    return new Record(HSV, { hue: o.h, sat: o.s, val: o.v });
+//  },
+//
+//  // TODO menus
+//  "List <- analogous colors Color": x => x.analogous(),
+//  "List <- triad colors Color": x => x.triad(),
+//  "List <- monochromatic colors Color": x => x.monochromatic(),
 
 
   /* Async tests */
