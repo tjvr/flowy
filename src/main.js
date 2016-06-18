@@ -1337,15 +1337,17 @@ class Block extends Drawable {
 
   click() {
     if (this.isDoubleTap()) {
-      console.log('hi');
-      if (this.workspace.app && this.defWorld) {
-        var b = this.copy();
-        b.defWorld = this.defWorld;
-        this.workspace.app.startEditing(b);
-      }
-      return;
+      return this.doubleClick();
     }
     super.click();
+  }
+
+  doubleClick() {
+    if (this.workspace.app && this.defWorld) {
+      var b = this.copy();
+      b.defWorld = this.defWorld;
+      this.workspace.app.startEditing(b, this.inputs);
+    }
   }
 
   copy() {
@@ -2871,6 +2873,13 @@ class World extends Workspace {
     return Math.min(4.0, this.zoom);
   }
 
+  setParameters(values) {
+    assert(this.parameters);
+    this.parameters.forEach((param, index) => {
+      param.node.setLiteral(values[index]);
+    });
+  }
+
 }
 
 /*****************************************************************************/
@@ -3025,13 +3034,14 @@ function makeBlock(category, spec, defaults) {
   if (category === 'custom') {
     b.defWorld = new World(el(''));
     var x = 128;
-    b.defWorld.inputs = b.inputs.map(input => {
+    b.defWorld.parameters = b.inputs.map(input => {
       var s = new Source(Node.input(input.node.value), null, 'param');
       s.layoutSelf();
       s.moveTo(x, 128);
       b.defWorld.add(s);
       x += s.width;
       x += 32;
+      return s;
     });
   }
   return b;
@@ -3199,6 +3209,19 @@ class Header extends Workspace {
     this.height = this.block.height + this.block.bubble.height + 16;
     this.el.style.width = `${this.width}px`;
     this.el.style.height = `${this.height}px`;
+
+    if (this.app.world.parameters) {
+      this.app.world.setParameters(this.block.inputs.map(input => {
+        return input.node.literal || input.node.value;
+      }));
+    }
+  }
+
+  setParameters(inputs) {
+    this.block.inputs.forEach((input, index) => {
+      var other = inputs[index];
+      input.value = other.value;
+    });
   }
 
   resize() {
@@ -3228,6 +3251,7 @@ class App {
     this.el.appendChild(this.header.el);
 
     this.world.app = this; // TODO
+    this.header.app = this; // TODO
     this.palette.app = this; // TODO
 
     this.resize();
@@ -3266,13 +3290,14 @@ class App {
     return this.world !== this.root;
   }
 
-  startEditing(block) {
+  startEditing(block, inputs) {
     assert(block.defWorld);
     if (this.isEditing) {
       this.el.removeChild(this.world.el);
     }
     this.header.block = block;
     this.header.el.classList.add('out');
+    if (inputs) this.header.setParameters(inputs);
 
     var world = block.defWorld;
     this.world = world;
