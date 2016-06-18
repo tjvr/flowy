@@ -211,7 +211,7 @@ export const functions = {
   "Int <- Int rem Int": 'BigInteger.remainder',
   "Int <- round Int": '($0)',
   "Int <- round Empty": '(0)',
-  "Int <- round Text": 'BigInteger.parseInt',
+  "Int <- round Text": '(safely(function() { return BigInteger.parseInt($0) }))',
   "Bool <- Int = Int": '(BigInteger.compareTo($0, $1) === 0)',
   "Bool <- Int < Int": '(BigInteger.compareTo($0, $1) === -1)',
   "Frac <- Int / Int": '(new Fraction($0, $1))',

@@ -145,7 +145,19 @@ Object.keys(functions).forEach(function(spec) {
 
 var self, S, R, STACK, C, WARP, CALLS, BASE, INDEX, THREAD, IMMEDIATE;
 
+var safely = function(cb) {
+  try {
+    var value = cb();
+  } catch (e) {
+    THREAD.emit(e = e instanceof Error ? e : new Error(e));
+    // TODO return immediately
+    return e;
+  }
+  return value;
+};
+
 var display = function(type, content) {
+  // TODO runtime type checking for Errors
   return ['text', 'view-' + type, content || ''];
 };
 
