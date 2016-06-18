@@ -161,8 +161,8 @@ export const specs = [
   // ["sensing", "error"],
   ["sensing", "delay %n secs: %s", [1, ""]],
 
-  ["custom", "return %s"],
-  ["custom", "fib %n"],
+  ["custom", "fib %n", [5]],
+  ["custom", "gcd %n %n", [12, 34]],
 
 ];
 

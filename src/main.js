@@ -1338,9 +1338,9 @@ class Block extends Drawable {
   click() {
     if (this.isDoubleTap()) {
       console.log('hi');
-      if (this.workspace.app && this.world) {
+      if (this.workspace.app && this.defWorld) {
         var b = this.copy();
-        b.world = this.world;
+        b.defWorld = this.defWorld;
         this.workspace.app.startEditing(b);
       }
       return;
@@ -1359,7 +1359,7 @@ class Block extends Drawable {
     });
     b.count = this.count;
     b.wrap = this.wrap;
-    b.world = this.world;
+    b.defWorld = this.defWorld;
     return b;
   }
 
@@ -1595,12 +1595,14 @@ class Block extends Drawable {
 
 
 class Source extends Drawable {
-  constructor(node, repr) {
+  constructor(node, repr, cls) {
     super();
 
     this.el = el('absolute source');
     this.el.appendChild(this.canvas = el('canvas', 'absolute'));
     this.context = this.canvas.getContext('2d');
+
+    this.cls = cls;
 
     //this.node = Node.input(value);
     this.node = node;
@@ -1637,6 +1639,10 @@ class Source extends Drawable {
   get isSource() { return true; }
   get isDraggable() { return true; }
   get isArg() { return true; }
+
+  get isParam() {
+    return this.cls === 'param';
+  }
 
   onProgress(e) {
     this.fraction = e.loaded / e.total;
@@ -1748,7 +1754,7 @@ class Source extends Drawable {
     context.closePath();
     context.fillStyle = this.invalid ? '#aaa' : '#fff';
     context.fill();
-    context.strokeStyle = '#555';
+    context.strokeStyle = this.isParam ? '#0093ff' : '#555';
     context.lineWidth = density;
     context.stroke();
   }
@@ -3017,7 +3023,16 @@ function makeBlock(category, spec, defaults) {
     return;
   }
   if (category === 'custom') {
-    b.world = new World(el(''));
+    b.defWorld = new World(el(''));
+    var x = 128;
+    b.defWorld.inputs = b.inputs.map(input => {
+      var s = new Source(Node.input(input.node.value), null, 'param');
+      s.layoutSelf();
+      s.moveTo(x, 128);
+      b.defWorld.add(s);
+      x += s.width;
+      x += 32;
+    });
   }
   return b;
 }
@@ -3224,14 +3239,14 @@ class App {
   }
 
   startEditing(block) {
-    assert(block.world);
+    assert(block.defWorld);
     if (this.isEditing) {
       this.el.removeChild(this.world.el);
     }
     this.header.block = block;
     this.header.el.classList.add('out');
 
-    var world = block.world;
+    var world = block.defWorld;
     this.world = world;
     world.app = this;
     assert(this.workspaces.shift() === this.root);
@@ -3627,7 +3642,7 @@ class App {
       var d = g.dragScript;
       var canDelete = false;
       if (d.isBlock || d.isSource) {
-        canDelete = d.outputs.filter(bubble => {
+        canDelete = !d.isParam && d.outputs.filter(bubble => {
           return bubble.parent !== d && bubble.parent.isBlock;
         }).length === 0;
       }
