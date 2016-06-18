@@ -49,6 +49,7 @@ export const specs = [
   ["hidden", "display %s", []],
 
   ["ops", "literal %s"],
+  ["text", "string %s"],
 
   /* Record */
 
@@ -209,6 +210,8 @@ export const functions = {
   "Int <- Int × Int": 'BigInteger.multiply',
   "Int <- Int rem Int": 'BigInteger.remainder',
   "Int <- round Int": '($0)',
+  "Int <- round Empty": '(0)',
+  "Int <- round Text": 'BigInteger.parseInt',
   "Bool <- Int = Int": '(BigInteger.compareTo($0, $1) === 0)',
   "Bool <- Int < Int": '(BigInteger.compareTo($0, $1) === -1)',
   "Frac <- Int / Int": '(new Fraction($0, $1))',
@@ -314,6 +317,7 @@ export const functions = {
 
   /* Text */
   "Text <- literal Text": '($0)',
+  "Text <- string Text": '($0)',
   "Int <- literal Int": '($0)',
   "Frac <- literal Frac": '($0)',
   "Float <- literal Float": '($0)',
