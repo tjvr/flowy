@@ -294,6 +294,10 @@ var range = function(from, to) {
   return result;
 };
 
+var fib = function(n) {
+  return n <= 2 ? 1 : fib(n - 1) + fib(n - 2);
+};
+
 var mathFunc = function(f, x) {
   switch (f) {
     case 'abs':

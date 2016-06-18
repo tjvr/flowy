@@ -162,6 +162,7 @@ export const specs = [
   ["sensing", "delay %n secs: %s", [1, ""]],
 
   ["custom", "return %s"],
+  ["custom", "fib %n"],
 
 ];
 
@@ -523,6 +524,8 @@ export const functions = {
     var y = b.values;
     return x.year < y.year && x.month < y.month && x.day < y.day;
   },
+
+  "Int <- fib Int": 'fib',
 
 };
 

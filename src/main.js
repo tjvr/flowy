@@ -1367,14 +1367,15 @@ class Block extends Drawable {
     this.curves.forEach(c => c.layoutSelf());
   }
 
-  get bubbleVisible() {
-    return !this.parent.isBlock && !(this.workspace && this.workspace.isPalette);
+  get hasBubble() {
+    return !this.parent.isBlock &&
+      !(this.workspace && this.workspace.isPalette && !this.workspace.isHeader);
   }
 
   objectFromPoint(x, y) {
-    if (this.bubble && this.bubbleVisible) {
+    if (this.bubble && this.hasBubble) {
       var o = this.bubble.objectFromPoint(x - this.bubble.x, y - this.bubble.y)
-      if (o) return o;
+        if (o) return o;
     }
     for (var i = this.parts.length; i--;) {
       var arg = this.parts[i];
@@ -1549,9 +1550,9 @@ class Block extends Drawable {
     this.context.scale(density, density);
     this.drawOn(this.context);
 
-    this.bubble.el.style.visibility = this.bubbleVisible ? 'visible' : 'hidden';
+    this.bubble.el.style.visibility = this.hasBubble ? 'visible' : 'hidden';
     if (this.bubble.curve) {
-      this.bubble.curve.el.style.visibility = this.bubbleVisible ? 'visible' : 'hidden';
+      this.bubble.curve.el.style.visibility = this.hasBubble ? 'visible' : 'hidden';
     }
   }
 
@@ -1565,13 +1566,13 @@ class Block extends Drawable {
   updateSinky() {
     var isSink = this.outputs.filter(bubble => {
       if (!bubble.parent || !this.parent) return;
-      return !bubble.parent.isBlock || (this.bubbleVisible && bubble.parent === this);
+      return !bubble.parent.isBlock || (this.hasBubble && bubble.parent === this);
     }).length;
     this.repr.setSink(!!isSink);
   }
 
   setDragging(dragging) {
-    this.bubble.el.style.visibility = !dragging && this.bubbleVisible ? 'visible' : 'hidden';
+    this.bubble.el.style.visibility = !dragging && this.hasBubble ? 'visible' : 'hidden';
   }
 
 }
@@ -3094,7 +3095,7 @@ class Palette extends Workspace {
   get isPalette() { return true; }
 }
 
-class Tag extends Workspace {
+class Header extends Workspace {
   constructor() {
     super();
     this.el.className += ' tag';
@@ -3102,7 +3103,7 @@ class Tag extends Workspace {
     //this.block = paletteContents[18].copy();
   }
   get isScrollable() { return false; }
-  get isTag() { return true; }
+  get isHeader() { return true; }
   get isPalette() { return true; }
 
   get block() { return this._block; }
@@ -3114,8 +3115,10 @@ class Tag extends Workspace {
   }
 
   layout() {
-    this.width = this.block.width + 8 + 10;
+    this.width = Math.max(this.block.width, this.block.bubble.width) + 18;
+    this.height = this.block.height + this.block.bubble.height + 16;
     this.el.style.width = `${this.width}px`;
+    this.el.style.height = `${this.height}px`;
   }
 
   // objectFromPoint(x, y) {
@@ -3153,7 +3156,7 @@ class App {
 
     this.world = new World(this.elWorld = el(''));
     this.palette = new Palette(this.elPalette = el(''));
-    this.tag = new Tag(this.elTag = el(''));
+    this.tag = new Header(this.elHeader = el(''));
     this.workspaces = [this.world, this.palette, this.tag];
     this.el.appendChild(this.world.el);
     this.el.appendChild(this.palette.el);
@@ -3469,7 +3472,7 @@ class App {
       }
     }
 
-    if (g.pressed && g.shouldDrag && !g.dragging) { //&& !g.pressObject.dragObject.workspace.isTag) {
+    if (g.pressed && g.shouldDrag && !g.dragging) { //&& !g.pressObject.dragObject.workspace.isHeader) {
       this.drop(g);
       g.shouldScroll = false;
       var obj = g.pressObject.dragObject;
