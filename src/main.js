@@ -1478,10 +1478,10 @@ class Block extends Drawable {
       }
       lineX += part.width;
       width = Math.max(width, lineX + Math.max(0, md - px));
-      lineX += 4;
+      lineX += 6;
       lineXs[line].push(lineX);
 
-      var h = part.height + (part.isBubble ? 0 : 4);
+      var h = part.height + (part.isBubble ? 0 : 8);
       lineHeights[line] = Math.max(lineHeights[line], h);
       lines[line].push(part);
     }
@@ -1502,7 +1502,7 @@ class Block extends Drawable {
         var part = line[j];
         var cx = px + xs[j];
         var cy = (lh - part.height) / 2;
-        if (part.isBubble) cy -= 2;
+        if (part.isBubble) cy -= 4;
         if (part.isLabel) cy += 1;
         if (part.icon === '▶' && wrap) cy = -4;
         part.moveTo(cx, y + cy);
@@ -1532,7 +1532,7 @@ class Block extends Drawable {
   pathBlock(context) {
     var w = this.ownWidth;
     var h = this.ownHeight;
-    var r = 12;
+    var r = 4 * density;
 
     context.moveTo(0, r + .5);
     context.arc(r, r + .5, r, PI, PI32, false);
