@@ -2793,9 +2793,8 @@ class Workspace extends Frame {
 
   resize() {
     super.resize();
-    var bb = this.el.getBoundingClientRect();
-    this.screenX = Math.round(bb.left);
-    this.screenY = Math.round(bb.top);
+    this.screenX = this.el.offsetLeft;
+    this.screenY = this.el.offsetTop;
     this.screenPosition = {x: this.screenX, y: this.screenY};
   }
 
@@ -3159,9 +3158,12 @@ class Header extends Workspace {
     this.el.style.height = `${this.height}px`;
   }
 
-  // objectFromPoint(x, y) {
-  //   return this;
-  // }
+  resize() {
+    super.resize();
+    this.screenX = 0;
+    this.screenY = 0;
+    this.screenPosition = {x: this.screenX, y: this.screenY};
+  }
 }
 
 /*****************************************************************************/
@@ -3227,27 +3229,29 @@ class App {
       this.el.removeChild(this.world.el);
     }
     this.header.block = block;
+    this.header.el.classList.add('out');
 
     var world = block.world;
     this.world = world;
     world.app = this;
-    world.resize();
-    this.workspaces.push(world);
+    assert(this.workspaces.shift() === this.root);
+    this.workspaces.splice(0, 0, world);
 
+    world.el.classList.add('out');
     this.el.appendChild(world.el);
     this.el.appendChild(this.header.el);
+    world.resize();
 
-    this.world.el.classList.add('out');
-    this.header.el.classList.add('out');
     setTimeout(() => {
       this.world.el.classList.remove('out');
       this.header.el.classList.remove('out');
-    }, 1);
+    });
   }
   endEditing() {
     assert(this.isEditing);
     var world = this.world;
-    assert(this.workspaces.pop() === world);
+    assert(this.workspaces.shift() === world);
+    this.workspaces.splice(0, 0, this.root);
     world.app = null;
     world.el.classList.add('out');
     this.header.el.classList.add('out');
