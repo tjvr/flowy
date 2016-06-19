@@ -370,14 +370,7 @@ export const functions = {
   // },
 
   /* Record */
-  "Record <- record with Variadic": (...pairs) => {
-    var values = {};
-    for (var i=0; i<pairs.length; i += 2) {
-      var name = pairs[i], value = pairs[i + 1];
-      values[name] = value;
-    }
-    return new Record(null, values);
-  },
+  /* "Record <- record with Variadic": */
   "Record <- update Record with Variadic": (record, ...pairs) => {
     var record = record || new Record(null, {});
     if (!(record instanceof Record)) return;

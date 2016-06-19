@@ -1384,7 +1384,7 @@ class Block extends Drawable {
   }
 
   get hasBubble() {
-    return !this.parent.isBlock && this.workspace && (!this.workspace.isPalette || this.workspace.isHeader);
+    return !this.parent.isBlock && !(this.workspace && this.workspace.isPalette && !this.workspace.isHeader);
   }
 
   objectFromPoint(x, y) {
