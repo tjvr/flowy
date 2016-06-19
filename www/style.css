@@ -86,6 +86,7 @@ button {
   transform: scale(0.5);
   opacity: 0;
   pointer-events: none;
+  transition: transform 300ms ease-in, opacity 300ms linear;
 }
 
 .palette {
