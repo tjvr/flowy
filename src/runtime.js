@@ -858,7 +858,7 @@ class Computed extends Observable {
     this.isSink = false;
     this.needed = false;
     this.inputs = inputs;
-    this.deps = new Set(inputs.filter((arg, index) => (this.args[index] !== '%u')));
+    this.deps = new Set(inputs.filter((arg, index) => (arg && this.args[index] !== '%u')));
     this.base = null;
     this.thread = null;
   }
@@ -909,7 +909,7 @@ class Computed extends Observable {
     this.type();
     console.log(this._type ? this._type.toString() : "--", this.name);
     if (!this._type) {
-      this.setDeps(new Set(this.inputs.filter((arg, index) => (this.args[index] !== '%u'))));
+      this.setDeps(new Set(this.inputs.filter((arg, index) => (arg && this.args[index] !== '%u'))));
       if (this.result !== null) {
         this.result = null;
         this.emit(null);

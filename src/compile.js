@@ -191,6 +191,7 @@ var typeCheck = function(name, inputTypes) {
 };
 
 var typePrim = function(name, inputs) {
+  if (any(inputs, x => x === undefined)) return;
   var inputTypes = inputs.map(x => x.type());
   var inputValues = inputs.map(x => x.result);
 
