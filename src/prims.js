@@ -310,7 +310,7 @@ export const functions = {
   // "Int <- sum List": '', // TODO
 
   "Int <- length of List": '($0.length)',
-  "Bool <- List is empty?": '(!!($0.length))',
+  "Bool <- List is empty?": '(!($0.length))',
 
   /* Record */
   /* "Record <- record with Variadic": */
