@@ -392,10 +392,12 @@ function highest(types) {
   var t = types[0];
   var o = highest(types.slice(1));
   if (!o) return t;
-  if (t.isSuper(o) === true) return t;
-  if (o.isSuper(t) === true) return o;
-  if (t.isSuper(o)) return t;
-  if (o.isSuper(t)) return o;
+  var x = t.isSuper(o);
+  if (x === true) return t;
+  var y = o.isSuper(t);
+  if (y === true) return o;
+  if (x && !containsVectorise(x)) return t;
+  if (y && !containsVectorise(y)) return o;
   return type.any;
 }
 

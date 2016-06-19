@@ -1056,7 +1056,7 @@ class Computed extends Observable {
         this.base = x.base;
         this._type = x.type;
       }
-      console.log(this._type ? this._type.toString() : "--", this.name);
+      console.log(this._type ? this._type.toString() : "???", '<-', this.name);
     }
     return this._type;
   }

@@ -56,7 +56,7 @@ export const specs = [
   ["record", "%q of %o", ["name"]],
   ["record", "update %o with %fields"], // TODO remove??
   ["record", "merge %o with %o"],
-  ["record", "table headings: %l %br rows: %l"],
+  ////["record", "table headings: %l %br rows: %l"],
   // ["record", "%o to JSON"],
   // ["record", "from JSON %s"],
 
@@ -316,7 +316,7 @@ export const functions = {
   /* "Record <- record with Variadic": */
   /* "Any <- Text of Record": true, */
   /* "Record <- update Record with Variadic": 'updateRecord', */
-  "Record Future <- table headings: List BR rows: List": function(symbols, rows) {
+  /*"Record Future <- table headings: List BR rows: List": function(symbols, rows) {
     var table = [];
     var init = false;
     rows.forEach((item, index) => {
@@ -333,7 +333,8 @@ export const functions = {
     });
     this.emit(table);
     init = true;
-  },
+  },*/
+
   // "Text <- Any to JSON": record => {
   //   return JSON.stringify(record);
   // },
