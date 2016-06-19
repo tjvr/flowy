@@ -139,7 +139,11 @@ var coerce = function(child, type, coercion) {
 var apply = function(func, inputTypes, coercions) {
   var args = [];
   for (var i=0; i<inputTypes.length; i++) {
-    args.push(coerce(new Arg(i), inputTypes[i], coercions[i]));
+    var arg = new Arg(i);
+    if (func.wants[i].toString() === 'Uneval') {
+      arg.uneval = true;
+    }
+    args.push(coerce(arg, inputTypes[i], coercions[i]));
   }
   //assert(all(coercions, c => c === true));
   for (var i=0; i<func.wants.length; i++) {
@@ -194,6 +198,7 @@ var typePrim = function(name, inputs) {
   if (any(inputs, x => x === undefined)) return;
   var inputTypes = inputs.map(x => x.type());
   var inputValues = inputs.map(x => x.result);
+  console.log(inputTypes);
 
   switch (name) {
     case 'join %exp':
@@ -235,6 +240,7 @@ var typePrim = function(name, inputs) {
         canYield: false,
         output: list ? list.child || type.any : type.any,
       }, inputTypes);
+      // TODO await Future cells
 
     case 'record with %fields':
       var schema = {};
@@ -284,6 +290,7 @@ var typePrim = function(name, inputs) {
         canYield: false,
         output: obj.schema[symbol],
       }, inputTypes);
+      // TODO await Future cells
 
     // TODO concat...
 
@@ -318,7 +325,7 @@ var compile = function(node) {
 
   var op = Func.cache(node.name);
   var base = generate(op, g, node);
-  //console.log(base);
+  console.log(base);
 
   return {type, op, base};
 };
@@ -445,8 +452,12 @@ var generate = function(func, gen, node) {
       switch (gen.name) {
         case 'arg':
           source += 'C.threads[' + gen.index + '] = request(' + gen.index + ');\n';
+          if (!gen.uneval) {
+            source += 'await(C.threads[' + gen.index + ']);\n';
+          }
           break;
         case 'resolve':
+          assert(false);
         case 'coerce':
           requestArgs(gen.child);
           break;
@@ -461,14 +472,10 @@ var generate = function(func, gen, node) {
       switch (gen.name) {
         case 'arg':
           var name = 'arg_' + gen.index;
-          source += 'var ' + name + ' = C.threads[' + gen.index + '];\n';
+          source += 'var ' + name + ' = C.threads[' + gen.index + ']' + (gen.uneval ? '' : '.result') + ';\n';
           return name;
         case 'resolve':
-          var name = arg(gen.child);
-          source += 'await(' + name + ');\n';
-          var result = gensym();
-          source += 'var ' + result + ' = ' + name + '.result;\n';
-          return result;
+          assert(false);
         case 'coerce':
           var name = arg(gen.child);
           var result = gensym();

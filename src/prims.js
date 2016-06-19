@@ -49,7 +49,6 @@ export const specs = [
   ["hidden", "display %s", []],
 
   ["ops", "literal %s"],
-  ["text", "string %s"],
 
   /* Record */
 
@@ -69,7 +68,7 @@ export const specs = [
   ["list", "item %n of %l", [1]],
   ["list", "%l concat %l"],
   ["list", "length of %l", []],
-  ["list", "sum %l"],
+  // ["list", "sum %l"],
   // ["list", "count %l", []],
   // ["list", "count %l if %r", []],
   // ["list", "keep %r from %l"],
@@ -80,6 +79,7 @@ export const specs = [
 
   /* Text */
 
+  ["text", "text %s"],
   ["text", "join %exp", ["Hello ", "world"]],
   //["text", "join words %s"],
   ["text", "join %l with %s", ["", " "]],
@@ -150,7 +150,7 @@ export const specs = [
 
   ["sensing", "get %s", ["https://tjvr.org/"]],
   ["sensing", "get %s", ["http://i.imgur.com/svIp9cx.jpg?1"]],
-  ["sensing", "get %s", ["http://api.scratch.mit.edu/users/blob8108"]],
+  ["sensing", "get %s", ["https://api.scratch.mit.edu/users/blob8108"]],
 
   // ["sensing", "select %s from %html"],
 
@@ -188,21 +188,22 @@ export const functions = {
   "UI <- display Text": '(display("Text", $0))',
   "UI <- display Int": '(display("Int", ""+$0))',
   "UI <- display Frac": `(['block', [
-    el('Frac-num', ''+$0.n),
+    display('Frac-num', ''+$0.n),
     ['rect', '#000', 'auto', 2],
-    el('Frac-den', ''+$0.d),
+    display('Frac-den', ''+$0.d),
   ]])`,
   "UI <- display Bool": "(display('Symbol view-Bool-' + ($0 ? 'yes' : 'no'), $0 ? 'yes' : 'no'))",
   "UI <- display Image": '(["image", $0.cloneNode()])',
   // "UI <- display Color": '(["rect", $0.toHexString(), 24, 24, "view-Color"])',
   "UI <- display Uncertain": `(['inline', [
-    el('Uncertain-mean', uncertain.m),
-    el('Uncertain-sym', "±"),
-    el('Uncertain-stddev', uncertain.s),
+    display('Uncertain-mean', ''+$0.m),
+    display('Uncertain-sym', "±"),
+    display('Uncertain-stddev', ''+$0.s),
   ]])`,
   "UI <- display Float": 'displayFloat',
   "UI <- display Record": 'displayRecord',
   "UI <- display List": 'displayList',
+  //"UI <- display Any": '(display("Text", $0))',
 
   /* Int */
   "Int <- Int + Int": 'BigInteger.add',
@@ -230,6 +231,7 @@ export const functions = {
   "Float <- Float – Float": '($0 - $1)',
   "Float <- Float × Float": '($0 * $1)',
   "Float <- Float / Float": '($0 / $1)',
+  "Float <- Float ^ Float": '(Math.pow($0, $1))',
   "Float <- Float rem Float": 'mod',
   "Int <- round Float": '(BigInteger.parseInt(""+Math.round($0)))',
   "Float <- float Float": '($0)',
@@ -253,27 +255,7 @@ export const functions = {
   "Float <- float Uncertain": '($0.m)',
   "Bool <- Uncertain = Uncertain": '($0.m === $1.m && $0.s === $1.s)',
 
-  "Uncertain <- mean List": list => {
-    if (!list.length) return;
-    var s = 0;
-    var s2 = 0;
-    var n = list.length;
-    var u;
-    for (var i=n; i--; ) {
-      var x = list[i];
-      if (x && x.constructor === Uncertain) {
-        u = u || 0;
-        // TODO average over uncertainties??
-        x = x.m;
-      }
-      s += x;
-      s2 += x * x;
-    }
-    var mean = s / n;
-    var variance = (s2 / (n - 1)) - mean * mean;
-    // TODO be actually correct
-    return new Uncertain(mean, Math.sqrt(variance));
-  },
+  "Uncertain <- mean List": 'sampleMean',
   "Float <- mean Uncertain": '($0.m)',
   "Float <- stddev Uncertain": '($0.s)',
   "Uncertain <- Uncertain + Uncertain": 'Uncertain.add',
@@ -286,20 +268,7 @@ export const functions = {
   "Bool <- Bool": '($0)',
   "Bool <- Bool = Bool": '($0 === $1)',
 
-  "Any Future <- Uneval if Bool else Uneval": true,
-
-  //function(tv, cond, fv) {
-  //  var ignore = cond ? fv : tv;
-  //  var want = cond ? tv : fv;
-  //  if (ignore) ignore.unsubscribe(this.target);
-  //  if (want) want.subscribe(this.target);
-  //  var thread = want.request();
-  //  this.awaitAll(thread.isTask ? [thread] : [], () => {
-  //    var result = thread.isTask ? thread.result : thread;
-  //    this.emit(result);
-  //    this.isRunning = false;
-  //  });
-  //},
+  "Any Future <- Uneval if Bool else Uneval": 'ifElse',
 
   "List <- repeat Int times: Any": 'repeat',
   "Text <- repeat Int times: Text": 'repeatText',
@@ -307,7 +276,7 @@ export const functions = {
 
   /* Text */
   "Text <- literal Text": '($0)',
-  "Text <- string Text": '($0)',
+  "Text <- text Text": '($0)',
   "Int <- literal Int": '($0)',
   "Frac <- literal Frac": '($0)',
   "Float <- literal Float": '($0)',
@@ -360,14 +329,9 @@ export const functions = {
 
   "Any <- item Int of List": '($1[$0 - 1])',
 
-  "Int <- sum List": function(list) {
-    // TODO
-  },
+  // "Int <- sum List": '', // TODO
 
   "Int <- length of List": '($0.length)',
-  // "Int <- count List": function(list) {
-  //   return list.filter(x => !!x).length;
-  // },
 
   /* Record */
   /* "Record <- record with Variadic": */
@@ -478,28 +442,12 @@ export const functions = {
 
   /* Async tests */
 
-  "Any Future <- get Text": 'get',
+  "WebPage Future <- get Text": 'getURL',
 
   "Any Future <- delay Int secs: Any": 'delay',
 
   "Time Future <- time": 'time',
-  "Date Future <- date": function() {
-    var update = () => {
-      if (this.isStopped) {
-        clearInterval(interval);
-        return;
-      }
-      var d = new Date();
-      this.emit(new Record(Date_, {
-        year: d.getFullYear(),
-        month: d.getMonth(),
-        day: d.getDate(),
-      }));
-      this.target.invalidateChildren();
-    };
-    var interval = setInterval(update, 1000);
-    update();
-  },
+  "Date Future <- date": 'date',
 
   "Bool <- Time < Time": function(a, b) {
     var x = a.values;

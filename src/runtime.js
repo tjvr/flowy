@@ -40,6 +40,7 @@ var Time = type.schema('Time', ['hour', 'mins', 'secs']);
 var Date_ = type.schema('Date', ['year', 'month', 'day']);
 var RGB = type.schema('Rgb', ['red', 'green', 'blue']);
 var HSV = type.schema('Hsv', ['hue', 'sat', 'val']);
+var WebPage = type.schema('WebPage', ['content-type', 'content']);
 
 class Uncertain {
   constructor(mean, stddev) {
@@ -329,6 +330,28 @@ var repeatText = function(times, obj) {
   return out;
 };
 
+var sampleMean = function(list) {
+  if (!list.length) return;
+  var s = 0;
+  var s2 = 0;
+  var n = list.length;
+  var u;
+  for (var i=n; i--; ) {
+    var x = list[i];
+    if (x && x.constructor === Uncertain) {
+      u = u || 0;
+      // TODO average over uncertainties??
+      x = x.m;
+    }
+    s += x;
+    s2 += x * x;
+  }
+  var mean = s / n;
+  var variance = (s2 / (n - 1)) - mean * mean;
+  // TODO be actually correct
+  return new Uncertain(mean, Math.sqrt(variance));
+};
+
 var fib = function(n) {
   return n <= 2 ? 1 : fib(n - 1) + fib(n - 2);
 };
@@ -416,11 +439,40 @@ var time = function() {
   return f;
 };
 
+var date = function() {
+  var f = new Future();
+  var interval = setInterval(update, 1000);
+  function update() {
+    var d = new Date();
+    f.emit(new Record(Date_, {
+      year: d.getFullYear(),
+      month: d.getMonth(),
+      day: d.getDate(),
+    }));
+  }
+  f.onCancel(function() {
+    clearInterval(interval);
+  });
+  return f;
+};
+
+var ifElse = function(tv, cond, fv) {
+  var f = new Future();
+  var computed = cond ? tv : fv;
+  THREAD.deps.add(computed);
+  if (computed.isComputed) {
+    computed.request();
+    computed.onFirstEmit(f.emit.bind(f));
+  } else {
+    f.emit(computed.result);
+  }
+  return f;
+};
+
 var getURL = function(url) {
   var f = new Future();
-  // var cors = 'http://crossorigin.me/http://';
-  var cors = 'http://localhost:1337/';
-  url = cors + url.replace(/^https?\:\/\//, "");
+  var cors = 'https://crossorigin.me/';
+  url = cors + url; //.replace(/^https?\:\/\//, "");
   var xhr = new XMLHttpRequest;
   xhr.open('GET', url, true);
   xhr.onprogress = e => {
@@ -428,10 +480,10 @@ var getURL = function(url) {
   };
   xhr.onload = () => {
     if (xhr.status === 200) {
-      f.emit({
-        contentType: xhr.getResponseHeader('content-type'),
-        response: xhr.response,
-      });
+      f.emit(new Record(WebPage, {
+        'content-type': xhr.getResponseHeader('content-type'),
+        content: xhr.response,
+      }));
     } else {
       f.emit(new Error('HTTP ' + xhr.status + ': ' + xhr.statusText));
     }

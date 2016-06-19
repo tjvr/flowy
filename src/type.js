@@ -144,6 +144,8 @@ class Type {
     switch (name) {
       case 'Any':
         return new AnyType();
+      case 'Uneval':
+        return new UnevalType();
       case 'Future':
         return new FutureType();
       case 'List':
@@ -160,6 +162,12 @@ class Type {
 
   isSuper(other) {
     if (!(other instanceof Type)) return false;
+
+    if (other instanceof FutureType) {
+      if (t = this.isSuper(other.child)) {
+        return Result.resolve(t);
+      }
+    }
 
     if (other instanceof AnyType) {
       return Result.typeCheck(this);
@@ -202,10 +210,7 @@ class FutureType extends Type {
   isSuper(other) {
     var t;
     if (other instanceof FutureType && (t = this.isSuper(other.child))) {
-      return t;
-    }
-    if (t = this.child.isSuper(other)) {
-      return Result.resolve(t);
+      return t; // XXX should be Result.future. cf List, Record
     }
     return super.isSuper(other);
   }
@@ -290,6 +295,14 @@ class AnyType extends Type {
   }
 }
 
+class UnevalType extends Type {
+  toString() { return "Uneval"; }
+
+  isSuper(other) {
+    return true;
+  }
+}
+
 /*****************************************************************************/
 
 function isValid(result) {
@@ -307,6 +320,7 @@ function containsVectorise(result) {
       return true;
     case 'list':
     //case 'resolve':
+    // XXX
       return containsVectorise(result.child);
     case 'record':
       for (var key in result.schema) {
@@ -333,6 +347,7 @@ export default function type(name, inputTypes) {
   for (var i=0; i<length; i++) {
     var imp = imps[i];
     var wants = imp.wants;
+
     var results = [];
     var score = 0;
     for (var j=0; j<wants.length; j++) {
@@ -402,6 +417,7 @@ type.schema = function(name, schema) {
 type.symbol = type.value('Symbol');
 type.none = new ValueType('None');
 type.any = new AnyType(null);
+type.uneval = new UnevalType(null);
 
 type.fromString = Type.fromString;
 
