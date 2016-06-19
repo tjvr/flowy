@@ -303,8 +303,21 @@ var join = function(...strings) {
   return strings.join("");
 };
 
-var makeList = function(...list) {
-  return list;
+var updateRecord = function(record, ...pairs) {
+  var record = record || new Record(null, {});
+  if (!(record instanceof Record)) return;
+  var values = {};
+  for (var i=0; i<pairs.length; i += 2) {
+    var name = pairs[i], value = pairs[i + 1];
+    values[name] = value;
+  }
+  var result = record.update(values);
+  return result;
+};
+
+/* "Record <- merge Record with Record": 'mergeRecords', */
+var mergeRecords = function(src, dest) {
+  return src.update(dest.values);
 };
 
 var range = function(from, to) {

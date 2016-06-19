@@ -54,9 +54,9 @@ export const specs = [
 
   // TODO
   ["record", "record with %fields"],
+  ["record", "%q of %o", ["name"]],
   ["record", "update %o with %fields"], // TODO remove??
   ["record", "merge %o with %o"],
-  ["record", "%q of %o", ["name"]],
   ["record", "table headings: %l %br rows: %l"],
   // ["record", "%o to JSON"],
   // ["record", "from JSON %s"],
@@ -64,10 +64,11 @@ export const specs = [
   /* List */
 
   ["list", "list %exp", ["foo", "bar", "baz"]],
-  ["list", "range %n to %n", [1, 5]],
   ["list", "item %n of %l", [1]],
   ["list", "%l concat %l"],
-  ["list", "length of %l", []],
+  ["list", "range %n to %n", [1, 5]],
+  ["list", "length of %l"],
+  ["list", "%l is empty?"],
   // ["list", "sum %l"],
   // ["list", "count %l", []],
   // ["list", "count %l if %r", []],
@@ -324,35 +325,20 @@ export const functions = {
   "List <- list Variadic": (...rest) => {
     return rest;
   },
-  "List <- List concat List": '($0.concat($1))',
+  /* "List <- List concat List": '($0.concat($1))', */
   "Int List <- range Int to Int": 'range',
 
-  "Any <- item Int of List": '($1[$0 - 1])',
+  /* "Any <- item Int of List": '($1[$0 - 1])', */
 
   // "Int <- sum List": '', // TODO
 
   "Int <- length of List": '($0.length)',
+  "Bool <- List is empty?": '(!!($0.length))',
 
   /* Record */
   /* "Record <- record with Variadic": */
-  "Record <- update Record with Variadic": (record, ...pairs) => {
-    var record = record || new Record(null, {});
-    if (!(record instanceof Record)) return;
-    var values = {};
-    for (var i=0; i<pairs.length; i += 2) {
-      var name = pairs[i], value = pairs[i + 1];
-      values[name] = value;
-    }
-    var result = record.update(values);
-    return result;
-  },
-  "Record <- merge Record with Record": (src, dest) => {
-    return src.update(dest.values);
-  },
-  "Any <- Text of Record": (name, record) => {
-    if (!(record instanceof Record)) return;
-    return record.values[name];
-  },
+  /* "Any <- Text of Record": true, */
+  /* "Record <- update Record with Variadic": 'updateRecord', */
   "Record Future <- table headings: List BR rows: List": function(symbols, rows) {
     var table = [];
     var init = false;

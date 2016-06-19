@@ -40,7 +40,7 @@ export function parseSpec(spec) {
     }
 
     return {
-      hash: words.join(" "),
+      hash: words.join(" ").replace(" ?", "?"),
       spec: spec,
       inputs: inputTypes,
       output: outputType,

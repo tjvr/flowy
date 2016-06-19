@@ -91,10 +91,10 @@ class Resolve extends Gen {
 }
 
 class Coerce extends Gen {
-  constructor(child, coercion) {
+  constructor(child, source) {
     super('coerce', child.canYield);
     this.child = child;
-    this.coercion = coercion;
+    this.source = source;
   }
 }
 
@@ -107,26 +107,34 @@ class RuntimeCheck extends Gen {
 
 /*****************************************************************************/
 
-var coerce = function(child, type, coercion) {
+var coerce = function(child, argType, coercion) {
   if (coercion === true) {
     // TODO check child has type?
     return child;
   }
   switch (coercion.kind) {
     case 'list':
-      // TODO
-      return;
+      assert(type.list(type.any).isSuper(argType));
+
+      assert(coercion.child.kind === 'coerce'); // TODO
+      var source = coercion.child.coercion;
+      source = '($0.map(function(x) { return ' + subst(source, ['x']) + '}))';
+
+      var g = coerce(child, argType.child, true);
+      return new Coerce(g, source);
+
     case 'record':
       // TODO
+      assert(false);
       return;
 
     case 'resolve':
-      assert(type.isFuture);
-      var g = coerce(child, type.child);
+      assert(argType.isFuture);
+      var g = coerce(child, argType.child);
       return new Resolve(child);
 
     case 'coerce':
-      assert(coercion.from.isSuper(type));
+      assert(coercion.from.isSuper(argType));
       var g = coerce(child, coercion.to, true);
       return new Coerce(g, coercion.coercion);
 
@@ -219,10 +227,11 @@ var typePrim = function(name, inputs) {
       var wants = inputTypes.map(t => child);
       var coercions = wants.map((t, index) => t.isSuper(inputTypes[index]));
       if (!all(coercions, type.validCoercion)) return;
+      var source = '([' + inputTypes.map((x, index) => '$' + index).join(', ') + '])';
       return intermediate({
         wants: wants,
         coercions: coercions,
-        source: 'makeList',
+        source: source,
         canYield: false,
         output: type.list(child),
       }, inputTypes);
@@ -292,6 +301,30 @@ var typePrim = function(name, inputs) {
       }, inputTypes);
       // TODO await Future cells
 
+    case '%l concat %l':
+      var a = inputTypes[0];
+      var b = inputTypes[1];
+      if (!a || !type.list(type.any).isSuper(a)) return;
+      if (!b || !type.list(type.any).isSuper(b)) return;
+      var child = type.highest([a.child, b.child]);
+      var out = type.list(child);
+
+      var wants = [out, out];
+      var coercions = wants.map((t, index) => t.isSuper(inputTypes[index]));
+      if (!all(coercions, type.validCoercion)) return;
+      return intermediate({
+        wants: wants,
+        coercions: coercions,
+        source: '($0.concat($1))',
+        canYield: false,
+        output: out,
+      }, inputTypes);
+      // TODO await Future cells
+
+    case 'merge %o with %o': // 'mergeRecords'
+    case 'update %o with %fields': // 'updateRecord',
+      return;
+
     // TODO concat...
 
     default:
@@ -340,6 +373,10 @@ var DEBUG;
 var warnings;
 var warn = function(message) {
   warnings[message] = (warnings[message] || 0) + 1;
+};
+
+function subst(source, args) {
+  return source.replace(/\$[0-9]+/g, function(x) { return args[+x.substr(1)]; });
 };
 
 function literalString(e) {
@@ -391,10 +428,6 @@ var generate = function(func, gen, node) {
     source += 'emit(' + value + ');\n';
   };
 
-  var subs = function(source, args) {
-    return source.replace(/\$[0-9]+/g, function(x) { return args[+x.substr(1)]; });
-  };
-
   var literal = function(e) {
     if (typeof e === 'number' || typeof e === 'boolean') {
       return '' + e;
@@ -413,7 +446,7 @@ var generate = function(func, gen, node) {
         var args = gen.args.map(a => val(a, inputs));
         assert(typeof src  === 'string');
         if (src[0] === '(') {
-          return subs(src, args);
+          return subst(src, args);
         } else {
           return '(' + src + '(' + args.join(', ') + '))';
         }
@@ -427,7 +460,8 @@ var generate = function(func, gen, node) {
         break;
       case 'coerce':
         var value = val(gen.child, inputs);
-        return subs(gen.coercion, [value]);
+        console.log(gen.source);
+        return subst(gen.source, [value]);
 
       case 'vectorise':
         var name = gensym();
@@ -479,7 +513,7 @@ var generate = function(func, gen, node) {
         case 'coerce':
           var name = arg(gen.child);
           var result = gensym();
-          source += 'var ' + result + ' = ' + subs(gen.coercion, [name]) + ';\n';
+          source += 'var ' + result + ' = ' + subst(gen.source, [name]) + ';\n';
         case 'list':
         case 'record':
         default:
