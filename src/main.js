@@ -85,13 +85,13 @@ function bezel(context, path, thisArg, inset, scale) {
   context.shadowOffsetX = (10000 + s * -1) * scale;
   context.shadowOffsetY = (10000 + s * -1) * scale;
   context.shadowBlur = 1.5 * scale;
-  context.shadowColor = 'rgba(0, 0, 0, .7)';
+  context.shadowColor = 'rgba(0, 0, 0, .5)';
   context.fill();
 
   context.shadowOffsetX = (10000 + s * 1) * scale;
   context.shadowOffsetY = (10000 + s * 1) * scale;
   context.shadowBlur = 1.5 * scale;
-  context.shadowColor = 'rgba(255, 255, 255, .4)';
+  context.shadowColor = 'rgba(255, 255, 255, .3)';
   context.fill();
 
   context.restore();
@@ -1439,6 +1439,9 @@ class Block extends Drawable {
     if (part.shape === 'Symbol') {
       return 9;
     }
+    if (part.shape === 'Num') {
+      return -4 + part.height/2 | 0;
+    }
     return -2 + part.height/2 | 0;
   }
 
@@ -1549,7 +1552,7 @@ class Block extends Drawable {
   pathBlock(context) {
     var w = this.ownWidth;
     var h = this.ownHeight;
-    var r = 6 * density;
+    var r = 8 * density;
 
     context.moveTo(0, r + .5);
     context.arc(r, r + .5, r, PI, PI32, false);
