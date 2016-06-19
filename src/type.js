@@ -267,6 +267,9 @@ class RecordType extends Type {
           return super.isSuper(other);
         }
         var ours = schema[sym];
+        if (!ours) {
+          continue;
+        }
         var t = ours.isSuper(theirs);
         if (!t) {
           return super.isSuper(other);
@@ -364,6 +367,20 @@ export default function type(name, inputTypes) {
   return best;
 };
 
+
+function mostGeneral(types) {
+  if (!types.length) {
+    return false;
+  }
+  var t = types[0];
+  var o = mostGeneral(types.slice(1));
+  if (!o) return t;
+  if (t.isSuper(o) === true) return t;
+  if (o.isSuper(t) === true) return o;
+  return type.any;
+}
+
+
 var cache = function(cls) {
   var cache = new Map();
   return function(key) {
@@ -388,4 +405,10 @@ type.none = new ValueType('None');
 type.any = new AnyType(null);
 
 type.fromString = Type.fromString;
+
+type.validCoercion = function(x) {
+  return x && isValid(x);
+};
+
+type.mostGeneral = mostGeneral;
 

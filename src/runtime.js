@@ -298,6 +298,14 @@ var mod = function(x, y) {
   return r;
 };
 
+var join = function(...strings) {
+  return strings.join("");
+};
+
+var makeList = function(...list) {
+  return list;
+};
+
 var range = function(from, to) {
   var result = [];
   for (var i=from; i<=to; i++) {
@@ -899,7 +907,7 @@ class Computed extends Observable {
   recompute() {
     console.log('recompute', this.name);
     this.type();
-    console.log(this._type, this.name);
+    console.log(this._type ? this._type.toString() : "--", this.name);
     if (!this._type) {
       this.setDeps(new Set(this.inputs.filter((arg, index) => (this.args[index] !== '%u'))));
       if (this.result !== null) {

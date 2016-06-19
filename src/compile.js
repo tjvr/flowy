@@ -190,39 +190,100 @@ var typeCheck = function(name, inputTypes) {
   }
 };
 
-var typePrim = function(name, inputTypes) {
+var typePrim = function(name, inputs) {
+  var inputTypes = inputs.map(x => x.type());
+  var inputValues = inputs.map(x => x.result);
+
   switch (name) {
     case 'join %exp':
-      // TODO how to type variadics?
-      var wants = [];
-      for (var i=0; i<inputTypes.length; i++) {
-        wants.push(type.string);
-      }
+      var wants = inputTypes.map(t => type.value('Text'));
+      var coercions = wants.map((t, index) => t.isSuper(inputTypes[index]));
+      if (!all(coercions, type.validCoercion)) return;
       return intermediate({
         wants: wants,
-        coercions: [true],
+        coercions: coercions,
+        source: 'join',
+        canYield: false,
+        output: type.value('Text'),
+      }, inputTypes);
+
+    case 'list %exp':
+      var child = type.mostGeneral(inputTypes);
+      var wants = inputTypes.map(t => child);
+      var coercions = wants.map((t, index) => t.isSuper(inputTypes[index]));
+      if (!all(coercions, type.validCoercion)) return;
+      return intermediate({
+        wants: wants,
+        coercions: coercions,
+        source: 'makeList',
+        canYield: false,
+        output: type.list(child),
       }, inputTypes);
 
     case 'item %n of %l':
       let [index, list] = inputTypes;
-      g.type = list.child;
-      // TODO
-      return;
+      if (!list) return;
+      var wants = [type.value('Int'), type.any];
+      var coercions = wants.map((t, index) => t.isSuper(inputTypes[index]));
+      if (!all(coercions, type.validCoercion)) return;
+      return intermediate({
+        wants: wants,
+        coercions: coercions,
+        source: '($1[$0 - 1])', // TODO BigInteger
+        canYield: false,
+        output: list ? list.child || type.any : type.any,
+      }, inputTypes);
 
-    case 'list %exp':
-      g.type = type.list(inputTypes[0]);
-      // TODO argh
-      return;
+    case 'record with %fields':
+      var schema = {};
+      var wants = [];
+      var source = '({\n';
+      for (var i=0; i<inputTypes.length; i += 2) {
+        var symbolType = inputTypes[i];
+        if (type.value('Text').isSuper(symbolType) !== true) return;
+        var symbol = inputValues[i];
+        wants.push(type.value('Text'));
 
-    // case '%q of %o':
-    //   let [symbol, record] = inputTypes;
-    //   assert(type.symbol.isSuper(symbol)); // and is immediate!
-    //   var value = TODO get actual symbol value
-    //   return record.schema[value];
+        var child = inputTypes[i + 1];
+        if (!child) return;
+        schema[symbol] = child;
+        wants.push(child);
+
+        source += literalString(symbol) + ': $' + (i + 1) + ',\n';
+      }
+      source += '})';
+      var coercions = wants.map((t, index) => t.isSuper(inputTypes[index]));
+      if (!all(coercions, type.validCoercion)) return;
+
+      return intermediate({
+        wants: wants,
+        coercions: coercions,
+        source: source,
+        canYield: false,
+        output: type.record(schema),
+      }, inputTypes);
+
+    case '%q of %o':
+      var symbolType = inputTypes[0];
+      if (type.value('Text').isSuper(symbolType) !== true) return;
+      var obj = inputTypes[1];
+      if (!obj) return;
+      var symbol = inputValues[0];
+      var schema = {};
+      schema[symbol] = type.any;
+      var wants = [type.value('Text'), type.record(schema)];
+      var coercions = wants.map((t, index) => t.isSuper(inputTypes[index]));
+      if (!all(coercions, type.validCoercion)) return;
+
+      return intermediate({
+        wants: wants,
+        coercions: coercions,
+        source: '($1[' + literalString(symbol) + '])',
+        canYield: false,
+        output: obj.schema[symbol],
+      }, inputTypes);
 
     // TODO concat...
-    // TODO record type
-    // TODO list type
 
     default:
       return typeCheck(name, inputTypes);
@@ -242,9 +303,7 @@ var isMine = function(node, other) {
 };
 
 var compileNode = function(node) {
-  var inputTypes = node.inputs.map(x => x.type());
-
-  var g = typePrim(node.name, inputTypes);
+  var g = typePrim(node.name, node.inputs);
   if (!g) return;
 
   return g;
@@ -257,7 +316,7 @@ var compile = function(node) {
 
   var op = Func.cache(node.name);
   var base = generate(op, g, node);
-  console.log(base);
+  //console.log(base);
 
   return {type, op, base};
 };
@@ -273,6 +332,16 @@ var warnings;
 var warn = function(message) {
   warnings[message] = (warnings[message] || 0) + 1;
 };
+
+function literalString(e) {
+  return '"' + e
+    .replace(/\\/g, '\\\\')
+    .replace(/\n/g, '\\n')
+    .replace(/\r/g, '\\r')
+    .replace(/"/g, '\\"')
+    .replace(/\{/g, '\\x7b')
+    .replace(/\}/g, '\\x7d') + '"';
+}
 
 var generate = function(func, gen, node) {
   var nextLabel = function() {
@@ -322,13 +391,7 @@ var generate = function(func, gen, node) {
       return '' + e;
 
     } else if (typeof e === 'string') {
-      return '"' + e
-        .replace(/\\/g, '\\\\')
-        .replace(/\n/g, '\\n')
-        .replace(/\r/g, '\\r')
-        .replace(/"/g, '\\"')
-        .replace(/\{/g, '\\x7b')
-        .replace(/\}/g, '\\x7d') + '"';
+      return literalString(e);
     }
     assert(false);
   };
