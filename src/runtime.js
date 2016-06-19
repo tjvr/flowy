@@ -321,12 +321,13 @@ var displayList = function(out, list) {
   }
 
   var itemType = out.isList ? out.child : type.any;
-  var isTyped = itemType.isAny;
+  var isTyped = !itemType.isAny;
+  var isRecordTable;
   withValue(list[0], first => {
     if (!isTyped) {
       itemType = runtimeTypeOf(first);
     }
-    var isRecordTable = itemType.isRecord;
+    isRecordTable = itemType.isRecord;
     if (isRecordTable) {
       // TODO use schema from type
       var schema = first.schema;
@@ -339,22 +340,22 @@ var displayList = function(out, list) {
 
     list.forEach((item, index) => {
       var thisItem = runtimeTypeOf(item);
-      if (isRecordTable && /Record/.test(thisItem)) {
+      if (isRecordTable && thisItem.isRecord) {
         items.push(['row', 'record', index, [ellipsis]]);
         withValue(item, result => {
           var values = symbols.map(sym => {
             var value = result.values[sym];
-            return ['cell', 'record', displayCell(thisItem, value), sym];
+            return ['cell', 'record', displayCell(type.any, value), sym]; // TODO types
           });
           items[index + 1] = ['row', 'record', index, values];
-          this.emit(l);
+          f.emit(l);
         });
 
-      } else if (/List$/.test(thisItem)) {
+      } else if (thisItem.isList) {
         items.push(['row', 'list', index, [ellipsis]]);
         withValue(item, result => {
           var values = result.map((item2, index2) => {
-            return ['cell', 'list', displayCell(thisItem, item2), index2 + 1];
+            return ['cell', 'list', displayCell(thisItem.child, item2), index2 + 1];
           });
           items[index] = ['row', 'list', index, values];
         });
