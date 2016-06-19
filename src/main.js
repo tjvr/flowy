@@ -1450,11 +1450,11 @@ class Block extends Drawable {
 
     var lineX = 0;
     var width = 0;
-    var height = 28;
+    var height = 30;
 
     var lines = [[]];
     var lineXs = [[0]];
-    var lineHeights = [28];
+    var lineHeights = [30];
     var line = 0;
 
     var parts = this.parts;
@@ -1501,7 +1501,7 @@ class Block extends Drawable {
       lineX += 6;
       lineXs[line].push(lineX);
 
-      var h = part.height + (part.isBubble ? 0 : 8);
+      var h = part.height + (part.isBubble ? 0 : 6);
       lineHeights[line] = Math.max(lineHeights[line], h);
       lines[line].push(part);
     }
@@ -1552,7 +1552,7 @@ class Block extends Drawable {
   pathBlock(context) {
     var w = this.ownWidth;
     var h = this.ownHeight;
-    var r = 8 * density;
+    var r = 7 * density;
 
     context.moveTo(0, r + .5);
     context.arc(r, r + .5, r, PI, PI32, false);
@@ -1925,7 +1925,7 @@ class Bubble extends Source {
 }
 Bubble.measure = createMetrics('result-label');
 
-Bubble.tipSize = 7;
+Bubble.tipSize = 6;
 Bubble.radius = 6;
 Bubble.paddingX = 4;
 Bubble.paddingY = 2;
