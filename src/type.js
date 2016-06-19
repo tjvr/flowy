@@ -154,6 +154,7 @@ class Type {
         return new RecordType();
       case 'Date':
       case 'Time':
+      case 'WebPage':
         return new RecordType(name, {}); // TODO
       default:
         return new ValueType(name);

@@ -472,8 +472,7 @@ var generate = function(func, gen, node) {
       case 'literal':
         return literal(gen.value);
       case 'arg':
-        var arg = inputs[gen.index];
-        return gen.uneval ? arg : arg + '.result';
+        return inputs[gen.index];
       case 'resolve':
         assert(false);
         break;
@@ -528,7 +527,7 @@ var generate = function(func, gen, node) {
     for (var i=0; i<indexes.length; i++) {
       var index = indexes[i];
       var name = 'vec_' + index;
-      source += 'var ' + name + ' = ' + (inputs[index] || '[]') + ';\n';
+      source += 'var ' + name + ' = ' + inputs[index] + ';\n';
       inputs[index] = name;
       childInputs[index] = name + '[index]';
     }
@@ -590,8 +589,10 @@ var generate = function(func, gen, node) {
     source += '];\n';
     var names = [];
     for (var i=0; i<node.inputs.length; i++) {
-      requestArg(args[i]);
-      names.push('C.threads[' + i + ']');
+      var gen = args[i];
+      requestArg(gen);
+      var arg = 'C.threads[' + i + ']';
+      names.push(gen.uneval ? arg : arg + '.result');
     }
     return names;
   };
@@ -607,25 +608,12 @@ var generate = function(func, gen, node) {
     }
 
     if (gen instanceof Vectorise) {
-      var args = [];
-      source += 'C.threads = [\n';
-      for (var i=0; i<node.inputs.length; i++) {
-        //assert(node.inputs[i] instanceof Observable);
-        source += 'request(' + i + '),\n';
-      }
-      source += '];\n';
-      for (var i=0; i<node.inputs.length; i++) {
-        source += 'await(C.threads[' + i + ']);\n';
-
-        var arg = node.inputs[i];
-        args.push('C.threads[' + i + '].result');
-      }
-
+      var args = awaitArgs(gen.child.args);
       emit(vectorise(gen, args));
 
     } else {
-      assert(gen instanceof Apply);
       var args = awaitArgs(gen.args);
+      assert(gen instanceof Apply);
       if (gen.canYield) {
         emit(apply(gen, args));
       } else {
