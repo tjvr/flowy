@@ -306,6 +306,21 @@ var range = function(from, to) {
   return result;
 };
 
+var repeat = function(times, obj) {
+  var out = [];
+  for (var i=0; i<times; i++) {
+    out.push(obj);
+  }
+  return out;
+};
+var repeatText = function(times, obj) {
+  var out = "";
+  for (var i=0; i<times; i++) {
+    out += obj;
+  }
+  return out;
+};
+
 var fib = function(n) {
   return n <= 2 ? 1 : fib(n - 1) + fib(n - 2);
 };

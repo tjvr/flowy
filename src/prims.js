@@ -286,33 +286,23 @@ export const functions = {
   "Bool <- Bool": '($0)',
   "Bool <- Bool = Bool": '($0 === $1)',
 
-  "Any Future <- Uneval if Bool else Uneval": function(tv, cond, fv) {
-    var ignore = cond ? fv : tv;
-    var want = cond ? tv : fv;
-    if (ignore) ignore.unsubscribe(this.target);
-    if (want) want.subscribe(this.target);
-    var thread = want.request();
-    this.awaitAll(thread.isTask ? [thread] : [], () => {
-      var result = thread.isTask ? thread.result : thread;
-      this.emit(result);
-      this.isRunning = false;
-    });
-  },
+  "Any Future <- Uneval if Bool else Uneval": true,
 
-  "List <- repeat Int times: Any": function(times, obj) {
-    var out = [];
-    for (var i=0; i<times; i++) {
-      out.push(obj);
-    }
-    return out;
-  },
-  "Text <- repeat Int times: Text": function(times, obj) {
-    var out = "";
-    for (var i=0; i<times; i++) {
-      out += obj;
-    }
-    return out;
-  },
+  //function(tv, cond, fv) {
+  //  var ignore = cond ? fv : tv;
+  //  var want = cond ? tv : fv;
+  //  if (ignore) ignore.unsubscribe(this.target);
+  //  if (want) want.subscribe(this.target);
+  //  var thread = want.request();
+  //  this.awaitAll(thread.isTask ? [thread] : [], () => {
+  //    var result = thread.isTask ? thread.result : thread;
+  //    this.emit(result);
+  //    this.isRunning = false;
+  //  });
+  //},
+
+  "List <- repeat Int times: Any": 'repeat',
+  "Text <- repeat Int times: Text": 'repeatText',
 
 
   /* Text */
