@@ -261,7 +261,9 @@ var typePrim = function(name, inputs) {
       var symbolType = inputTypes[0];
       if (type.value('Text').isSuper(symbolType) !== true) return;
       var obj = inputTypes[1];
-      if (!obj || !obj.isRecord) return;
+      if (!obj) return;
+      if (obj.isList && obj.child.isRecord) obj = obj.child;
+      if (!obj.isRecord) return;
       var symbol = inputValues[0];
       var schema = {};
       schema[symbol] = type.any;

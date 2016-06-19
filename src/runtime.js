@@ -61,7 +61,7 @@ class Uncertain {
 
 
 var runtimeTypeOf = function(value) {
-  if (value === undefined) return;
+  if (value === undefined) return type.any;
   if (value === null) return;
   switch (typeof value) {
     case 'number':
@@ -79,11 +79,11 @@ var runtimeTypeOf = function(value) {
       }
       switch (value.constructor) {
         case Error: return type.value('Error');
+        case Array: return type.list(type.any);
+        case Record: return type.record(value.schema); // TODO
         case BigInteger: return type.value('Int');
-        case Array: return type.value('List');
         case Image: return type.value('Image');
         case Uncertain: return type.value('Uncertain');
-        case Record: return type.record(value.schema); // TODO
       }
       if (value instanceof Fraction) return type.value('Frac'); // TODO
       if (value instanceof tinycolor) return type.value('Color'); // TODO
