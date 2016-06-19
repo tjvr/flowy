@@ -9,7 +9,7 @@ _site/out.js : src/main.js src/compile.js src/runtime.js src/types.js src/prims.
 	node_modules/.bin/browserify src/main.js -t babelify | uglifyjs --mangle > _site/out.js
 
 test:
-	node_modules/.bin/moduleserve --host 0.0.0.0 --port 8888 --transform babel www
+	node_modules/.bin/moduleserve --host 0.0.0.0 --port 8000 --transform babel www
 
 deploy:
 	rsync -Pvraz _site/ scod:~daft/public_html/dev
