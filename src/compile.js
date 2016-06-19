@@ -209,7 +209,8 @@ var typePrim = function(name, inputs) {
       }, inputTypes);
 
     case 'list %exp':
-      var child = type.mostGeneral(inputTypes);
+      if (any(inputTypes, x => x === null)) return;
+      var child = type.highest(inputTypes);
       var wants = inputTypes.map(t => child);
       var coercions = wants.map((t, index) => t.isSuper(inputTypes[index]));
       if (!all(coercions, type.validCoercion)) return;
@@ -317,7 +318,7 @@ var compile = function(node) {
 
   var op = Func.cache(node.name);
   var base = generate(op, g, node);
-  console.log(base);
+  //console.log(base);
 
   return {type, op, base};
 };

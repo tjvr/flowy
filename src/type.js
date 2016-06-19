@@ -258,7 +258,7 @@ class RecordType extends Type {
       var ts;
       var schema = this.schema;
       var otherSchema = other.schema;
-      var symbols = other.keys();
+      var symbols = this.keys();
       var length = symbols.length;
       for (var i=0; i<length; i++) {
         var sym = symbols[i];
@@ -267,9 +267,6 @@ class RecordType extends Type {
           return super.isSuper(other);
         }
         var ours = schema[sym];
-        if (!ours) {
-          continue;
-        }
         var t = ours.isSuper(theirs);
         if (!t) {
           return super.isSuper(other);
@@ -368,15 +365,17 @@ export default function type(name, inputTypes) {
 };
 
 
-function mostGeneral(types) {
+function highest(types) {
   if (!types.length) {
     return false;
   }
   var t = types[0];
-  var o = mostGeneral(types.slice(1));
+  var o = highest(types.slice(1));
   if (!o) return t;
   if (t.isSuper(o) === true) return t;
   if (o.isSuper(t) === true) return o;
+  if (t.isSuper(o).kind === 'coerce') return t;
+  if (o.isSuper(t).kind === 'coerce') return o;
   return type.any;
 }
 
@@ -410,5 +409,5 @@ type.validCoercion = function(x) {
   return x && isValid(x);
 };
 
-type.mostGeneral = mostGeneral;
+type.highest = highest;
 
