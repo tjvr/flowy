@@ -99,17 +99,47 @@ function bezel(context, path, thisArg, inset, scale) {
 
 /*****************************************************************************/
 
-import {graph} from "./runtime";
+import {worker} from "./runtime";
 
-graph.sendMessage = onMessage;
+class Graph {
+  constructor() {
+    this.id = ++Graph.highestId;
+    worker.onMessage({ action: 'graph', graph: this.id });
+  }
 
-function sendMessage(json) {
-  //console.log(`=> ${json.action}`, json);
-  graph.onMessage(json);
+  sendMessage(json) {
+    json.graph = this.id;
+    worker.onMessage(json);
+  }
+
+  input(literal) {
+    var graph = this;
+    var name = "literal _";
+    var node = new Node(graph, name, literal, false);
+    graph.sendMessage({action: 'create', id: node.id, name: name, literal: literal});
+    node.value = literal;
+    return node;
+  }
+  block(name) {
+    var graph = this;
+    var node = new Node(graph, name, null, false);
+    graph.sendMessage({action: 'create', id: node.id, name: name});
+    return node;
+  }
+  repr(node) {
+    var graph = this;
+    var name = "display";
+    var repr = new Node(graph, name, null, false);
+    graph.sendMessage({action: 'create', id: repr.id, name: name, isSink: false});
+    repr.addInput(0, node);
+    return repr;
+  }
+
 }
+Graph.highestId = 0;
 
+worker.sendMessage = onMessage;
 function onMessage(json) {
-  //console.log(`<= ${json.action}`, json);
   switch (json.action) {
     case 'invalidate':
       Node.byId[json.id].invalidate();
@@ -120,12 +150,15 @@ function onMessage(json) {
     case 'progress':
       Node.byId[json.id].progress(json.loaded, json.total);
       return;
+    default:
+      throw json;
   }
 }
 
 class Node {
-  constructor(id, name, literal, isSink) {
-    this.id = id || ++Node.highestId;
+  constructor(graph, name, literal, isSink) {
+    this.graph = graph;
+    this.id = ++Node.highestId;
     this.name = name;
     this.literal = literal || null;
     this.isSink = isSink || false;
@@ -140,30 +173,10 @@ class Node {
   }
 
   destroy() {
-    sendMessage({action: 'destroy', id: this.id});
+    this.graph.sendMessage({action: 'destroy', id: this.id});
     delete Node.byId[this.id];
     this.inputs.forEach(node => this.removeInput(this.inputs.indexOf(node)));
     this.outputs.forEach(node => node.removeInput(node.inputs.indexOf(this)));
-  }
-
-  static input(literal) {
-    var name = "literal _";
-    var node = new Node(null, name, literal, false);
-    sendMessage({action: 'create', id: node.id, name: name, literal: literal});
-    node.value = literal;
-    return node;
-  }
-  static block(name) {
-    var node = new Node(null, name, null, false);
-    sendMessage({action: 'create', id: node.id, name: name});
-    return node;
-  }
-  static repr(node) {
-    var name = "display";
-    var repr = new Node(null, name, null, false);
-    sendMessage({action: 'create', id: repr.id, name: name, isSink: false});
-    repr.addInput(0, node);
-    return repr;
   }
 
   /* * */
@@ -183,14 +196,14 @@ class Node {
     this.removeInput(index);
     this.inputs[index] = node;
     node._addOutput(this);
-    sendMessage({action: 'link', from: node.id, index: index, to: this.id});
+    this.graph.sendMessage({action: 'link', from: node.id, index: index, to: this.id});
   }
 
   removeInput(index) {
     var oldNode = this.inputs[index];
     if (oldNode) {
       oldNode._removeOutput(this);
-      sendMessage({action: 'unlink', from: oldNode.id, index: index, to: this.id});
+      this.graph.sendMessage({action: 'unlink', from: oldNode.id, index: index, to: this.id});
     }
     this.inputs[index] = null;
   }
@@ -198,13 +211,13 @@ class Node {
   setLiteral(value) {
     if (this.literal === value) return;
     this.literal = value;
-    sendMessage({action: 'setLiteral', id: this.id, literal: this.literal});
+    this.graph.sendMessage({action: 'setLiteral', id: this.id, literal: this.literal});
   }
 
   setSink(isSink) {
     if (this.isSink === isSink) return;
     this.isSink = isSink;
-    sendMessage({action: 'setSink', id: this.id, isSink: this.isSink});
+    this.graph.sendMessage({action: 'setSink', id: this.id, isSink: this.isSink});
   }
 
   /* * */
@@ -601,7 +614,7 @@ class Input extends Drawable {
     this.field.addEventListener('input', this.change.bind(this));
     this.field.addEventListener('keydown', this.keyDown.bind(this));
 
-    this.node = Node.input(value);
+    this.node = app.world.graph.input(value);
     this.value = value;
   }
 
@@ -873,7 +886,7 @@ class Switch extends Drawable {
     this.knob = new SwitchKnob(this);
     this.el.appendChild(this.knob.el);
 
-    this.node = Node.input(value);
+    this.node = app.world.graph.input(value);
     this.value = value;
   }
 
@@ -1143,8 +1156,9 @@ class Block extends Drawable {
     this.labels = [];
     this.args = [];
 
-    this.node = Node.block(info.spec);
-    this.repr = Node.repr(this.node);
+    this.graph = app.world.graph;
+    this.node = this.graph.block(info.spec);
+    this.repr = this.graph.repr(this.node);
 
     this.info = info;
     for (var i=0; i<parts.length; i++) {
@@ -1612,7 +1626,7 @@ class Source extends Drawable {
     this.node = node;
     this.repr = repr;
     if (!this.repr) {
-      this.repr = Node.repr(this.node);
+      this.repr = node.graph.repr(this.node);
       this.repr.setSink(true);
     }
 
@@ -1631,7 +1645,7 @@ class Source extends Drawable {
   }
 
   static value(value) {
-    return new Source(Node.input(value));
+    return new Source(app.world.graph.input(value));
   }
 
   addBubble(bubble) {
@@ -2870,6 +2884,7 @@ class World extends Workspace {
     super();
     this.el.className += ' world';
     this.elContents.className += ' world-contents';
+    this.graph = new Graph();
   }
 
   get isWorld() { return true; }
@@ -2919,15 +2934,7 @@ var colors = {
 };
 
 var ringBlock;
-
-var paletteContents = [];
 var blocksBySpec = {};
-specs.forEach(p => {
-  let [category, spec, defaults] = p;
-  var block = makeBlock(category, spec, defaults);
-  if (!block) return;
-  paletteContents.push(block);
-});
 
 function makeBlock(category, spec, defaults) {
   var def = (defaults || []).slice();
@@ -3042,7 +3049,7 @@ function makeBlock(category, spec, defaults) {
     b.defWorld = new World(el(''));
     var x = 128;
     b.defWorld.parameters = b.inputs.map(input => {
-      var s = new Source(Node.input(input.node.value), null, 'param');
+      var s = new Source(b.defWorld.graph.input(input.node.value), null, 'param');
       s.layoutSelf();
       s.moveTo(x, 128);
       b.defWorld.add(s);
@@ -3104,6 +3111,14 @@ class Palette extends Workspace {
     this.makeBtn.textContent = "Make a block";
     this.elContents.appendChild(this.makeBtn);
     this.makeBtn.addEventListener('click', e => this.make());
+
+    var paletteContents = [];
+    specs.forEach(p => {
+      let [category, spec, defaults] = p;
+      var block = makeBlock(category, spec, defaults);
+      if (!block) return;
+      paletteContents.push(block);
+    });
 
     this.blocks = paletteContents;
     this.blocks.forEach(o => {
@@ -3248,6 +3263,7 @@ class App {
     document.body.appendChild(this.el);
     document.body.appendChild(this.elScripts = el('absolute dragging'));
 
+    window.app = this;
     this.root = this.world = new World(this.elWorld = el(''));
     this.palette = new Palette(this.elPalette = el(''));
     this.header = new Header(this.elHeader = el(''));

@@ -901,40 +901,6 @@ class Graph {
     return {from: this.get(json.from), index: json.index, to: this.get(json.to)};
   }
 
-  onMessage(json) {
-    switch (json.action) {
-      case 'link':
-        var link = this.linkFromJSON(json);
-        link.to.replace(link.index, link.from);
-        return;
-      case 'unlink':
-        var link = this.linkFromJSON(json);
-        link.to.replace(link.index);
-        return;
-      case 'setLiteral':
-        var node = this.get(json.id);
-        node.assign(json.literal);
-        return;
-      case 'setSink':
-        var node = this.get(json.id);
-        node.setSink(json.isSink);
-        return;
-      case 'create':
-        var node = json.hasOwnProperty('literal') ? new Observable(json.literal) : new Computed(json.name);
-        this.add(node, json.id);
-        return;
-      case 'destroy':
-        var node = this.get(json.id);
-        this.remove(node);
-        node.destroy();
-        return;
-      default:
-        throw json;
-    }
-  }
-
-  sendMessage(json) {}
-
   invalidate(node) {
     var action = 'invalidate';
     var id = node.id;
@@ -955,15 +921,69 @@ class Graph {
     var json = {action, id, loaded, total};
     this.sendMessage(json);
   }
+
+  onMessage(json) {
+    switch (json.action) {
+      case 'link':
+        var link = this.linkFromJSON(json);
+        link.to.replace(link.index, link.from);
+        return;
+      case 'unlink':
+        var link = this.linkFromJSON(json);
+        link.to.replace(link.index);
+        return;
+      case 'setLiteral':
+        var node = this.get(json.id);
+        node.assign(json.literal);
+        return;
+      case 'setSink':
+        var node = this.get(json.id);
+        node.setSink(json.isSink);
+        return;
+      case 'create':
+        var node = json.hasOwnProperty('literal') ? new Observable(this, json.literal) : new Computed(this, json.name);
+        this.add(node, json.id);
+        return;
+      case 'destroy':
+        var node = this.get(json.id);
+        this.remove(node);
+        node.destroy();
+        return;
+      default:
+        throw json;
+    }
+  }
+
+  sendMessage(json) {
+    json.graph = this.id;
+    worker.sendMessage(json);
+  }
 }
-export const graph = new Graph();
+Graph.byId = {};
+
+export const worker = {
+  onMessage: function(json) {
+    console.log(json);
+    if (json.action === 'graph') {
+      var graph = new Graph();
+      graph.id = json.graph;
+      Graph.byId[graph.id] = graph;
+      return;
+    }
+    var graph = Graph.byId[json.graph];
+    graph.onMessage(json);
+  },
+  sendMessage: function(json) {},
+};
+
 
 /***************************************************************************/
 
 import compile from "./compile";
 
 class Observable {
-  constructor(value) {
+  constructor(graph, value) {
+    this.graph = graph;
     this.result = value;
     this.subscribers = new Set();
   }
@@ -998,8 +1018,8 @@ class Observable {
 }
 
 class Computed extends Observable {
-  constructor(name, inputs) {
-    super(null);
+  constructor(graph, name, inputs) {
+    super(graph, null);
     this.name = name;
     this.args = name.split(" ").filter(x => x[0] === '%');
 
@@ -1022,7 +1042,7 @@ class Computed extends Observable {
     //   this.thread.cancel();
     // }
     this.thread = null;
-    graph.invalidate(this);
+    this.graph.invalidate(this);
     super.invalidate();
   }
 
@@ -1056,7 +1076,7 @@ class Computed extends Observable {
         this.base = x.base;
         this._type = x.type;
       }
-      console.log(this._type ? this._type.toString() : "???", '<-', this.name);
+      console.log(this._type ? this._type.toString() : "?", '<-', this.name);
     }
     return this._type;
   }
@@ -1073,7 +1093,7 @@ class Computed extends Observable {
       var thread = this.thread = new Thread(evaluator, this, this.base);
       thread.onFirstEmit(result => {
         this.result = result;
-        graph.emit(this, result);
+        this.graph.emit(this, result);
         this.emit(result);
 
         this.setDeps(thread.deps);
