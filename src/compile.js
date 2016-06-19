@@ -316,7 +316,7 @@ var compile = function(node) {
 
   var op = Func.cache(node.name);
   var base = generate(op, g, node);
-  //console.log(base);
+  console.log(base);
 
   return {type, op, base};
 };
@@ -485,17 +485,11 @@ var generate = function(func, gen, node) {
     var src = gen.func.source;
 
     var name = gensym();
-    if (func.canYield) {
-      source += 'save();\n';
-      source += 'R.future = ' + src + '(' + names.join(', ') + ');\n';
-      await('R.future');
-      source += 'var ' + name + ' = R.future;\n';
-      source += 'restore();\n';
-    } else if (src[0] === '(') {
-      source += 'var ' + name + ' = ' + subs(src, names) + ';\n';
-    } else {
-      source += 'var ' + name + ' = ' + src + '(' + names.join(', ') + ');\n';
-    }
+    source += 'save();\n';
+    source += 'R.future = ' + src + '(' + names.join(', ') + ');\n';
+    await('R.future');
+    source += 'var ' + name + ' = R.future.result;\n';
+    source += 'restore();\n';
     return name;
   };
 
