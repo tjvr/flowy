@@ -2,6 +2,7 @@
 site: _site/out.js
 	cp www/style.css _site/
 	cp www/index.html _site/
+	cp www/favicon.png _site/
 	sed -Ei '' 's/.*script.*/<script src="out.js"><\/script>/' _site/index.html
 
 _site/out.js : src/main.js src/compile.js src/runtime.js src/types.js src/prims.js
