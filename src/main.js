@@ -3252,7 +3252,7 @@ class App {
     this.palette = new Palette(this.elPalette = el(''));
     this.header = new Header(this.elHeader = el(''));
     this.header.el.classList.add('out');
-    this.workspaces = [this.world, this.palette, this.header];
+    this.workspaces = [this.world, this.palette];
     this.el.appendChild(this.world.el);
     this.el.appendChild(this.palette.el);
     this.el.appendChild(this.header.el);
@@ -3306,6 +3306,8 @@ class App {
     this.header.block = block;
     this.header.el.classList.add('out');
     if (inputs) this.header.setParameters(inputs);
+    this.workspaces.push(this.header);
+    this.header.resize();
 
     var world = block.defWorld;
     this.world = world;
@@ -3327,6 +3329,7 @@ class App {
     assert(this.isEditing);
     var world = this.world;
     assert(this.workspaces.shift() === world);
+    assert(this.workspaces.pop() === this.header);
     this.workspaces.splice(0, 0, this.root);
     world.app = null;
     world.el.classList.add('out');
