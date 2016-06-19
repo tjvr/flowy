@@ -159,7 +159,7 @@ class Node {
     return node;
   }
   static repr(node) {
-    var name = "display %s";
+    var name = "display";
     var repr = new Node(null, name, null, false);
     sendMessage({action: 'create', id: repr.id, name: name, isSink: false});
     repr.addInput(0, node);

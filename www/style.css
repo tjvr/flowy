@@ -179,6 +179,7 @@ button {
 
 .view-Error {
   color: #e40046;
+  padding: 2px 4px;
 }
 
 .view-Text,
@@ -194,6 +195,7 @@ button {
   content: "”";
 }
 
+.view-Raw,
 .view-Int,
 .view-Float,
 .view-Frac-num,
@@ -201,6 +203,9 @@ button {
 .view-Uncertain-mean,
 .view-Uncertain-stddev {
   font: 14px/20px Source Code Pro, Monaco, monospace;
+}
+.view-Raw {
+  color: #555;
 }
 
 .view-Frac-num,

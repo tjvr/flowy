@@ -46,7 +46,6 @@ export const specs = [
   // TODO optional arguments
 
   ["ring", "%s", []],
-  ["hidden", "display %s", []],
 
   ["ops", "literal %s"],
 
@@ -183,28 +182,6 @@ specs.forEach(p => {
 /*****************************************************************************/
 
 export const functions = {
-
-  "UI <- display None": '(display("Error", "None"))',
-  "UI <- display Error": '(display("Error", $0.message || $0))',
-  "UI <- display Text": '(display("Text", $0))',
-  "UI <- display Int": '(display("Int", ""+$0))',
-  "UI <- display Frac": `(['block', [
-    display('Frac-num', ''+$0.n),
-    ['rect', '#000', 'auto', 2],
-    display('Frac-den', ''+$0.d),
-  ]])`,
-  "UI <- display Bool": "(display('Symbol view-Bool-' + ($0 ? 'yes' : 'no'), $0 ? 'yes' : 'no'))",
-  "UI <- display Image": '(["image", $0.cloneNode()])',
-  // "UI <- display Color": '(["rect", $0.toHexString(), 24, 24, "view-Color"])',
-  "UI <- display Uncertain": `(['inline', [
-    display('Uncertain-mean', ''+$0.m),
-    display('Uncertain-sym', "±"),
-    display('Uncertain-stddev', ''+$0.s),
-  ]])`,
-  "UI <- display Float": 'displayFloat',
-  "UI <- display Record": 'displayRecord',
-  "UI <- display List": 'displayList',
-  //"UI <- display Any": '(display("Text", $0))',
 
   /* Int */
   "Int <- Int + Int": 'BigInteger.add',

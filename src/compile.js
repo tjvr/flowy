@@ -118,7 +118,7 @@ var coerce = function(child, argType, coercion) {
   }
   switch (coercion.kind) {
     case 'list':
-      assert(type.list(type.any).isSuper(argType));
+      assert(argType.isList);
 
       assert(coercion.child.kind === 'coerce'); // TODO
       var source = coercion.child.coercion;
@@ -152,7 +152,7 @@ var apply = function(func, inputTypes, coercions) {
   var args = [];
   for (var i=0; i<inputTypes.length; i++) {
     var arg = new Arg(i);
-    if (func.wants[i].toString() === 'Uneval') {
+    if (func.wants[i].isUneval) {
       arg.uneval = true;
     }
     args.push(coerce(arg, inputTypes[i], coercions[i]));
@@ -258,7 +258,7 @@ var typePrim = function(name, inputs) {
     case 'record with %fields':
       var schema = {};
       var wants = [];
-      var source = '({\n';
+      var source = '(new Record(null, {\n';
       for (var i=0; i<inputTypes.length; i += 2) {
         var symbolType = inputTypes[i];
         if (type.value('Text').isSuper(symbolType) !== true) return;
@@ -272,7 +272,7 @@ var typePrim = function(name, inputs) {
 
         source += literalString(symbol) + ': $' + (i + 1) + ',\n';
       }
-      source += '})';
+      source += '}))';
       var coercions = wants.map((t, index) => t.isSuper(inputTypes[index]));
       if (!all(coercions, type.validCoercion)) return;
 
@@ -299,7 +299,7 @@ var typePrim = function(name, inputs) {
       return intermediate({
         wants: wants,
         coercions: coercions,
-        source: '($1[' + literalString(symbol) + '])',
+        source: '($1.values[' + literalString(symbol) + '])',
         canYield: false,
         output: obj.schema[symbol],
       }, inputTypes);
@@ -310,7 +310,7 @@ var typePrim = function(name, inputs) {
       var b = inputTypes[1];
       if (!a || !b) return;
       var out = type.highest([a, b]);
-      if (!type.list(type.any).isSuper(out)) return;
+      if (!out.isList) return;
       var wants = [out, out];
       var coercions = wants.map((t, index) => t.isSuper(inputTypes[index]));
       if (!all(coercions, type.validCoercion)) return;
@@ -329,7 +329,7 @@ var typePrim = function(name, inputs) {
       var [a, b] = inputTypes;
       if (!a || !b) return;
       var out = type.highest([a, b]);
-      assert(type.record({}).isSuper(out));
+      assert(out.isRecord);
       // TODO this
       return intermediate({
         wants: wants,

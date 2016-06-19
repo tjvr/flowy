@@ -222,6 +222,7 @@ class ListType extends Type {
     this.child = child || new AnyType();
   }
   toString() { return "List of " + this.child.toString(); }
+  get isList() { return true; }
 
   isSuper(other) {
     var t;
@@ -238,6 +239,7 @@ class RecordType extends Type {
     this.name = name;
     this.schema = schema || {};
   }
+  get isRecord() { return true; }
 
   keys() {
     return Object.keys(this.schema);
@@ -289,6 +291,7 @@ class RecordType extends Type {
 
 class AnyType extends Type {
   toString() { return "Any"; }
+  get isAny() { return true; }
 
   isSuper(other) {
     return true;
@@ -297,6 +300,7 @@ class AnyType extends Type {
 
 class UnevalType extends Type {
   toString() { return "Uneval"; }
+  get isUneval() { return true; }
 
   isSuper(other) {
     return true;

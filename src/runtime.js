@@ -60,7 +60,7 @@ class Uncertain {
 }
 
 
-var typeOf = function(value) {
+var runtimeTypeOf = function(value) {
   if (value === undefined) return;
   if (value === null) return;
   switch (typeof value) {
@@ -83,7 +83,7 @@ var typeOf = function(value) {
         case Array: return type.value('List');
         case Image: return type.value('Image');
         case Uncertain: return type.value('Uncertain');
-        // case Record: return value.schema ? value.schema.name : 'Record'; // TODO
+        case Record: return type.record(value.schema); // TODO
       }
       if (value instanceof Fraction) return type.value('Frac'); // TODO
       if (value instanceof tinycolor) return type.value('Color'); // TODO
@@ -157,9 +157,97 @@ var safely = function(cb) {
   return value;
 };
 
-var display = function(type, content) {
-  // TODO runtime type checking for Errors
-  return ['text', 'view-' + type, content || ''];
+var displayAwait = function(computed) {
+  THREAD.deps.add(computed);
+  if (computed.isComputed) {
+    var other = computed.request();
+    if (!other) {
+      THREAD.emit(['inline', []]); // no implementation
+      return;
+    }
+    if (!other.isDone) {
+      var thread = THREAD;
+      other.onFirstEmit(function() {
+        // awake --restart display()
+        self.queue.push(thread);
+      });
+      return;
+    }
+  }
+  var out = computed.type();
+  var value = computed.result;
+
+  var repr = display(out, value);
+  if (repr instanceof Future) {
+    THREAD.children.push(repr);
+    if (!repr.isDone) {
+      var thread = THREAD;
+      repr.onFirstEmit(thread.emit.bind(thread));
+    } else {
+      THREAD.emit(repr.result);
+    }
+  } else {
+    THREAD.emit(repr);
+  }
+}
+
+var display = function(out, result) {
+  if (out.isAny) {
+    out = runtimeTypeOf(result) || type.any;
+  }
+  console.log('display', result, 'type:', out.toString());
+  var el = function(type, content) {
+    return ['text', 'view-' + type, content || ''];
+  };
+
+  if (result === undefined) {
+    return ['inline', []]; // undefined result??? eg item of list
+
+  } else if (result instanceof Error) {
+    return el('Error', result.message || result);
+
+  } else if (out.isList) {
+    return displayList(out, result);
+
+  } else if (out.isRecord) {
+    return displayRecord(out, result);
+
+  } else if (out.name) {
+    switch (out.name) {
+      case 'Text':
+        return el('Text', result);
+      case 'Bool':
+        return el('Symbol view-Bool-' + (result ? 'yes' : 'no'), result ? 'yes' : 'no');
+      case 'Int':
+        return el('Int', ''+result);
+      case 'Float':
+        return el('Float', reprFloat(result));
+      case 'Frac':
+        return ['block', [
+          el('Frac-num', ''+result.n),
+          ['rect', '#000', 'auto', 2],
+          el('Frac-den', ''+result.d),
+        ]];
+      case 'Uncertain':
+        return ['inline', [
+          el('Uncertain-mean', ''+result.m),
+          el('Uncertain-sym', "±"),
+          el('Uncertain-stddev', ''+result.s),
+        ]];
+      case 'Color':
+        return ["rect", $0.toHexString(), 24, 24, "view-Color"];
+      case 'Image':
+        return ["image", result.cloneNode()];
+      default:
+        console.log(result);
+        return el('Raw', ''+result);
+    }
+  }
+};
+
+var displayCell = function(out, value) {
+  var repr = display(out, value);
+  return repr instanceof Future ? repr.result : repr;
 };
 
 function withValue(value, cb) {
@@ -174,7 +262,7 @@ function withValue(value, cb) {
   }
 }
 
-var displayFloat = function(x) {
+var reprFloat = function(x) {
   var r = ''+x;
   var index = r.indexOf('.');
   if (index === -1) {
@@ -184,10 +272,11 @@ var displayFloat = function(x) {
       r = x.toFixed(3);
     }
   }
-  return display('Float', r);
+  return r;
 };
 
-var displayRecord = function(record) {
+var displayRecord = function(out, record) {
+  var f = new Future();
   // TODO use RecordView
   var schema = record.schema;
   var symbols = schema ? schema.symbols : Object.keys(record.values);
@@ -210,17 +299,16 @@ var displayRecord = function(record) {
     items.push(field);
 
     withValue(record.values[symbol], result => {
-      var prim = this.evaluator.getPrim("display %s", [result]);
-      var value = prim.func.call(this, result);
-      cell[2] = value;
-      this.emit(r);
+      cell[2] = displayCell(type.any, result); // TODO types
+      f.emit(r);
     });
   });
-  this.emit(r);
-  return r;
+  f.emit(r);
+  return f;
 };
 
-var displayList = function(list) {
+var displayList = function(out, list) {
+  var f = new Future();
   var items = [];
   var l = ['table', items];
 
@@ -228,42 +316,45 @@ var displayList = function(list) {
 
   if (list.length === 0) {
     // TODO empty lists
-    this.emit(l);
-    return l;
+    f.emit(l);
+    return f;
   }
 
+  var itemType = out.isList ? out.child : type.any;
+  var isTyped = itemType.isAny;
   withValue(list[0], first => {
-    var isRecordTable = false;
-    if (first instanceof Record) {
+    if (!isTyped) {
+      itemType = runtimeTypeOf(first);
+    }
+    var isRecordTable = itemType.isRecord;
+    if (isRecordTable) {
+      // TODO use schema from type
       var schema = first.schema;
       var symbols = schema ? schema.symbols : Object.keys(first.values);
       var headings = symbols.map(text => ['cell', 'header', ['text', 'heading', text], text]);
       items.push(['row', 'header', null, headings]);
-      isRecordTable = true;
     }
 
     // TODO header row for list lists
 
     list.forEach((item, index) => {
-      var type = typeOf(item);
-      if (isRecordTable && /Record/.test(type)) {
+      var thisItem = runtimeTypeOf(item);
+      if (isRecordTable && /Record/.test(thisItem)) {
         items.push(['row', 'record', index, [ellipsis]]);
         withValue(item, result => {
           var values = symbols.map(sym => {
             var value = result.values[sym];
-            var prim = this.evaluator.getPrim("display %s", [value]);
-            return ['cell', 'record', prim.func.call(this, value), sym];
+            return ['cell', 'record', displayCell(thisItem, value), sym];
           });
           items[index + 1] = ['row', 'record', index, values];
           this.emit(l);
         });
 
-      } else if (/List$/.test(type)) {
+      } else if (/List$/.test(thisItem)) {
         items.push(['row', 'list', index, [ellipsis]]);
         withValue(item, result => {
           var values = result.map((item2, index2) => {
-            var prim = this.evaluator.getPrim("display %s", [item2]);
-            return ['cell', 'list', prim.func.call(this, item2), index2 + 1];
+            return ['cell', 'list', displayCell(thisItem, item2), index2 + 1];
           });
           items[index] = ['row', 'list', index, values];
         });
@@ -271,24 +362,14 @@ var displayList = function(list) {
       } else {
         items.push(['row', 'item', index, [ellipsis]]);
         withValue(item, result => {
-          var prim = this.evaluator.getPrim("display %s", [result]);
-          var value = ['cell', 'item', prim.func.call(this, result)];
+          var value = ['cell', 'item', displayCell(thisItem, result)];
           items[isRecordTable ? index + 1 : index] = ['row', 'item', index, [value]];
         });
       }
     });
   });
-  this.emit(l);
-  return l;
-};
-
-var displayList = function(list) {
-  if (!list) return;
-  return ['block', list.map(x => ['text', 'view-Int', x])];
-};
-
-var displayRecord = function(record) {
-  return display('Record', JSON.stringify(record));
+  f.emit(l);
+  return f;
 };
 
 var mod = function(x, y) {
@@ -472,13 +553,17 @@ var date = function() {
 var ifElse = function(tv, cond, fv) {
   var f = new Future();
   var computed = cond ? tv : fv;
+
   THREAD.deps.add(computed);
   if (computed.isComputed) {
     computed.request();
-    computed.onFirstEmit(f.emit.bind(f));
-  } else {
-    f.emit(computed.result);
+    if (!computed.isDone) {
+      computed.onFirstEmit(f.emit.bind(f));
+      return f;
+    }
   }
+  f.emit(computed.result);
+
   return f;
 };
 
@@ -909,7 +994,7 @@ class Observable {
   update() {}
 
   type() {
-    return typeOf(this.result);
+    return runtimeTypeOf(this.result);
   }
 }
 
@@ -959,12 +1044,19 @@ class Computed extends Observable {
     // if (this._type) {
     //   return this._type;
     // }
-    var x = compile(this);
-    if (x) {
-      var {type, op, base} = x;
-      this.fns = op.fns;
-      this.base = base;
-      this._type = type;
+    if (this.isBubble) {
+      this.base = () => {
+        displayAwait(this.inputs[0]);
+      };
+      this.fns = [this.base];
+      this._type = type.value('UI');
+    } else {
+      var x = compile(this);
+      if (x) {
+        this.fns = x.op.fns;
+        this.base = x.base;
+        this._type = x.type;
+      }
     }
     return this._type;
   }
@@ -1041,7 +1133,7 @@ class Computed extends Observable {
   }
 
   get isBubble() {
-    return this.name === 'display %s';
+    return this.name === 'display';
   }
 
   updateNeeded() {
