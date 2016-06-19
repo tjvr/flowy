@@ -1521,7 +1521,7 @@ class Block extends Drawable {
         var part = line[j];
         var cx = px + xs[j];
         var cy = (lh - part.height) / 2;
-        if (part.isBubble) cy -= 4;
+        if (part.isBubble) cy -= 1;
         if (part.isLabel) cy += 1;
         if (part.icon === '▶' && wrap) cy = -4;
         part.moveTo(cx, y + cy);
