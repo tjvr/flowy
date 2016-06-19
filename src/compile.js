@@ -210,50 +210,31 @@ var typePrim = function(name, inputs) {
   if (any(inputs, x => x === undefined)) return;
   var inputTypes = inputs.map(x => x.type());
   var inputValues = inputs.map(x => x.result);
-  console.log(inputTypes);
 
   switch (name) {
     case 'join %exp':
       var wants = inputTypes.map(t => type.value('Text'));
-      var coercions = wants.map((t, index) => t.isSuper(inputTypes[index]));
-      if (!all(coercions, type.validCoercion)) return;
-      return intermediate({
-        wants: wants,
-        coercions: coercions,
-        source: 'join',
-        canYield: false,
-        output: type.value('Text'),
-      }, inputTypes);
+      //var source = 'join';
+      var source = '([' + inputTypes.map((x, index) => '$' + index) + '].join(""))';
+      var out = type.value('Text');
+      break;
 
     case 'list %exp':
       if (any(inputTypes, x => x === null)) return;
       var child = type.highest(inputTypes);
       var wants = inputTypes.map(t => child);
-      var coercions = wants.map((t, index) => t.isSuper(inputTypes[index]));
-      if (!all(coercions, type.validCoercion)) return;
       var source = '([' + inputTypes.map((x, index) => '$' + index).join(', ') + '])';
-      return intermediate({
-        wants: wants,
-        coercions: coercions,
-        source: source,
-        canYield: false,
-        output: type.list(child),
-      }, inputTypes);
+      var out = type.list(child);
+      break;
 
     case 'item %n of %l':
       let [index, list] = inputTypes;
       if (!list) return;
       var wants = [type.value('Int'), type.any];
-      var coercions = wants.map((t, index) => t.isSuper(inputTypes[index]));
-      if (!all(coercions, type.validCoercion)) return;
-      return intermediate({
-        wants: wants,
-        coercions: coercions,
-        source: '($1[$0 - 1])', // TODO BigInteger
-        canYield: false,
-        output: list ? list.child || type.any : type.any,
-      }, inputTypes);
+      var source = '($1[$0 - 1])'; // TODO BigInteger
+      var out = list ? list.child || type.any : type.any;
       // TODO await Future cells
+      break;
 
     case 'record with %fields':
       var schema = {};
@@ -273,37 +254,21 @@ var typePrim = function(name, inputs) {
         source += literalString(symbol) + ': $' + (i + 1) + ',\n';
       }
       source += '}))';
-      var coercions = wants.map((t, index) => t.isSuper(inputTypes[index]));
-      if (!all(coercions, type.validCoercion)) return;
-
-      return intermediate({
-        wants: wants,
-        coercions: coercions,
-        source: source,
-        canYield: false,
-        output: type.record(schema),
-      }, inputTypes);
+      var out = type.record(schema);
+      break;
 
     case '%q of %o':
       var symbolType = inputTypes[0];
       if (type.value('Text').isSuper(symbolType) !== true) return;
       var obj = inputTypes[1];
-      if (!obj) return;
+      if (!obj || !obj.isRecord) return;
       var symbol = inputValues[0];
       var schema = {};
       schema[symbol] = type.any;
       var wants = [type.value('Text'), type.record(schema)];
-      var coercions = wants.map((t, index) => t.isSuper(inputTypes[index]));
-      if (!all(coercions, type.validCoercion)) return;
-
-      return intermediate({
-        wants: wants,
-        coercions: coercions,
-        source: '($1.values[' + literalString(symbol) + '])',
-        canYield: false,
-        output: obj.schema[symbol],
-      }, inputTypes);
-      // TODO await Future cells
+      var source = '($1.values[' + literalString(symbol) + '])';
+      var out = obj.schema[symbol];
+      break;
 
     case '%l concat %l':
       var a = inputTypes[0];
@@ -312,41 +277,37 @@ var typePrim = function(name, inputs) {
       var out = type.highest([a, b]);
       if (!out.isList) return;
       var wants = [out, out];
-      var coercions = wants.map((t, index) => t.isSuper(inputTypes[index]));
-      if (!all(coercions, type.validCoercion)) return;
-      return intermediate({
-        wants: wants,
-        coercions: coercions,
-        source: '($0.concat($1))',
-        canYield: false,
-        output: out,
-      }, inputTypes);
+      var source = '($0.concat($1))';
 
     case 'merge %o with %o':
       var wants = [type.record({}), type.record({})];
-      var coercions = wants.map((t, index) => t.isSuper(inputTypes[index]));
-      if (!all(coercions, type.validCoercion)) return;
       var [a, b] = inputTypes;
       if (!a || !b) return;
       var out = type.highest([a, b]);
+      var source = '($0.update($1))';
       assert(out.isRecord);
-      // TODO this
-      return intermediate({
-        wants: wants,
-        coercions: coercions,
-        source: '($0.update($1))',
-        canYield: false,
-        output: out,
-      }, inputTypes);
+      return; // TODO this
+      break;
       
     case 'update %o with %fields': // 'updateRecord',
       var record = {};
-      // TODO this
-      return;
+      return; // TODO this
+      break;
 
     default:
       return typeCheck(name, inputTypes);
   }
+
+  var coercions = wants.map((t, index) => t.isSuper(inputTypes[index]));
+  if (!all(coercions, type.validCoercion)) return;
+  return intermediate({
+    wants: wants,
+    coercions: coercions,
+    source: source,
+    canYield: false,
+    output: out,
+  }, inputTypes);
+
 };
 
 var isMine = function(node, other) {
@@ -375,7 +336,7 @@ var compile = function(node) {
 
   var op = Func.cache(node.name);
   var base = generate(op, g, node);
-  console.log(base);
+  //console.log(base);
 
   return {type, op, base};
 };
@@ -478,7 +439,6 @@ var generate = function(func, gen, node) {
         break;
       case 'coerce':
         var value = val(gen.child, inputs);
-        console.log(gen.source);
         return subst(gen.source, [value]);
 
       case 'vectorise':

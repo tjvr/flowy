@@ -192,10 +192,9 @@ var displayAwait = function(computed) {
 }
 
 var display = function(out, result) {
-  if (out.isAny) {
+  if (!out || out.isAny) {
     out = runtimeTypeOf(result) || type.any;
   }
-  console.log('display', result, 'type:', out.toString());
   var el = function(type, content) {
     return ['text', 'view-' + type, content || ''];
   };
@@ -239,7 +238,6 @@ var display = function(out, result) {
       case 'Image':
         return ["image", result.cloneNode()];
       default:
-        console.log(result);
         return el('Raw', ''+result);
     }
   }
@@ -1058,14 +1056,13 @@ class Computed extends Observable {
         this.base = x.base;
         this._type = x.type;
       }
+      console.log(this._type ? this._type.toString() : "--", this.name);
     }
     return this._type;
   }
 
   recompute() {
-    console.log('recompute', this.name);
     this.type();
-    console.log(this._type ? this._type.toString() : "--", this.name);
     if (!this._type) {
       this.setDeps(new Set(this.inputs.filter((arg, index) => (arg && this.args[index] !== '%u'))));
       if (this.result !== null) {
