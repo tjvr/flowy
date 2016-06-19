@@ -1384,8 +1384,7 @@ class Block extends Drawable {
   }
 
   get hasBubble() {
-    return !this.parent.isBlock &&
-      !(this.workspace && this.workspace.isPalette && !this.workspace.isHeader);
+    return !this.parent.isBlock && this.workspace && (!this.workspace.isPalette || this.workspace.isHeader);
   }
 
   objectFromPoint(x, y) {
@@ -1814,7 +1813,10 @@ class Bubble extends Source {
 
   get isSource() { return false; }
   get isBubble() { return true; }
-  get isDraggable() { return true; }
+  get isDraggable() {
+    if (this.workspace.isHeader) return false;
+    return true;
+  }
 
   get parent() { return this._parent; }
   set parent(value) {
@@ -1949,7 +1951,9 @@ class Result extends Frame {
     this.repr.onEmit(this.onEmit.bind(this));
   }
 
-  get isDraggable() { return true; }
+  get isDraggable() {
+    return this.parent.isDraggable;
+  }
   get dragObject() {
     return this.parent;
   }
@@ -2082,7 +2086,7 @@ class View extends Drawable {
   }
 
   get isDraggable() {
-    return true;
+    return this.parent.isDraggable;
   }
   get dragObject() {
     return this;
