@@ -3,6 +3,10 @@ function assert(x) {
   if (!x) throw "Assertion failed!";
 }
 
+function isArray(x) {
+  return x && x instanceof Array;
+}
+
 function all(seq, cb) {
   for (var i=0; i<seq.length; i++) {
     if (!cb(seq[i])) return false;
@@ -453,6 +457,7 @@ var generate = function(func, gen, node) {
 
   var val = function(gen, inputs) {
     assert(!gen.canYield);
+    assert(isArray(inputs));
     switch (gen.name) {
       case 'apply':
         var src = gen.func.source;
@@ -467,7 +472,8 @@ var generate = function(func, gen, node) {
       case 'literal':
         return literal(gen.value);
       case 'arg':
-        return inputs[gen.index];
+        var arg = inputs[gen.index];
+        return gen.uneval ? arg : arg + '.result';
       case 'resolve':
         assert(false);
         break;
@@ -489,55 +495,17 @@ var generate = function(func, gen, node) {
     }
   };
 
-  var apply = function(gen) {
+  var apply = function(gen, inputs) {
     assert(gen.canYield);
     assert(gen instanceof Apply);
     var func = gen.func;
-    var args = gen.args;
 
-    var requestArgs = function(gen) {
-      switch (gen.name) {
-        case 'arg':
-          source += 'C.threads[' + gen.index + '] = request(' + gen.index + ');\n';
-          if (!gen.uneval) {
-            source += 'await(C.threads[' + gen.index + ']);\n';
-          }
-          break;
-        case 'resolve':
-          assert(false);
-        case 'coerce':
-          requestArgs(gen.child);
-          break;
-        case 'list':
-        case 'record':
-        default:
-          assert(false, gen);
-      }
-    };
-
-    var arg = function(gen) {
-      switch (gen.name) {
-        case 'arg':
-          var name = 'arg_' + gen.index;
-          source += 'var ' + name + ' = C.threads[' + gen.index + ']' + (gen.uneval ? '' : '.result') + ';\n';
-          return name;
-        case 'resolve':
-          assert(false);
-        case 'coerce':
-          var name = arg(gen.child);
-          var result = gensym();
-          source += 'var ' + result + ' = ' + subst(gen.source, [name]) + ';\n';
-        case 'list':
-        case 'record':
-        default:
-          assert(false, gen);
-      }
-    };
-
-    source += 'C.threads = [];\n';
-
-    args.forEach(requestArgs);
-    var names = args.map(arg);
+    var args = gen.args.map(a => val(a,  inputs));
+    var names = args.map(function(arg) {
+      var name = gensym();
+      source += 'var ' + name + ' = ' + arg + ';\n';
+      return name;
+    });
     var src = gen.func.source;
 
     var name = gensym();
@@ -594,12 +562,46 @@ var generate = function(func, gen, node) {
     return 'l';
   };
 
+  var awaitArgs = function(args) {
+    var requestArg = function(gen) {
+      switch (gen.name) {
+        case 'arg':
+          if (!gen.uneval) {
+            source += 'await(C.threads[' + gen.index + ']);\n';
+          }
+          break;
+        case 'resolve':
+          assert(false);
+        case 'coerce':
+          requestArg(gen.child);
+          break;
+        case 'list':
+        case 'record':
+        default:
+          assert(false, gen);
+      }
+    };
+
+    source += 'C.threads = [\n';
+    for (var i=0; i<node.inputs.length; i++) {
+      //assert(node.inputs[i] instanceof Observable);
+      source += 'request(' + i + '),\n';
+    }
+    source += '];\n';
+    var names = [];
+    for (var i=0; i<node.inputs.length; i++) {
+      requestArg(args[i]);
+      names.push('C.threads[' + i + ']');
+    }
+    return names;
+  };
+
   var generate = function(gen) {
     if (gen instanceof RuntimeCheck) {
       // TODO
       source += 'debugger;\n';
       source += 'var x = compile(S);\n';
-      source += 'IMMEDIATE = x.base();\n';
+      source += 'IMMEDIATE = x.base;\n';
       source += 'return;\n';
       return;
     }
@@ -620,27 +622,15 @@ var generate = function(func, gen, node) {
       }
 
       emit(vectorise(gen, args));
-      return;
-    }
 
-    assert(gen instanceof Apply);
-    if (gen.canYield) {
-      emit(apply(gen));
     } else {
-      var args = [];
-      source += 'C.threads = [\n';
-      for (var i=0; i<node.inputs.length; i++) {
-        //assert(node.inputs[i] instanceof Observable);
-        source += 'request(' + i + '),\n';
+      assert(gen instanceof Apply);
+      var args = awaitArgs(gen.args);
+      if (gen.canYield) {
+        emit(apply(gen, args));
+      } else {
+        emit(val(gen, args));
       }
-      source += '];\n';
-      for (var i=0; i<node.inputs.length; i++) {
-        source += 'await(C.threads[' + i + ']);\n';
-
-        var arg = node.inputs[i];
-        args.push('C.threads[' + i + '].result');
-      }
-      emit(val(gen, args));
     }
   };
 
