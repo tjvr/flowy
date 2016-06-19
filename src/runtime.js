@@ -941,8 +941,8 @@ class Computed extends Observable {
   replace(index, arg) {
     var old = this.inputs[index];
     assert(old !== arg);
-    if (arg === undefined) {
-      delete this.inputs[index];
+    if (arg === undefined && index === this.inputs.length - 1) {
+      assert(this.inputs.pop() === old);
     } else {
       this.inputs[index] = arg;
     }
