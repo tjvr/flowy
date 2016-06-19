@@ -304,11 +304,9 @@ var typePrim = function(name, inputs) {
     case '%l concat %l':
       var a = inputTypes[0];
       var b = inputTypes[1];
-      if (!a || !type.list(type.any).isSuper(a)) return;
-      if (!b || !type.list(type.any).isSuper(b)) return;
-      var child = type.highest([a.child, b.child]);
-      var out = type.list(child);
-
+      if (!a || !b) return;
+      var out = type.highest([a, b]);
+      if (!type.list(type.any).isSuper(out)) return;
       var wants = [out, out];
       var coercions = wants.map((t, index) => t.isSuper(inputTypes[index]));
       if (!all(coercions, type.validCoercion)) return;
@@ -319,13 +317,28 @@ var typePrim = function(name, inputs) {
         canYield: false,
         output: out,
       }, inputTypes);
-      // TODO await Future cells
 
-    case 'merge %o with %o': // 'mergeRecords'
+    case 'merge %o with %o':
+      var wants = [type.record({}), type.record({})];
+      var coercions = wants.map((t, index) => t.isSuper(inputTypes[index]));
+      if (!all(coercions, type.validCoercion)) return;
+      var [a, b] = inputTypes;
+      if (!a || !b) return;
+      var out = type.highest([a, b]);
+      assert(type.record({}).isSuper(out));
+      // TODO this
+      return intermediate({
+        wants: wants,
+        coercions: coercions,
+        source: '($0.update($1))',
+        canYield: false,
+        output: out,
+      }, inputTypes);
+      
     case 'update %o with %fields': // 'updateRecord',
+      var record = {};
+      // TODO this
       return;
-
-    // TODO concat...
 
     default:
       return typeCheck(name, inputTypes);

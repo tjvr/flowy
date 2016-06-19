@@ -389,8 +389,8 @@ function highest(types) {
   if (!o) return t;
   if (t.isSuper(o) === true) return t;
   if (o.isSuper(t) === true) return o;
-  if (t.isSuper(o).kind === 'coerce') return t;
-  if (o.isSuper(t).kind === 'coerce') return o;
+  if (t.isSuper(o)) return t;
+  if (o.isSuper(t)) return o;
   return type.any;
 }
 
