@@ -1,5 +1,6 @@
 
 import type from "./type";
+import compile from "./compile";
 
 function assert(x) {
   if (!x) throw "Assertion failed!";
@@ -885,6 +886,7 @@ evaluator.start();
 class Graph {
   constructor(nodes, links) {
     this.nodes = {};
+    this.spec = null;
   }
 
   add(node, id) {
@@ -927,43 +929,56 @@ class Graph {
       case 'link':
         var link = this.linkFromJSON(json);
         link.to.replace(link.index, link.from);
-        return;
+        break;
       case 'unlink':
         var link = this.linkFromJSON(json);
         link.to.replace(link.index);
-        return;
+        break;
       case 'setLiteral':
         var node = this.get(json.id);
         node.assign(json.literal);
-        return;
+        break;
       case 'setSink':
         var node = this.get(json.id);
         node.setSink(json.isSink);
-        return;
+        break;
       case 'create':
-        var node = json.hasOwnProperty('literal') ? new Observable(this, json.literal) : new Computed(this, json.name);
+        var node = json.hasOwnProperty('literal') ? new Observable(this, json.literal, json.param) : new Computed(this, json.name);
         this.add(node, json.id);
-        return;
+        break;
       case 'destroy':
         var node = this.get(json.id);
         this.remove(node);
         node.destroy();
-        return;
+        break;
+      case 'moved':
+        var node = this.get(json.id);
+        node.move(json.x, json.y);
+        break;
+      case 'graphSpec':
+        this.spec = json.spec;
+        break;
       default:
         throw json;
     }
+    this.changed();
   }
 
   sendMessage(json) {
     json.graph = this.id;
     worker.sendMessage(json);
   }
+
+  changed() {
+    if (this.spec) {
+      compile.graph(this);
+    }
+  }
 }
 Graph.byId = {};
 
 export const worker = {
   onMessage: function(json) {
-    console.log(json);
     if (json.action === 'graph') {
       var graph = new Graph();
       graph.id = json.graph;
@@ -979,13 +994,14 @@ export const worker = {
 
 /***************************************************************************/
 
-import compile from "./compile";
-
 class Observable {
-  constructor(graph, value) {
+  constructor(graph, value, param) {
     this.graph = graph;
     this.result = value;
     this.subscribers = new Set();
+    this.x = null;
+    this.y = null;
+    this.param = param || null;
   }
 
   subscribe(obj) {
@@ -1014,6 +1030,11 @@ class Observable {
 
   type() {
     return runtimeTypeOf(this.result);
+  }
+
+  move(x, y) {
+    this.x = x;
+    this.y = y;
   }
 }
 
@@ -1070,7 +1091,7 @@ class Computed extends Observable {
       this.fns = [this.base];
       this._type = type.value('UI');
     } else {
-      var x = compile(this);
+      var x = compile.node(this);
       if (x) {
         this.fns = x.op.fns;
         this.base = x.base;

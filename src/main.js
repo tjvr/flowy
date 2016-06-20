@@ -120,6 +120,13 @@ class Graph {
     node.value = literal;
     return node;
   }
+  param(literal, index) {
+    var graph = this;
+    var node = new Node(graph, name, literal, false);
+    graph.sendMessage({action: 'create', id: node.id, name: name, literal: literal, param: index});
+    node.value = literal;
+    return node;
+  }
   block(name) {
     var graph = this;
     var node = new Node(graph, name, null, false);
@@ -135,6 +142,9 @@ class Graph {
     return repr;
   }
 
+  setSpec(spec) {
+    this.sendMessage({action: 'graphSpec', spec: spec});
+  }
 }
 Graph.highestId = 0;
 
@@ -218,6 +228,10 @@ class Node {
     if (this.isSink === isSink) return;
     this.isSink = isSink;
     this.graph.sendMessage({action: 'setSink', id: this.id, isSink: this.isSink});
+  }
+
+  moved(x, y) {
+    this.graph.sendMessage({action: 'moved', id: this.id, x: x, y: y});
   }
 
   /* * */
@@ -1395,6 +1409,7 @@ class Block extends Drawable {
   moved() {
     this.parts.forEach(p => p.moved());
     this.curves.forEach(c => c.layoutSelf());
+    this.node.moved(this.x, this.y);
   }
 
   get hasBubble() {
@@ -3047,9 +3062,10 @@ function makeBlock(category, spec, defaults) {
   }
   if (category === 'custom') {
     b.defWorld = new World(el(''));
+    b.defWorld.graph.setSpec(spec);
     var x = 128;
-    b.defWorld.parameters = b.inputs.map(input => {
-      var s = new Source(b.defWorld.graph.input(input.node.value), null, 'param');
+    b.defWorld.parameters = b.inputs.map((input, index) => {
+      var s = new Source(b.defWorld.graph.param(input.node.value, index), null, 'param');
       s.layoutSelf();
       s.moveTo(x, 128);
       b.defWorld.add(s);

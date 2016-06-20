@@ -27,6 +27,8 @@ function any(seq, cb) {
 import type from "./type";
 import {scopedEval} from "./runtime";
 
+var customBlocks = {};
+
 class Func {
   constructor() {
     this.fns = [];
@@ -297,7 +299,13 @@ var typePrim = function(name, inputs) {
       break;
 
     default:
-      return typeCheck(name, inputTypes);
+      var g = typeCheck(name, inputTypes);
+      if (!g && customBlocks.hasOwnProperty(name)) {
+        var custom = customBlocks[name];
+        console.log('custom:', name);
+        return compileCustom(custom, inputs);
+      }
+      return g;
   }
 
   var coercions = wants.map((t, index) => t.isSuper(inputTypes[index]));
@@ -325,10 +333,7 @@ var isMine = function(node, other) {
 };
 
 var compileNode = function(node) {
-  var g = typePrim(node.name, node.inputs);
-  if (!g) return;
-
-  return g;
+  return typePrim(node.name, node.inputs);
 };
 
 var compile = function(node) {
@@ -343,6 +348,57 @@ var compile = function(node) {
   return {type, op, base};
 };
 
+/*****************************************************************************/
+
+class Custom {
+  constructor(name, graph) {
+    this.name = name;
+    this.graph = graph;
+    this.fns = [];
+  }
+}
+
+var compileRecursive = function(node, params) {
+  if (node.param !== null) {
+    var index = node.param;
+    var param = params[index]; // TODO
+    var g = new Arg(index);
+    g.type = param.type();
+    return g;
+  }
+  console.log(node);
+
+  if (!node.isComputed) {
+    return new Literal(node.result);
+  }
+
+  var g = typePrim(node.name, node.inputs);
+  assert(g instanceof Apply);
+  for (var index=0; index<node.inputs.length; index++) {
+    var arg = compileRecursive(node.inputs[index], params);
+    g.sub(index, arg);
+  }
+  return g;
+};
+
+var compileCustom = function(custom, inputs) {
+  var graph = custom.graph;
+  var name = custom.name;
+
+  var outputNode;
+  Object.keys(graph.nodes).forEach(function(id) {
+    var node = graph.nodes[id];
+    if (!outputNode || node.y > outputNode.y || (node.y === outputNode.y && node.x > outputNode.x)) {
+      outputNode = node;
+    }
+  });
+
+  var g = compileRecursive(outputNode, inputs);
+
+  console.log(outputNode);
+
+  return g;
+};
 
 
 /*****************************************************************************/
@@ -536,6 +592,8 @@ var generate = function(func, gen, node) {
         case 'coerce':
           requestArg(gen.child);
           break;
+        case 'literal':
+          break;
         case 'list':
         case 'record':
         default:
@@ -573,9 +631,12 @@ var generate = function(func, gen, node) {
       var args = awaitArgs(gen.child.args);
       emit(vectorise(gen, args));
 
+    } else if (gen instanceof Literal) {
+      emit(val(gen, []));
+
     } else {
-      var args = awaitArgs(gen.args);
       assert(gen instanceof Apply);
+      var args = awaitArgs(gen.args);
       if (gen.canYield) {
         emit(apply(gen, args));
       } else {
@@ -656,16 +717,30 @@ var createContinuation = function(source) {
   return scopedEval(result);
 };
 
-export default function(node) {
+export default {
+  node: function(node) {
 
-  warnings = Object.create(null);
+    warnings = Object.create(null);
 
-  var type = compile(node, []);
+    var type = compile(node, []);
 
-  for (var key in warnings) {
-    console.warn(key + (warnings[key] > 1 ? ' (repeated ' + warnings[key] + ' times)' : ''));
-  }
+    for (var key in warnings) {
+      console.warn(key + (warnings[key] > 1 ? ' (repeated ' + warnings[key] + ' times)' : ''));
+    }
 
-  return type;
+    return type;
+  },
+
+  graph: function(graph) {
+
+    warnings = Object.create(null);
+
+    customBlocks[graph.spec] = new Custom(graph.spec, graph);
+
+    for (var key in warnings) {
+      console.warn(key + (warnings[key] > 1 ? ' (repeated ' + warnings[key] + ' times)' : ''));
+    }
+
+  },
 };
 
