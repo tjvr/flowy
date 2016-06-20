@@ -1514,7 +1514,7 @@ class Block extends Drawable {
       lineX += 6;
       lineXs[line].push(lineX);
 
-      var h = part.height + (part.isBubble ? 0 : 6);
+      var h = part.height + (part.isBubble ? 2 : 6);
       lineHeights[line] = Math.max(lineHeights[line], h);
       lines[line].push(part);
     }
