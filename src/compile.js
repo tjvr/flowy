@@ -61,6 +61,7 @@ class Vectorise extends Gen {
   }
 }
 
+// for prims
 class Apply extends Gen {
   constructor(func, args) {
     super('apply', func.canYield || any(args, g => g.canYield));
@@ -72,6 +73,21 @@ class Apply extends Gen {
   sub(index, arg) {
     this.args[index] = arg;
     this.canYield = this.func.canYield || any(this.args, g => g.canYield);
+  }
+}
+
+// for custom
+class Call extends Gen {
+  constructor(spec, startfn, args) {
+    super('call', customBlocks[spec].canYield || any(args, g => g.canYield));
+    this.spec = spec;
+    this.startfn = startfn;
+    this.args = args;
+  }
+
+  sub(index, arg) {
+    this.args[index] = arg;
+    this.canYield = customBlocks[this.spec].canYield || any(this.args, g => g.canYield);
   }
 }
 
@@ -292,7 +308,7 @@ var typePrim = function(name, inputs) {
       assert(out.isRecord);
       return; // TODO this
       break;
-      
+
     case 'update %o with %fields': // 'updateRecord',
       var record = {};
       return; // TODO this
@@ -303,7 +319,8 @@ var typePrim = function(name, inputs) {
       if (!g && customBlocks.hasOwnProperty(name)) {
         var custom = customBlocks[name];
         console.log('custom:', name);
-        return compileCustom(custom, inputs);
+        var startfn = compileCustom(custom, inputTypes);
+        return new Call(name, startfn, inputTypes.map((_, index) => new Arg(index)));
       }
       return g;
   }
@@ -358,22 +375,25 @@ class Custom {
   }
 }
 
-var compileRecursive = function(node, params) {
+var compileRecursive = function(node, paramTypes) {
   if (node.param !== null) {
-    var index = node.param;
-    var param = params[index]; // TODO
-    var g = new Arg(index);
-    g.type = param.type();
+    var g = new Arg(node.param);
+    g.type = paramTypes[node.param];
     return g;
   }
-  console.log(node);
 
   if (!node.isComputed) {
     return new Literal(node.result);
   }
 
+  if (customBlocks.hasOwnProperty(node.name)) {
+    // TODO
+    return;
+  }
+
   var g = typePrim(node.name, node.inputs);
-  assert(g instanceof Apply);
+  assert(g instanceof Apply || g instanceof Call);
+  // TODO support vectorise
   for (var index=0; index<node.inputs.length; index++) {
     var arg = compileRecursive(node.inputs[index], params);
     g.sub(index, arg);
@@ -381,7 +401,7 @@ var compileRecursive = function(node, params) {
   return g;
 };
 
-var compileCustom = function(custom, inputs) {
+var compileCustom = function(custom, paramTypes) {
   var graph = custom.graph;
   var name = custom.name;
 
@@ -393,11 +413,14 @@ var compileCustom = function(custom, inputs) {
     }
   });
 
-  var g = compileRecursive(outputNode, inputs);
+  var g = compileRecursive(outputNode, paramTypes);
 
-  console.log(outputNode);
+  custom.canYield = false; // TODO
 
-  return g;
+  var startfn = custom.fns.length;
+  var base = generate(custom, g);
+
+  return startfn;
 };
 
 
@@ -425,7 +448,7 @@ function literalString(e) {
     .replace(/\}/g, '\\x7d') + '"';
 }
 
-var generate = function(func, gen, node) {
+var generate = function(func, gen) {
   var nextLabel = function() {
     return func.fns.length + fns.length;
   };
@@ -488,6 +511,11 @@ var generate = function(func, gen, node) {
           return '(' + src + '(' + args.join(', ') + '))';
         }
 
+      case 'call':
+        var func = '(customBlocks[' + gen.spec + '][' + gen.startfn + '])';
+        var args = gen.args.map(a => val(a, inputs));
+        return '(' + func + '(' + args.join(', ') + '))';
+
       case 'literal':
         return literal(gen.value);
       case 'arg':
@@ -532,6 +560,18 @@ var generate = function(func, gen, node) {
     source += 'var ' + name + ' = R.future.result;\n';
     source += 'restore();\n';
     return name;
+  };
+
+  var call = function(gen, inputs) {
+    assert(gen.canYield);
+    assert(gen instanceof Call);
+
+    var args = gen.args.map(a => val(a,  inputs));
+
+    var values = args.join(", ");
+    source += 'call(' + gen.spec + ', ' + gen.startfn + ', [' + values + '])\n';
+    // TODO endCall() in generate
+    // TODO emit() here
   };
 
   var vectorise = function(gen, inputs) {
@@ -602,13 +642,12 @@ var generate = function(func, gen, node) {
     };
 
     source += 'C.threads = [\n';
-    for (var i=0; i<node.inputs.length; i++) {
-      //assert(node.inputs[i] instanceof Observable);
+    for (var i=0; i<args.length; i++) {
       source += 'request(' + i + '),\n';
     }
     source += '];\n';
     var names = [];
-    for (var i=0; i<node.inputs.length; i++) {
+    for (var i=0; i<args.length; i++) {
       var gen = args[i];
       requestArg(gen);
       var arg = 'C.threads[' + i + ']';
@@ -635,7 +674,7 @@ var generate = function(func, gen, node) {
       emit(val(gen, []));
 
     } else {
-      assert(gen instanceof Apply);
+      assert(gen instanceof Apply || gen instanceof Call);
       var args = awaitArgs(gen.args);
       if (gen.canYield) {
         emit(apply(gen, args));
