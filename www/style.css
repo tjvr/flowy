@@ -11,6 +11,12 @@ html, body {
   font: 9px/14px Lucida Grande, Verdana, Arial, DejaVu Sans, sans-serif;
 }
 
+button {
+  -webkit-appearance: none;
+  outline: none;
+  border: none;
+}
+
 * {
   box-sizing: border-box;
 }
@@ -68,20 +74,47 @@ html, body {
 .world {
   position: absolute;
   top: 0;
-  left: 258px;
-  right: 0;
+  left: 0;
+  right: 256px;
   bottom: 0;
+
+  background: #eee;
+  box-shadow: 0 0 8px #555;
+  transition: transform 300ms ease-out, opacity 300ms linear;
+}
+.world.out {
+  transform: scale(0.5);
+  opacity: 0;
+  pointer-events: none;
+  transition: transform 300ms ease-in, opacity 300ms linear;
 }
 
 .palette {
   position: fixed;
   top: 0;
   bottom: 0;
-  left: 0;
+  right: 0;
   width: 256px;
   z-index: 101;
-  border-right: 2px solid #aaa;
+  border-left: 2px solid #aaa;
   background: #fff;
+}
+
+.header {
+  position: fixed;
+  top: 0;
+  left: 0;
+  height: 48px;
+  width: 256px;
+  border-right: 2px solid #aaa;
+  border-bottom: 2px solid #aaa;
+  background: #fff;
+  border-radius: 0 0 16px 0;
+  transition: top 300ms ease-out, opacity 300ms linear;
+}
+.header.out {
+  top: -60px;
+  opacity: 0;
 }
 
 .search {
@@ -118,7 +151,7 @@ html, body {
 }
 
 .label {
-  font: bold 14px/20px Noto Sans, Lucida Grande, Verdana, Arial, DejaVu Sans, sans-serif;
+  font: bold 12px/20px Noto Sans, Lucida Grande, Verdana, Arial, DejaVu Sans, sans-serif;
   color: #fff;
   z-index: 1;
 }
@@ -132,21 +165,21 @@ html, body {
 
 .result {
   border-radius: 5px;
+  transition: opacity 100ms linear, background 100ms linear;
+}
+.result-invalid {
+  background: rgba(255,255,127,0.5);
 }
 .result-contents {
   color: #000;
   white-space: pre;
   display: inline-block;
   min-height: 12px;
-  transition: opacity 100ms linear, background 100ms linear;
-}
-.result-invalid {
-  opacity: 0.6;
-  background: rgba(255,255,127,0.5);
 }
 
 .view-Error {
   color: #e40046;
+  padding: 2px 4px;
 }
 
 .view-Text,
@@ -162,6 +195,7 @@ html, body {
   content: "”";
 }
 
+.view-Raw,
 .view-Int,
 .view-Float,
 .view-Frac-num,
@@ -169,6 +203,9 @@ html, body {
 .view-Uncertain-mean,
 .view-Uncertain-stddev {
   font: 14px/20px Source Code Pro, Monaco, monospace;
+}
+.view-Raw {
+  color: #555;
 }
 
 .view-Frac-num,
@@ -256,7 +293,7 @@ html, body {
 
 .field {
   color: #505050;
-  font: 14px/20px Noto Sans, Lucida Grande, Verdana, Arial, DejaVu Sans, sans-serif;
+  font: 13px/20px Noto Sans, Lucida Grande, Verdana, Arial, DejaVu Sans, sans-serif;
   margin: 0;
   padding: 0;
   border: 0;
@@ -294,5 +331,38 @@ html, body {
 .progress-error {
   background: #e40046;
   background: #ecc;
+}
+
+.button {
+  padding: 2px 8px;
+  background: linear-gradient(#fafafa, #e8e8e8);
+  box-shadow:
+    0 0 0 1px rgba(0, 0, 0, .35),
+    0 1px 4px rgba(0, 0, 0, .2);
+  border-radius: 3px;
+  cursor: pointer;
+  color: #000;
+  text-decoration: none;
+  -webkit-tap-highlight-color: transparent;
+}
+.button:hover {
+  background: linear-gradient(#fff, #eaeaea);
+  box-shadow:
+    0 0 0 1px rgba(0, 0, 0, .4),
+    0 1px 4px rgba(0, 0, 0, .3);
+}
+.button:active {
+  background: linear-gradient(#ddd, #eaeaea);
+  box-shadow:
+    0 0 0 1px rgba(0, 0, 0, .5),
+    inset 0 2px 5px rgba(0, 0, 0, .15);
+}
+.button {
+  display: inline-block;
+  vertical-align: middle;
+}
+
+.button {
+  font: 14px/20px Noto Sans, Lucida Grande, Verdana, Arial, DejaVu Sans, sans-serif;
 }
 

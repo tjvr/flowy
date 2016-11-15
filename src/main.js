@@ -85,13 +85,13 @@ function bezel(context, path, thisArg, inset, scale) {
   context.shadowOffsetX = (10000 + s * -1) * scale;
   context.shadowOffsetY = (10000 + s * -1) * scale;
   context.shadowBlur = 1.5 * scale;
-  context.shadowColor = 'rgba(0, 0, 0, .7)';
+  context.shadowColor = 'rgba(0, 0, 0, .5)';
   context.fill();
 
   context.shadowOffsetX = (10000 + s * 1) * scale;
   context.shadowOffsetY = (10000 + s * 1) * scale;
   context.shadowBlur = 1.5 * scale;
-  context.shadowColor = 'rgba(255, 255, 255, .4)';
+  context.shadowColor = 'rgba(255, 255, 255, .3)';
   context.fill();
 
   context.restore();
@@ -99,66 +99,84 @@ function bezel(context, path, thisArg, inset, scale) {
 
 /*****************************************************************************/
 
-import {evaluator, Observable, Computed} from "./eval";
-import {compile} from "./compile";
-window.compile = compile;
+import {worker} from "./runtime";
 
-evaluator.sendMessage = onMessage;
+class Graph {
+  constructor() {
+    this.id = ++Graph.highestId;
+    worker.onMessage({ action: 'graph', graph: this.id });
+  }
 
-function sendMessage(json) {
-  //console.log(`=> ${json.action}`, json);
-  evaluator.onMessage(json);
+  sendMessage(json) {
+    json.graph = this.id;
+    worker.onMessage(json);
+  }
+
+  input(literal) {
+    var graph = this;
+    var name = "literal _";
+    var node = new Node(graph, name, literal, false);
+    graph.sendMessage({action: 'create', id: node.id, name: name, literal: literal});
+    node.value = literal;
+    return node;
+  }
+  block(name) {
+    var graph = this;
+    var node = new Node(graph, name, null, false);
+    graph.sendMessage({action: 'create', id: node.id, name: name});
+    return node;
+  }
+  repr(node) {
+    var graph = this;
+    var name = "display";
+    var repr = new Node(graph, name, null, false);
+    graph.sendMessage({action: 'create', id: repr.id, name: name, isSink: false});
+    repr.addInput(0, node);
+    return repr;
+  }
+
 }
+Graph.highestId = 0;
 
+worker.sendMessage = onMessage;
 function onMessage(json) {
-  //console.log(`<= ${json.action}`, json);
   switch (json.action) {
+    case 'invalidate':
+      Node.byId[json.id].invalidate();
+      return;
     case 'emit':
       Node.byId[json.id].emit(json.value);
       return;
     case 'progress':
       Node.byId[json.id].progress(json.loaded, json.total);
       return;
+    default:
+      throw json;
   }
 }
 
 class Node {
-  constructor(id, name, literal, isSink) {
-    this.id = id || ++Node.highestId;
+  constructor(graph, name, literal, isSink) {
+    this.graph = graph;
+    this.id = ++Node.highestId;
     this.name = name;
     this.literal = literal || null;
     this.isSink = isSink || false;
     this.inputs = [];
     this.outputs = [];
 
+    this.value = null;
+    this.invalid = false;
+
     //sendMessage({action: 'create', id: this.id, name: this.name, literal: this.literal, isSink: this.isSink});
     Node.byId[this.id] = this;
   }
 
   destroy() {
-    sendMessage({action: 'destroy', id: this.id});
+    this.graph.sendMessage({action: 'destroy', id: this.id});
     delete Node.byId[this.id];
     this.inputs.forEach(node => this.removeInput(this.inputs.indexOf(node)));
     this.outputs.forEach(node => node.removeInput(node.inputs.indexOf(this)));
-  }
-
-  static input(literal) {
-    var name = "literal _";
-    var node = new Node(null, name, literal, false);
-    sendMessage({action: 'create', id: node.id, name: name, literal: literal});
-    return node;
-  }
-  static block(name) {
-    var node = new Node(null, name, null, false);
-    sendMessage({action: 'create', id: node.id, name: name});
-    return node;
-  }
-  static repr(node) {
-    var name = "display %s";
-    var repr = new Node(null, name, null, false);
-    sendMessage({action: 'create', id: repr.id, name: name, isSink: false});
-    repr.addInput(0, node);
-    return repr;
   }
 
   /* * */
@@ -178,14 +196,14 @@ class Node {
     this.removeInput(index);
     this.inputs[index] = node;
     node._addOutput(this);
-    sendMessage({action: 'link', from: node.id, index: index, to: this.id});
+    this.graph.sendMessage({action: 'link', from: node.id, index: index, to: this.id});
   }
 
   removeInput(index) {
     var oldNode = this.inputs[index];
     if (oldNode) {
       oldNode._removeOutput(this);
-      sendMessage({action: 'unlink', from: oldNode.id, index: index, to: this.id});
+      this.graph.sendMessage({action: 'unlink', from: oldNode.id, index: index, to: this.id});
     }
     this.inputs[index] = null;
   }
@@ -193,18 +211,24 @@ class Node {
   setLiteral(value) {
     if (this.literal === value) return;
     this.literal = value;
-    sendMessage({action: 'setLiteral', id: this.id, literal: this.literal});
+    this.graph.sendMessage({action: 'setLiteral', id: this.id, literal: this.literal});
   }
 
   setSink(isSink) {
     if (this.isSink === isSink) return;
     this.isSink = isSink;
-    sendMessage({action: 'setSink', id: this.id, isSink: this.isSink});
+    this.graph.sendMessage({action: 'setSink', id: this.id, isSink: this.isSink});
   }
 
   /* * */
 
+  invalidate() {
+    this.invalid = true;
+    this.dispatchInvalidate();
+  }
+
   emit(value) {
+    this.invalid = false;
     this.value = value;
     this.dispatchEmit(value);
   }
@@ -218,7 +242,7 @@ Node.highestId = 0;
 Node.byId = {};
 
 import {addEvents} from "./events";
-addEvents(Node, 'emit', 'progress');
+addEvents(Node, 'emit', 'progress', 'invalidate');
 
 /*****************************************************************************/
 
@@ -278,7 +302,9 @@ class Drawable {
     var t = '';
     t += `translate(${this.x + (this._flip ? 1 : 0)}px, ${this.y}px)`;
     if (this._zoom !== 1) t += ` scale(${this._zoom})`;
-    t += ' translateZ(0)';
+    if (this.parent && (this.parent.isWorld || this.parent.isApp)) {
+      t += ' translateZ(0)';
+    }
     this.el.style.transform = t;
   }
 
@@ -403,7 +429,7 @@ class Frame {
     this.inertiaX = 0;
     this.inertiaY = 0;
     this.scrolling = false;
-    setInterval(this.tick.bind(this), 1000 / 60);
+    this.interval = null;
 
     this.contentsLeft = 0;
     this.contentsTop = 0;
@@ -447,9 +473,12 @@ class Frame {
     if (!this.scrolling) {
       this.inertiaX = 0;
       this.inertiaY = 0;
+      if (!this.interval) {
+        this.interval = setInterval(this.tick.bind(this), 1000 / 60);
+      }
+      this.scrolling = true;
     }
     this.scrollBy(-dx, -dy);
-    this.scrolling = true;
   }
 
   fingerScrollEnd() {
@@ -469,6 +498,10 @@ class Frame {
         this.inertiaY *= 0.95;
         if (Math.abs(this.inertiaX) < 0.01) this.inertiaX = 0;
         if (Math.abs(this.inertiaY) < 0.01) this.inertiaY = 0;
+        if (this.inertiaX === 0 && this.inertiaY === 0) {
+          clearInterval(this.interval);
+          this.interval = null;
+        }
       }
     }
   }
@@ -581,7 +614,7 @@ class Input extends Drawable {
     this.field.addEventListener('input', this.change.bind(this));
     this.field.addEventListener('keydown', this.keyDown.bind(this));
 
-    this.node = Node.input(value);
+    this.node = app.world.graph.input(value);
     this.value = value;
   }
 
@@ -853,7 +886,7 @@ class Switch extends Drawable {
     this.knob = new SwitchKnob(this);
     this.el.appendChild(this.knob.el);
 
-    this.node = Node.input(value);
+    this.node = app.world.graph.input(value);
     this.value = value;
   }
 
@@ -1123,8 +1156,9 @@ class Block extends Drawable {
     this.labels = [];
     this.args = [];
 
-    this.node = Node.block(info.spec);
-    this.repr = Node.repr(this.node);
+    this.graph = app.world.graph;
+    this.node = this.graph.block(info.spec);
+    this.repr = this.graph.repr(this.node);
 
     this.info = info;
     for (var i=0; i<parts.length; i++) {
@@ -1315,6 +1349,21 @@ class Block extends Drawable {
     return this;
   }
 
+  click() {
+    if (this.isDoubleTap()) {
+      return this.doubleClick();
+    }
+    super.click();
+  }
+
+  doubleClick() {
+    if (this.workspace.app && this.defWorld) {
+      var b = this.copy();
+      b.defWorld = this.defWorld;
+      this.workspace.app.startEditing(b, this.inputs);
+    }
+  }
+
   copy() {
     var b = new Block(this.info, this.parts.map(c => c.copy()));
     b.inputs = this.inputs.map(part => {
@@ -1326,6 +1375,7 @@ class Block extends Drawable {
     });
     b.count = this.count;
     b.wrap = this.wrap;
+    b.defWorld = this.defWorld;
     return b;
   }
 
@@ -1347,14 +1397,14 @@ class Block extends Drawable {
     this.curves.forEach(c => c.layoutSelf());
   }
 
-  get bubbleVisible() {
-    return !this.parent.isBlock && !(this.workspace && this.workspace.isPalette);
+  get hasBubble() {
+    return !this.parent.isBlock && !(this.workspace && this.workspace.isPalette && !this.workspace.isHeader);
   }
 
   objectFromPoint(x, y) {
-    if (this.bubble && this.bubbleVisible) {
+    if (this.bubble && this.hasBubble) {
       var o = this.bubble.objectFromPoint(x - this.bubble.x, y - this.bubble.y)
-      if (o) return o;
+        if (o) return o;
     }
     for (var i = this.parts.length; i--;) {
       var arg = this.parts[i];
@@ -1402,6 +1452,9 @@ class Block extends Drawable {
     if (part.shape === 'Symbol') {
       return 9;
     }
+    if (part.shape === 'Num') {
+      return -4 + part.height/2 | 0;
+    }
     return -2 + part.height/2 | 0;
   }
 
@@ -1410,11 +1463,11 @@ class Block extends Drawable {
 
     var lineX = 0;
     var width = 0;
-    var height = 28;
+    var height = 30;
 
     var lines = [[]];
     var lineXs = [[0]];
-    var lineHeights = [28];
+    var lineHeights = [30];
     var line = 0;
 
     var parts = this.parts;
@@ -1458,10 +1511,10 @@ class Block extends Drawable {
       }
       lineX += part.width;
       width = Math.max(width, lineX + Math.max(0, md - px));
-      lineX += 4;
+      lineX += 6;
       lineXs[line].push(lineX);
 
-      var h = part.height + (part.isBubble ? 0 : 4);
+      var h = part.height + (part.isBubble ? 0 : 6);
       lineHeights[line] = Math.max(lineHeights[line], h);
       lines[line].push(part);
     }
@@ -1482,7 +1535,7 @@ class Block extends Drawable {
         var part = line[j];
         var cx = px + xs[j];
         var cy = (lh - part.height) / 2;
-        if (part.isBubble) cy -= 2;
+        if (part.isBubble) cy -= 1;
         if (part.isLabel) cy += 1;
         if (part.icon === '▶' && wrap) cy = -4;
         part.moveTo(cx, y + cy);
@@ -1512,7 +1565,7 @@ class Block extends Drawable {
   pathBlock(context) {
     var w = this.ownWidth;
     var h = this.ownHeight;
-    var r = 12;
+    var r = 7 * density;
 
     context.moveTo(0, r + .5);
     context.arc(r, r + .5, r, PI, PI32, false);
@@ -1529,9 +1582,9 @@ class Block extends Drawable {
     this.context.scale(density, density);
     this.drawOn(this.context);
 
-    this.bubble.el.style.visibility = this.bubbleVisible ? 'visible' : 'hidden';
+    this.bubble.el.style.visibility = this.hasBubble ? 'visible' : 'hidden';
     if (this.bubble.curve) {
-      this.bubble.curve.el.style.visibility = this.bubbleVisible ? 'visible' : 'hidden';
+      this.bubble.curve.el.style.visibility = this.hasBubble ? 'visible' : 'hidden';
     }
   }
 
@@ -1545,13 +1598,13 @@ class Block extends Drawable {
   updateSinky() {
     var isSink = this.outputs.filter(bubble => {
       if (!bubble.parent || !this.parent) return;
-      return !bubble.parent.isBlock || (this.bubbleVisible && bubble.parent === this);
+      return !bubble.parent.isBlock || (this.hasBubble && bubble.parent === this);
     }).length;
     this.repr.setSink(!!isSink);
   }
 
   setDragging(dragging) {
-    this.bubble.el.style.visibility = !dragging && this.bubbleVisible ? 'visible' : 'hidden';
+    this.bubble.el.style.visibility = !dragging && this.hasBubble ? 'visible' : 'hidden';
   }
 
 }
@@ -1560,18 +1613,20 @@ class Block extends Drawable {
 
 
 class Source extends Drawable {
-  constructor(node, repr) {
+  constructor(node, repr, cls) {
     super();
 
     this.el = el('absolute source');
     this.el.appendChild(this.canvas = el('canvas', 'absolute'));
     this.context = this.canvas.getContext('2d');
 
+    this.cls = cls;
+
     //this.node = Node.input(value);
     this.node = node;
     this.repr = repr;
     if (!this.repr) {
-      this.repr = Node.repr(this.node);
+      this.repr = node.graph.repr(this.node);
       this.repr.setSink(true);
     }
 
@@ -1590,7 +1645,7 @@ class Source extends Drawable {
   }
 
   static value(value) {
-    return new Source(Node.input(value));
+    return new Source(app.world.graph.input(value));
   }
 
   addBubble(bubble) {
@@ -1602,6 +1657,10 @@ class Source extends Drawable {
   get isSource() { return true; }
   get isDraggable() { return true; }
   get isArg() { return true; }
+
+  get isParam() {
+    return this.cls === 'param';
+  }
 
   onProgress(e) {
     this.fraction = e.loaded / e.total;
@@ -1639,7 +1698,6 @@ class Source extends Drawable {
   }
 
   copy() {
-    // TODO this doesn't work
     return Source.value(this.node.value);
   }
 
@@ -1714,7 +1772,7 @@ class Source extends Drawable {
     context.closePath();
     context.fillStyle = this.invalid ? '#aaa' : '#fff';
     context.fill();
-    context.strokeStyle = '#555';
+    context.strokeStyle = this.isParam ? '#0093ff' : '#555';
     context.lineWidth = density;
     context.stroke();
   }
@@ -1769,11 +1827,15 @@ class Bubble extends Source {
 
   get isSource() { return false; }
   get isBubble() { return true; }
-  get isDraggable() { return true; }
+  get isDraggable() {
+    if (this.workspace.isHeader) return false;
+    return true;
+  }
 
   get parent() { return this._parent; }
   set parent(value) {
     this._parent = value;
+    if (value === null) return;
     if (this.target) this.target.updateSinky();
   }
 
@@ -1879,7 +1941,7 @@ class Bubble extends Source {
 }
 Bubble.measure = createMetrics('result-label');
 
-Bubble.tipSize = 7;
+Bubble.tipSize = 6;
 Bubble.radius = 6;
 Bubble.paddingX = 4;
 Bubble.paddingY = 2;
@@ -1899,10 +1961,13 @@ class Result extends Frame {
     this.view = null;
     this.display();
     setTimeout(() => this.display(this.repr.value));
+    this.repr.onInvalidate(this.onInvalidate.bind(this));
     this.repr.onEmit(this.onEmit.bind(this));
   }
 
-  get isDraggable() { return true; }
+  get isDraggable() {
+    return this.parent.isDraggable;
+  }
   get dragObject() {
     return this.parent;
   }
@@ -1946,6 +2011,7 @@ class Result extends Frame {
   }
 
   display(value) {
+  // TODO scroll to top on update
     this.elContents.innerHTML = '';
     this.view = View.fromJSON(value);
     this.view.layoutChildren();
@@ -1955,12 +2021,12 @@ class Result extends Frame {
     this.layout();
   }
 
+  onInvalidate() {
+    this.el.classList.add('result-invalid');
+  }
+
   onEmit(value) {
-    if (value === null) {
-      this.elContents.classList.add('result-invalid');
-      return;
-    }
-    this.elContents.classList.remove('result-invalid');
+    this.el.classList.remove('result-invalid');
     this.display(value);
     if (this.fraction === 0) this.fraction = 1;
     this.parent.drawProgress();
@@ -2034,7 +2100,7 @@ class View extends Drawable {
   }
 
   get isDraggable() {
-    return true;
+    return this.parent.isDraggable;
   }
   get dragObject() {
     return this;
@@ -2756,9 +2822,8 @@ class Workspace extends Frame {
 
   resize() {
     super.resize();
-    var bb = this.el.getBoundingClientRect();
-    this.screenX = Math.round(bb.left);
-    this.screenY = Math.round(bb.top);
+    this.screenX = this.el.offsetLeft;
+    this.screenY = this.el.offsetTop;
     this.screenPosition = {x: this.screenX, y: this.screenY};
   }
 
@@ -2814,6 +2879,32 @@ class Workspace extends Frame {
 
 /*****************************************************************************/
 
+class World extends Workspace {
+  constructor() {
+    super();
+    this.el.className += ' world';
+    this.elContents.className += ' world-contents';
+    this.graph = new Graph();
+  }
+
+  get isWorld() { return true; }
+  get isInfinite() { return true; }
+  get isZoomable() { return true; }
+
+  fixZoom(zoom) {
+    return Math.min(4.0, this.zoom);
+  }
+
+  setParameters(values) {
+    assert(this.parameters);
+    this.parameters.forEach((param, index) => {
+      param.node.setLiteral(values[index]);
+    });
+  }
+
+}
+
+/*****************************************************************************/
 
 import {literal, specs} from "./prims";
 
@@ -2843,11 +2934,9 @@ var colors = {
 };
 
 var ringBlock;
-
-var paletteContents = [];
 var blocksBySpec = {};
-specs.forEach(p => {
-  let [category, spec, defaults] = p;
+
+function makeBlock(category, spec, defaults) {
   var def = (defaults || []).slice();
   var color = colors[category] || '#555';
   var words = spec.split(/ /g);
@@ -2956,8 +3045,21 @@ specs.forEach(p => {
   if (category === 'hidden') {
     return;
   }
-  paletteContents.push(b);
-});
+  if (category === 'custom') {
+    b.defWorld = new World(el(''));
+    var x = 128;
+    b.defWorld.parameters = b.inputs.map(input => {
+      var s = new Source(b.defWorld.graph.input(input.node.value), null, 'param');
+      s.layoutSelf();
+      s.moveTo(x, 128);
+      b.defWorld.add(s);
+      x += s.width;
+      x += 32;
+      return s;
+    });
+  }
+  return b;
+}
 
 class Search extends Drawable {
   constructor(parent) {
@@ -3005,11 +3107,25 @@ class Palette extends Workspace {
     this.search = new Search(this);
     this.elContents.appendChild(this.search.el);
 
+    this.makeBtn = el('button', 'button');
+    this.makeBtn.textContent = "Make a block";
+    this.elContents.appendChild(this.makeBtn);
+    this.makeBtn.addEventListener('click', e => this.make());
+
+    var paletteContents = [];
+    specs.forEach(p => {
+      let [category, spec, defaults] = p;
+      var block = makeBlock(category, spec, defaults);
+      if (!block) return;
+      paletteContents.push(block);
+    });
+
     this.blocks = paletteContents;
     this.blocks.forEach(o => {
       this.add(o);
     });
   }
+  get isPalette() { return true; }
 
   layout() {}
 
@@ -3041,9 +3157,23 @@ class Palette extends Workspace {
         o.hidden = true;
       }
     });
+
+    this.makeBtn.style.transform = `translate(10px, ${y}px)`;
+    y += 20;
+    y += 16;
+
     this.contentsBottom = y;
     this.contentsRight = w + 16;
+    this.scrollToTop();
+  }
+
+  scrollToTop() {
     this.scrollY = 0;
+    this.makeBounds();
+    this.transform();
+  }
+  scrollToBottom() {
+    this.scrollY = this.contentsBottom - this.height;
     this.makeBounds();
     this.transform();
   }
@@ -3063,26 +3193,65 @@ class Palette extends Workspace {
     return this;
   }
 
-  get isPalette() { return true; }
+  make() {
+    var spec = window.prompt("Block spec?");
+    var b = makeBlock('custom', spec, []);
+    this.add(b);
+    paletteContents.push(b);
+    this.filter(this.search.el.value);
+    this.scrollToBottom();
+  }
+
 }
 
-/*****************************************************************************/
-
-class World extends Workspace {
+class Header extends Workspace {
   constructor() {
     super();
-    this.el.className += ' world';
-    this.elContents.className += ' world-contents';
+    this.el.className += ' header';
+
+    //this.block = paletteContents[18].copy();
+  }
+  get isScrollable() { return false; }
+  get isHeader() { return true; }
+  get isPalette() { return true; }
+
+  get block() { return this._block; }
+  set block(o) {
+    if (this._block) {
+      this.remove(this._block);
+    }
+    this._block = o;
+    this.add(o);
+    this.layout();
+    o.moveTo(8, 8);
   }
 
-  get isWorld() { return true; }
-  get isInfinite() { return true; }
-  get isZoomable() { return true; }
+  layout() {
+    this.width = Math.max(this.block.width, this.block.bubble.width) + 18;
+    this.height = this.block.height + this.block.bubble.height + 16;
+    this.el.style.width = `${this.width}px`;
+    this.el.style.height = `${this.height}px`;
 
-  fixZoom(zoom) {
-    return Math.min(4.0, this.zoom);
+    if (this.app.world.parameters) {
+      this.app.world.setParameters(this.block.inputs.map(input => {
+        return input.node.literal || input.node.value;
+      }));
+    }
   }
 
+  setParameters(inputs) {
+    this.block.inputs.forEach((input, index) => {
+      var other = inputs[index];
+      input.value = other.value;
+    });
+  }
+
+  resize() {
+    super.resize();
+    this.screenX = 0;
+    this.screenY = 0;
+    this.screenPosition = {x: this.screenX, y: this.screenY};
+  }
 }
 
 /*****************************************************************************/
@@ -3094,13 +3263,19 @@ class App {
     document.body.appendChild(this.el);
     document.body.appendChild(this.elScripts = el('absolute dragging'));
 
-    this.world = new World(this.elWorld = el(''));
+    window.app = this;
+    this.root = this.world = new World(this.elWorld = el(''));
     this.palette = new Palette(this.elPalette = el(''));
+    this.header = new Header(this.elHeader = el(''));
+    this.header.el.classList.add('out');
     this.workspaces = [this.world, this.palette];
     this.el.appendChild(this.world.el);
     this.el.appendChild(this.palette.el);
+    this.el.appendChild(this.header.el);
 
     this.world.app = this; // TODO
+    this.header.app = this; // TODO
+    this.palette.app = this; // TODO
 
     this.resize();
     this.palette.filter("");
@@ -3134,6 +3309,53 @@ class App {
   get isApp() { return true; }
   get app() { return this; }
 
+  get isEditing() {
+    return this.world !== this.root;
+  }
+
+  startEditing(block, inputs) {
+    assert(block.defWorld);
+    if (this.isEditing) {
+      this.el.removeChild(this.world.el);
+      this.workspaces[0] = this.root;
+    }
+    this.header.block = block;
+    this.header.el.classList.add('out');
+    if (inputs) this.header.setParameters(inputs);
+    this.workspaces.push(this.header);
+    this.header.resize();
+
+    var world = block.defWorld;
+    this.world = world;
+    world.app = this;
+    assert(this.workspaces.shift() === this.root);
+    this.workspaces.splice(0, 0, world);
+
+    world.el.classList.add('out');
+    this.el.appendChild(world.el);
+    this.el.appendChild(this.header.el);
+    world.resize();
+
+    setTimeout(() => {
+      this.world.el.classList.remove('out');
+      this.header.el.classList.remove('out');
+    });
+  }
+  endEditing() {
+    assert(this.isEditing);
+    var world = this.world;
+    assert(this.workspaces.shift() === world);
+    assert(this.workspaces.pop() === this.header);
+    this.workspaces.splice(0, 0, this.root);
+    world.app = null;
+    world.el.classList.add('out');
+    this.header.el.classList.add('out');
+    setTimeout(() => {
+      this.el.removeChild(world.el);
+    }, 300);
+    this.world = this.root;
+  }
+
   layout() {}
 
   resize(e) {
@@ -3151,8 +3373,11 @@ class App {
     }
 
     if (e.target === document.body) {
-      if (e.keyCode === 8) {
+      if (e.keyCode === 8) { // return
         e.preventDefault();
+      } else if (e.keyCode === 27 && this.isEditing) { // escape
+        e.preventDefault();
+        this.endEditing();
       }
     }
   }
@@ -3407,7 +3632,7 @@ class App {
       }
     }
 
-    if (g.pressed && g.shouldDrag && !g.dragging) {
+    if (g.pressed && g.shouldDrag && !g.dragging) { //&& !g.pressObject.dragObject.workspace.isHeader) {
       this.drop(g);
       g.shouldScroll = false;
       var obj = g.pressObject.dragObject;
@@ -3497,7 +3722,7 @@ class App {
       var d = g.dragScript;
       var canDelete = false;
       if (d.isBlock || d.isSource) {
-        canDelete = d.outputs.filter(bubble => {
+        canDelete = !d.isParam && d.outputs.filter(bubble => {
           return bubble.parent !== d && bubble.parent.isBlock;
         }).length === 0;
       }
@@ -3663,5 +3888,5 @@ class App {
 
 window.app = new App();
 
-window.onbeforeunload = e => "AAAAA";
+//window.onbeforeunload = e => "AAAAA";
 

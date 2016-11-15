@@ -1,632 +1,671 @@
-var compile = (function() {
-  'use strict';
 
-  var LOG_PRIMITIVES;
-  var DEBUG;
-  LOG_PRIMITIVES = true;
-  DEBUG = true;
+function assert(x) {
+  if (!x) throw "Assertion failed!";
+}
+
+function isArray(x) {
+  return x && x instanceof Array;
+}
+
+function all(seq, cb) {
+  for (var i=0; i<seq.length; i++) {
+    if (!cb(seq[i])) return false;
+  }
+  return true;
+}
+
+function any(seq, cb) {
+  for (var i=0; i<seq.length; i++) {
+    if (cb(seq[i])) return true;
+  }
+  return false;
+}
 
-  var warnings;
-  var warn = function(message) {
-    warnings[message] = (warnings[message] || 0) + 1;
-  };
-
-  var compileNode = function(object, script) {
-    //if (!script[0] || EVENT_SELECTORS.indexOf(script[0][0]) === -1) return;
-
-    var nextLabel = function() {
-      return object.fns.length + fns.length;
-    };
-
-    var label = function() {
-      var id = nextLabel();
-      fns.push(source.length);
-      return id;
-    };
-
-    var tmps = 0;
-    var genSym = function() {
-      return '_tmp' + (++tmps);
-    };
-
-    var queue = function(id) {
-      source += 'queue(' + id + ');\n';
-      source += 'return;\n';
-    };
-
-    var request = function(node) {
-      var id = label();
-      var tmp = genSym();
-      if (node.isObservable) {
-        source += `${tmp} = ${node}.value\n`;
-        return tmp;
-      }
-      if (node.thread) {
-        if (node.thread.isDone) {
-          source += `${tmp} = ${node}.thread.result\n`;
-          return tmp;
-        }
-      } else {
-        node.request();
-      }
-      node.thread.onFirstEmit(this.awake);
-      return tmp;
-      // source += 'request(' + node + ')';
-    };
-
-    var seq = function(script) {
-      if (!script) return;
-      for (var i = 0; i < script.length; i++) {
-        compile(script[i]);
-      }
-    };
-
-    var val = function(e, usenum, usebool) {
-      var v;
-      if (typeof e === 'number' || typeof e === 'boolean') {
-
-        return '' + e;
-
-      } else if (typeof e === 'string') {
-
-        return '"' + e
-          .replace(/\\/g, '\\\\')
-          .replace(/\n/g, '\\n')
-          .replace(/\r/g, '\\r')
-          .replace(/"/g, '\\"')
-          .replace(/\{/g, '\\x7b')
-          .replace(/\}/g, '\\x7d') + '"';
-
-      } else {
-
-        warn('Undefined val: ' + e[0]);
-
-      }
-    };
-
-
-    var DIGIT = /\d/;
-    var boolval = function(e) {
-
-      if (e[0] === 'list:contains:') { /* Data */
-
-        return 'listContains(' + listRef(e[1]) + ', ' + val(e[2]) + ')';
-
-      } else if (e[0] === '<' || e[0] === '>') { /* Operators */
-
-        if (typeof e[1] === 'string' && DIGIT.test(e[1]) || typeof e[1] === 'number') {
-          var less = e[0] === '<';
-          var x = e[1];
-          var y = e[2];
-        } else if (typeof e[2] === 'string' && DIGIT.test(e[2]) || typeof e[2] === 'number') {
-          var less = e[0] === '>';
-          var x = e[2];
-          var y = e[1];
-        }
-        var nx = +x;
-        if (x == null || nx !== nx) {
-          return '(compare(' + val(e[1]) + ', ' + val(e[2]) + ') === ' + (e[0] === '<' ? -1 : 1) + ')';
-        }
-        return (less ? 'numLess' : 'numGreater') + '(' + nx + ', ' + val(y) + ')';
-
-      } else if (e[0] === '=') {
-
-        if (typeof e[1] === 'string' && DIGIT.test(e[1]) || typeof e[1] === 'number') {
-          var x = e[1];
-          var y = e[2];
-        } else if (typeof e[2] === 'string' && DIGIT.test(e[2]) || typeof e[2] === 'number') {
-          var x = e[2];
-          var y = e[1];
-        }
-        var nx = +x;
-        if (x == null || nx !== nx) {
-          return '(equal(' + val(e[1]) + ', ' + val(e[2]) + '))';
-        }
-        return '(numEqual(' + nx + ', ' + val(y) + '))';
-
-      }
-    };
-
-    var bool = function(e) {
-      if (typeof e === 'boolean') {
-        return e;
-      }
-      if (typeof e === 'number' || typeof e === 'string') {
-        return +e !== 0 && e !== '' && e !== 'false' && e !== false;
-      }
-      var v = boolval(e);
-      return v != null ? v : 'bool(' + val(e, false, true) + ')';
-    };
-
-    var num = function(e) {
-      if (typeof e === 'number') {
-        return e || 0;
-      }
-      if (typeof e === 'boolean' || typeof e === 'string') {
-        return +e || 0;
-      }
-      var v = numval(e);
-      return v != null ? v : '(+' + val(e, true) + ' || 0)';
-    };
-
-    var wait = function(dur) {
-      source += 'save();\n';
-      source += 'R.start = self.now();\n';
-      source += 'R.duration = ' + dur + ';\n';
-      source += 'R.first = true;\n';
-
-      var id = label();
-      source += 'if (self.now() - R.start < R.duration * 1000 || R.first) {\n';
-      source += '  R.first = false;\n';
-      queue(id);
-      source += '}\n';
-
-      source += 'restore();\n';
-    };
-
-    var compile = function(block) {
-      if (LOG_PRIMITIVES) {
-        source += 'console.log(' + val(block[0]) + ');\n';
-      }
-
-      if (block[0] === 'doBroadcastAndWait') {
-
-        source += 'save();\n';
-        source += 'R.threads = broadcast(' + val(block[1]) + ');\n';
-        source += 'if (R.threads.indexOf(BASE) !== -1) return;\n';
-        var id = label();
-        source += 'if (running(R.threads)) {\n';
-        queue(id);
-        source += '}\n';
-        source += 'restore();\n';
-
-      } else if (block[0] === 'doForever') {
-
-        var id = label();
-        seq(block[1]);
-        queue(id);
-
-      } else if (block[0] === 'doForeverIf') {
-
-        var id = label();
-
-        source += 'if (' + bool(block[1]) + ') {\n';
-        seq(block[2]);
-        source += '}\n';
-
-        queue(id);
-
-      // } else if (block[0] === 'doForLoop') {
-
-      } else if (block[0] === 'doIf') {
-
-        source += 'if (' + bool(block[1]) + ') {\n';
-        seq(block[2]);
-        source += '}\n';
-
-      } else if (block[0] === 'doIfElse') {
-
-        source += 'if (' + bool(block[1]) + ') {\n';
-        seq(block[2]);
-        source += '} else {\n';
-        seq(block[3]);
-        source += '}\n';
-
-      } else if (block[0] === 'doRepeat') {
-
-        source += 'save();\n';
-        source += 'R.count = ' + num(block[1]) + ';\n';
-
-        var id = label();
-
-        source += 'if (R.count >= 0.5) {\n';
-        source += '  R.count -= 1;\n';
-        seq(block[2]);
-        queue(id);
-        source += '} else {\n';
-        source += '  restore();\n';
-        source += '}\n';
-
-      } else if (block[0] === 'doReturn') {
-
-        source += 'endCall();\n';
-        source += 'return;\n';
-
-      } else if (block[0] === 'doUntil') {
-
-        var id = label();
-        source += 'if (!' + bool(block[1]) + ') {\n';
-        seq(block[2]);
-        queue(id);
-        source += '}\n';
-
-      } else if (block[0] === 'doWhile') {
-
-        var id = label();
-        source += 'if (' + bool(block[1]) + ') {\n';
-        seq(block[2]);
-        queue(id);
-        source += '}\n';
-
-      } else if (block[0] === 'doWaitUntil') {
-
-        var id = label();
-        source += 'if (!' + bool(block[1]) + ') {\n';
-        queue(id);
-        source += '}\n';
-
-      }
-    };
-
-    var source = '';
-    var startfn = object.fns.length;
-    var fns = [0];
-
-    for (var i = 1; i < script.length; i++) {
-      compile(script[i]);
-    }
-
-    var createContinuation = function(source) {
-      var result = '(function() {\n';
-      var brackets = 0;
-      var delBrackets = 0;
-      var shouldDelete = false;
-      var here = 0;
-      var length = source.length;
-      while (here < length) {
-        var i = source.indexOf('{', here);
-        var j = source.indexOf('}', here);
-        if (i === -1 && j === -1) {
-          if (!shouldDelete) {
-            result += source.slice(here);
-          }
-          break;
-        }
-        if (i === -1) i = length;
-        if (j === -1) j = length;
-        if (shouldDelete) {
-          if (i < j) {
-            delBrackets++;
-            here = i + 1;
-          } else {
-            delBrackets--;
-            if (!delBrackets) {
-              shouldDelete = false;
-            }
-            here = j + 1;
-          }
-        } else {
-          if (i < j) {
-            result += source.slice(here, i + 1);
-            brackets++;
-            here = i + 1;
-          } else {
-            result += source.slice(here, j);
-            here = j + 1;
-            if (source.substr(j, 8) === '} else {') {
-              if (brackets > 0) {
-                result += '} else {';
-                here = j + 8;
-              } else {
-                shouldDelete = true;
-                delBrackets = 0;
-              }
-            } else {
-              if (brackets > 0) {
-                result += '}';
-                brackets--;
-              }
-            }
-          }
-        }
-      }
-      result += '})';
-      return runtime.scopedEval(result);
-    };
-
-
-    source += 'if (true) {\n';
-    var id = label();
-    source += 'lol();'
-    source += '} else {\n';
-    queue(id);
-    source += '}\n';
-
-    for (var i = 0; i < fns.length; i++) {
-      object.fns.push(createContinuation(source.slice(fns[i])));
-    }
-
-    var f = object.fns[startfn];
-  };
-
-
-  return function(node) {
-
-    warnings = Object.create(null);
-
-    compileNode(node, []);
-
-    for (var key in warnings) {
-      console.warn(key + (warnings[key] > 1 ? ' (repeated ' + warnings[key] + ' times)' : ''));
-    }
-
-  };
-
-}());
-export {compile};
 
 /*****************************************************************************/
 
-var runtime = (function() {
+import type from "./type";
+import {scopedEval} from "./runtime";
 
-  var self, S, R, STACK, C, WARP, CALLS, BASE, THREAD, IMMEDIATE;
+class Func {
+  constructor() {
+    this.fns = [];
+  }
 
-  var bool = function(v) {
-    return +v !== 0 && v !== '' && v !== 'false' && v !== false;
-  };
-
-  var mod = function(x, y) {
-    var r = x % y;
-    if (r / y < 0) {
-      r += y;
+  static cache(name) {
+    var cache = Func._cache;
+    if (!cache.has(name)) {
+      cache.set(name, new Func());
     }
-    return r;
-  };
+    return cache.get(name);
+  }
+}
+Func._cache = new Map();
 
-  var mathFunc = function(f, x) {
-    switch (f) {
-      case 'abs':
-        return Math.abs(x);
-      case 'floor':
-        return Math.floor(x);
-      case 'sqrt':
-        return Math.sqrt(x);
-      case 'ceiling':
-        return Math.ceil(x);
-      case 'cos':
-        return Math.cos(x * Math.PI / 180);
-      case 'sin':
-        return Math.sin(x * Math.PI / 180);
-      case 'tan':
-        return Math.tan(x * Math.PI / 180);
-      case 'asin':
-        return Math.asin(x) * 180 / Math.PI;
-      case 'acos':
-        return Math.acos(x) * 180 / Math.PI;
-      case 'atan':
-        return Math.atan(x) * 180 / Math.PI;
-      case 'ln':
-        return Math.log(x);
-      case 'log':
-        return Math.log(x) / Math.LN10;
-      case 'e ^':
-        return Math.exp(x);
-      case '10 ^':
-        return Math.exp(x * Math.LN10);
+/*****************************************************************************/
+
+class Gen {
+  constructor(name, canYield) {
+    this.name = name;
+    this.canYield = !!canYield;
+  }
+}
+
+class Vectorise extends Gen {
+  constructor(child, indexes) {
+    super('vectorise', child.canYield);
+    this.child = child;
+    this.indexes = indexes;
+  }
+}
+
+class Apply extends Gen {
+  constructor(func, args) {
+    super('apply', func.canYield || any(args, g => g.canYield));
+    assert(!(func instanceof Function));
+    this.func = func;
+    this.args = args;
+  }
+
+  sub(index, arg) {
+    this.args[index] = arg;
+    this.canYield = this.func.canYield || any(this.args, g => g.canYield);
+  }
+}
+
+class Literal extends Gen {
+  constructor(value) {
+    super('literal', false);
+    this.value = value;
+  }
+}
+
+class Arg extends Gen {
+  constructor(index) {
+    super('arg', false);
+    this.index = index;
+  }
+}
+
+class Resolve extends Gen {
+  constructor(child) {
+    super('resolve', true);
+    this.child = child;
+  }
+}
+
+class Coerce extends Gen {
+  constructor(child, source) {
+    super('coerce', child.canYield);
+    this.child = child;
+    this.source = source;
+  }
+}
+
+class RuntimeCheck extends Gen {
+  constructor(name) {
+    super('runtime-typing', true);
+    this.name = name;
+  }
+}
+
+/*****************************************************************************/
+
+var coerce = function(child, argType, coercion) {
+  if (coercion === true) {
+    // TODO check child has type?
+    return child;
+  }
+  switch (coercion.kind) {
+    case 'list':
+      assert(argType.isList);
+
+      assert(coercion.child.kind === 'coerce'); // TODO
+      var source = coercion.child.coercion;
+      source = '($0.map(function(x) { return ' + subst(source, ['x']) + '}))';
+
+      var g = coerce(child, argType.child, true);
+      return new Coerce(g, source);
+
+    case 'record':
+      // TODO
+      assert(false);
+      return;
+
+    case 'resolve':
+      assert(argType.isFuture);
+      var g = coerce(child, argType.child);
+      return new Resolve(child);
+
+    case 'coerce':
+      assert(coercion.from.isSuper(argType));
+      var g = coerce(child, coercion.to, true);
+      return new Coerce(g, coercion.coercion);
+
+    case 'check':
+      assert(false);
+  }
+
+};
+
+var apply = function(func, inputTypes, coercions) {
+  var args = [];
+  for (var i=0; i<inputTypes.length; i++) {
+    var arg = new Arg(i);
+    if (func.wants[i].isUneval) {
+      arg.uneval = true;
     }
-    return 0;
-  };
+    args.push(coerce(arg, inputTypes[i], coercions[i]));
+  }
+  //assert(all(coercions, c => c === true));
+  for (var i=0; i<func.wants.length; i++) {
+    assert(func.wants[i].isSuper(inputTypes[i]));
+  }
+  return new Apply(func, args);
+};
 
-  var save = function() {
-    STACK.push(R);
-    R = {};
-  };
+var vectorise = function(func, inputTypes, coercions) {
+  var indexes = [];
+  for (var i=0; i<coercions.length; i++) {
+    if (coercions[i].kind === 'vectorise') {
+      indexes.push(i);
+      coercions[i] = coercions[i].child || true;
+      inputTypes[i] = inputTypes[i].child;
+    }
+  }
+  assert(indexes.length);
 
-  var restore = function() {
-    R = STACK.pop();
-  };
+  var g = apply(func, inputTypes, coercions);
+  return new Vectorise(g, indexes);
+};
 
-  // var lastCalls = [];
-  var call = function(spec, id, values) {
-    // lastCalls.push(spec);
-    // if (lastCalls.length > 10000) lastCalls.shift();
-    var procedure = S.procedures[spec];
-    if (procedure) {
-      STACK.push(R);
-      CALLS.push(C);
-      C = {
-        base: procedure.fn,
-        fn: S.fns[id],
-        args: values,
-        numargs: [],
-        boolargs: [],
-        stack: STACK = [],
-        warp: procedure.warp
-      };
-      R = {};
-      if (C.warp || WARP) {
-        WARP++;
-        IMMEDIATE = procedure.fn;
-      } else {
-        for (var i = CALLS.length, j = 5; i-- && j--;) {
-          if (CALLS[i].base === procedure.fn) {
-            var recursive = true;
-            break;
-          }
-        }
-        if (recursive) {
-          self.queue[THREAD] = {
-            sprite: S,
-            base: BASE,
-            fn: procedure.fn,
-            calls: CALLS
-          };
-        } else {
-          IMMEDIATE = procedure.fn;
-        }
+var intermediate = function(imp, inputTypes) {
+  if (any(imp.coercions, c => c.kind === 'vectorise')) {
+    var g = vectorise(imp, inputTypes, imp.coercions)
+      g.type = type.list(imp.output);
+  } else {
+    var g = apply(imp, inputTypes, imp.coercions);
+    g.type = imp.output;
+  }
+  return g;
+};
+
+var typeCheck = function(name, inputTypes) {
+  var imps = type(name, inputTypes);
+
+  if (imps.length === 1) {
+    var best = imps[0];
+    return intermediate(best, inputTypes);
+
+  } else if (imps.length > 1) {
+    return new RuntimeCheck(name);
+
+  } else {
+    console.log('no imps for', name, inputTypes);
+    return;
+  }
+};
+
+var typePrim = function(name, inputs) {
+  if (any(inputs, x => x === undefined)) return;
+  var inputTypes = inputs.map(x => x.type());
+  var inputValues = inputs.map(x => x.result);
+
+  switch (name) {
+    case 'join %exp':
+      var wants = inputTypes.map(t => type.value('Text'));
+      //var source = 'join';
+      var source = '([' + inputTypes.map((x, index) => '$' + index) + '].join(""))';
+      var out = type.value('Text');
+      break;
+
+    case 'list %exp':
+      if (any(inputTypes, x => x === null)) return;
+      var child = type.highest(inputTypes);
+      var wants = inputTypes.map(t => child);
+      var source = '([' + inputTypes.map((x, index) => '$' + index).join(', ') + '])';
+      var out = type.list(child);
+      break;
+
+    case 'item %n of %l':
+      let [index, list] = inputTypes;
+      if (!list) return;
+      var wants = [type.value('Int'), type.any];
+      var source = '($1[$0 - 1])'; // TODO BigInteger
+      var out = list ? list.child || type.any : type.any;
+      // TODO await Future cells
+      break;
+
+    case 'record with %fields':
+      var schema = {};
+      var wants = [];
+      var source = '(new Record(null, {\n';
+      for (var i=0; i<inputTypes.length; i += 2) {
+        var symbolType = inputTypes[i];
+        if (type.value('Text').isSuper(symbolType) !== true) return;
+        var symbol = inputValues[i];
+        wants.push(type.value('Text'));
+
+        var child = inputTypes[i + 1];
+        if (!child) return;
+        schema[symbol] = child;
+        wants.push(child);
+
+        source += literalString(symbol) + ': $' + (i + 1) + ',\n';
       }
-    } else {
-      IMMEDIATE = S.fns[id];
+      source += '}))';
+      var out = type.record(schema);
+      break;
+
+    case '%q of %o':
+      var symbolType = inputTypes[0];
+      if (type.value('Text').isSuper(symbolType) !== true) return;
+      var obj = inputTypes[1];
+      if (!obj) return;
+      if (obj.isList && obj.child.isRecord) obj = obj.child;
+      if (!obj.isRecord) return;
+      var symbol = inputValues[0];
+      var schema = {};
+      schema[symbol] = type.any;
+      var wants = [type.value('Text'), type.record(schema)];
+      var source = '($1.values[' + literalString(symbol) + '])';
+      var out = obj.schema[symbol];
+      break;
+
+    case '%l concat %l':
+      var a = inputTypes[0];
+      var b = inputTypes[1];
+      if (!a || !b) return;
+      var out = type.highest([a, b]);
+      if (!out.isList) return;
+      var wants = [out, out];
+      var source = '($0.concat($1))';
+
+    case 'merge %o with %o':
+      var wants = [type.record({}), type.record({})];
+      var [a, b] = inputTypes;
+      if (!a || !b) return;
+      var out = type.highest([a, b]);
+      var source = '($0.update($1))';
+      assert(out.isRecord);
+      return; // TODO this
+      break;
+      
+    case 'update %o with %fields': // 'updateRecord',
+      var record = {};
+      return; // TODO this
+      break;
+
+    default:
+      return typeCheck(name, inputTypes);
+  }
+
+  var coercions = wants.map((t, index) => t.isSuper(inputTypes[index]));
+  if (!all(coercions, type.validCoercion)) return;
+  return intermediate({
+    wants: wants,
+    coercions: coercions,
+    source: source,
+    canYield: false,
+    output: out,
+  }, inputTypes);
+
+};
+
+var isMine = function(node, other) {
+  // TODO needed is wrong
+  var subs = other.subscribers;
+  var mine = true;
+  subs.forEach(s => {
+    if (s !== node && s.needed && !(s.isBubble && !s.isSink)) {
+      mine = false;
     }
+  });
+  return mine
+};
+
+var compileNode = function(node) {
+  var g = typePrim(node.name, node.inputs);
+  if (!g) return;
+
+  return g;
+};
+
+var compile = function(node) {
+  var g = compileNode(node);
+  if (!g) return;
+  var type = g.type;
+
+  var op = Func.cache(node.name);
+  var base = generate(op, g, node);
+  //console.log(base);
+
+  return {type, op, base};
+};
+
+
+
+/*****************************************************************************/
+
+var DEBUG;
+//DEBUG = true;
+
+var warnings;
+var warn = function(message) {
+  warnings[message] = (warnings[message] || 0) + 1;
+};
+
+function subst(source, args) {
+  return source.replace(/\$[0-9]+/g, function(x) { return args[+x.substr(1)]; });
+};
+
+function literalString(e) {
+  return '"' + e
+    .replace(/\\/g, '\\\\')
+    .replace(/\n/g, '\\n')
+    .replace(/\r/g, '\\r')
+    .replace(/"/g, '\\"')
+    .replace(/\{/g, '\\x7b')
+    .replace(/\}/g, '\\x7d') + '"';
+}
+
+var generate = function(func, gen, node) {
+  var nextLabel = function() {
+    return func.fns.length + fns.length;
   };
 
-  var endCall = function() {
-    if (CALLS.length) {
-      if (WARP) WARP--;
-      IMMEDIATE = C.fn;
-      C = CALLS.pop();
-      STACK = C.stack;
-      R = STACK.pop();
-    }
+  var label = function() {
+    var id = nextLabel();
+    fns.push(source.length);
+    return id;
+  };
+
+  var tmps = 0;
+  var alpha = 'abcdefghijklmnopqrstuvwxyz';
+  var gensym = function() {
+    var name = alpha[tmps % 26] + (tmps >= 26 ? tmps / 26 | 0 : '');
+    tmps++;
+    return name;
   };
 
   var queue = function(id) {
-    self.queue[THREAD] = {
-      sprite: S,
-      base: BASE,
-      fn: S.fns[id],
-      calls: CALLS
-    };
+    source += 'queue(' + id + ');\n';
+    source += 'return;\n';
   };
 
-  /***************************************************************************/
+  var forceQueue = function(id) {
+    source += 'forceQueue(' + id + ');\n';
+    source += 'return;\n';
+  };
 
-  // Internal definition
-  class Evaluator {
-    get framerate() { return 60; }
+  var await = function(thread) {
+    var id = nextLabel();
+    source += 'if (await(' + thread + ', ' + id + ')) return;\n';
+    fns.push(source.length);
+  };
 
-    initRuntime() {
-      this.queue = [];
-      this.onError = this.onError.bind(this);
+  var emit = function(value) {
+    source += 'emit(' + value + ');\n';
+  };
+
+  var literal = function(e) {
+    if (typeof e === 'number' || typeof e === 'boolean') {
+      return '' + e;
+
+    } else if (typeof e === 'string') {
+      return literalString(e);
     }
+    assert(false);
+  };
 
-    startThread(sprite, base) {
-      var thread = new Thread(sprite, base);
-      for (var i = 0; i < this.queue.length; i++) {
-        var q = this.queue[i];
-        if (q && q.sprite === sprite && q.base === base) {
-          this.queue[i] = thread;
-          return;
+  var val = function(gen, inputs) {
+    assert(!gen.canYield);
+    assert(isArray(inputs));
+    switch (gen.name) {
+      case 'apply':
+        var src = gen.func.source;
+        var args = gen.args.map(a => val(a, inputs));
+        assert(typeof src  === 'string');
+        if (src[0] === '(') {
+          return subst(src, args);
+        } else {
+          return '(' + src + '(' + args.join(', ') + '))';
         }
+
+      case 'literal':
+        return literal(gen.value);
+      case 'arg':
+        return inputs[gen.index];
+      case 'resolve':
+        assert(false);
+        break;
+      case 'coerce':
+        var value = val(gen.child, inputs);
+        return subst(gen.source, [value]);
+
+      case 'vectorise':
+        var name = gensym();
+        vectorise(gen, inputs);
+        source += 'var ' + name + ' = l;\n';
+        return name;
+
+      case 'list':
+      case 'record':
+      default:
+        assert(false, gen);
+    }
+  };
+
+  var apply = function(gen, inputs) {
+    assert(gen.canYield);
+    assert(gen instanceof Apply);
+    var func = gen.func;
+
+    var args = gen.args.map(a => val(a,  inputs));
+    var names = args.map(function(arg) {
+      var name = gensym();
+      source += 'var ' + name + ' = ' + arg + ';\n';
+      return name;
+    });
+    var src = gen.func.source;
+
+    var name = gensym();
+    source += 'save();\n';
+    source += 'R.future = ' + src + '(' + names.join(', ') + ');\n';
+    await('R.future');
+    source += 'var ' + name + ' = R.future.result;\n';
+    source += 'restore();\n';
+    return name;
+  };
+
+  var vectorise = function(gen, inputs) {
+    var indexes = gen.indexes;
+    var child = gen.child;
+    assert(child instanceof Apply);
+    var func = gen.child.func;
+    var args = gen.child.args;
+
+    var childInputs = inputs.slice();
+    for (var i=0; i<indexes.length; i++) {
+      var index = indexes[i];
+      var name = 'vec_' + index;
+      source += 'var ' + name + ' = ' + inputs[index] + ';\n';
+      inputs[index] = name;
+      childInputs[index] = name + '[index]';
+    }
+
+    source += 'save();\n';
+    source += 'var length = ' + inputs[indexes[0]] + '.length;\n';
+    if (indexes.length > 1) {
+      var cond = [];
+      for (var i=1; i<indexes.length; i++) {
+        cond.push(inputs[indexes[i]] + '.length !== R.length');
       }
-      this.queue.push(thread);
+      source += 'if (' + cond.join(' || ') + ') {\n';
+      emit('new Error("Poop")');
+      source += '}\n';
+    }
+    source += 'var l = [];\n';
+    source += 'for (var index = 0; index < length; index++) {\n';
+
+    if (child.canYield) {
+      // parallel map
+      // TODO
+      debugger;
+
+    } else {
+      // fast vectorise
+      source += 'l.push(' + val(child, childInputs) + ');\n';
     }
 
-    stopThread(thread) {
-      var index = this.queue.indexOf(thread);
-      if (index !== -1) {
-        this.queue.splice(index, 1);
+    source += '}\n';
+    source += 'restore();\n';
+    return 'l';
+  };
+
+  var awaitArgs = function(args) {
+    var requestArg = function(gen) {
+      switch (gen.name) {
+        case 'arg':
+          if (!gen.uneval) {
+            source += 'await(C.threads[' + gen.index + ']);\n';
+          }
+          break;
+        case 'resolve':
+          assert(false);
+        case 'coerce':
+          requestArg(gen.child);
+          break;
+        case 'list':
+        case 'record':
+        default:
+          assert(false, gen);
+      }
+    };
+
+    source += 'C.threads = [\n';
+    for (var i=0; i<node.inputs.length; i++) {
+      //assert(node.inputs[i] instanceof Observable);
+      source += 'request(' + i + '),\n';
+    }
+    source += '];\n';
+    var names = [];
+    for (var i=0; i<node.inputs.length; i++) {
+      var gen = args[i];
+      requestArg(gen);
+      var arg = 'C.threads[' + i + ']';
+      names.push(gen.uneval ? arg : arg + '.result');
+    }
+    return names;
+  };
+
+  var generate = function(gen) {
+    if (gen instanceof RuntimeCheck) {
+      // TODO
+      source += 'debugger;\n';
+      source += 'var x = compile(S);\n';
+      source += 'IMMEDIATE = x.base;\n';
+      source += 'return;\n';
+      return;
+    }
+
+    if (gen instanceof Vectorise) {
+      var args = awaitArgs(gen.child.args);
+      emit(vectorise(gen, args));
+
+    } else {
+      var args = awaitArgs(gen.args);
+      assert(gen instanceof Apply);
+      if (gen.canYield) {
+        emit(apply(gen, args));
+      } else {
+        emit(val(gen, args));
       }
     }
+  };
 
-    start() {
-      this.isRunning = true;
-      if (this.interval) return;
-      addEventListener('error', this.onError);
-      this.baseTime = Date.now();
-      this.interval = setInterval(this.step.bind(this), 1000 / this.framerate);
-    }
+  var source = "";
+  var startfn = func.fns.length;
+  var fns = [0];
 
-    pause() {
-      if (this.interval) {
-        this.baseNow = this.now();
-        clearInterval(this.interval);
-        delete this.interval;
-        removeEventListener('error', this.onError);
+  generate(gen);
+
+  for (var i = 0; i < fns.length; i++) {
+    func.fns.push(createContinuation(source.slice(fns[i])));
+  }
+  var f = func.fns[startfn];
+  return f;
+};
+
+
+var createContinuation = function(source) {
+  var result = '(function() {\n';
+  var brackets = 0;
+  var delBrackets = 0;
+  var shouldDelete = false;
+  var here = 0;
+  var length = source.length;
+  while (here < length) {
+    var i = source.indexOf('{', here);
+    var j = source.indexOf('}', here);
+    if (i === -1 && j === -1) {
+      if (!shouldDelete) {
+        result += source.slice(here);
       }
-      this.isRunning = false;
+      break;
     }
-
-    stopAll() {
-      this.hidePrompt = false;
-      this.prompter.style.display = 'none';
-      this.promptId = this.nextPromptId = 0;
-      this.queue.length = 0;
-      this.resetFilters();
-      this.stopSounds();
-      for (var i = 0; i < this.children.length; i++) {
-        var c = this.children[i];
-        if (c.isClone) {
-          c.remove();
-          this.children.splice(i, 1);
-          i -= 1;
-        } else if (c.isSprite) {
-          c.resetFilters();
-          if (c.saying) c.say('');
-          c.stopSounds();
+    if (i === -1) i = length;
+    if (j === -1) j = length;
+    if (shouldDelete) {
+      if (i < j) {
+        delBrackets++;
+        here = i + 1;
+      } else {
+        delBrackets--;
+        if (!delBrackets) {
+          shouldDelete = false;
         }
+        here = j + 1;
       }
-    }
-
-    now() {
-      return this.baseNow + Date.now() - this.baseTime;
-    }
-
-    step() {
-      self = this;
-      var start = Date.now();
-      do {
-        var queue = this.queue;
-        for (THREAD = 0; THREAD < queue.length; THREAD++) {
-          if (queue[THREAD]) {
-            S = queue[THREAD].sprite;
-            IMMEDIATE = queue[THREAD].fn;
-            BASE = queue[THREAD].base;
-            CALLS = queue[THREAD].calls;
-            C = CALLS.pop();
-            STACK = C.stack;
-            R = STACK.pop();
-            queue[THREAD] = undefined;
-            WARP = 0;
-            while (IMMEDIATE) {
-              var fn = IMMEDIATE;
-              IMMEDIATE = null;
-              fn();
-            }
-            STACK.push(R);
-            CALLS.push(C);
+    } else {
+      if (i < j) {
+        result += source.slice(here, i + 1);
+        brackets++;
+        here = i + 1;
+      } else {
+        result += source.slice(here, j);
+        here = j + 1;
+        if (source.substr(j, 8) === '} else {') {
+          if (brackets > 0) {
+            result += '} else {';
+            here = j + 8;
+          } else {
+            shouldDelete = true;
+            delBrackets = 0;
+          }
+        } else {
+          if (brackets > 0) {
+            result += '}';
+            brackets--;
           }
         }
-        for (var i = queue.length; i--;) {
-          if (!queue[i]) queue.splice(i, 1);
-        }
-      } while (Date.now() - start < 1000 / this.framerate && queue.length);
-      this.syncEmissions();
-      S = null;
+      }
     }
+  }
+  result += '})';
+  return scopedEval(result);
+};
 
-    syncEmissions() {
-      // TODO process emit queue
-    }
+export default function(node) {
 
-    onError(e) {
-      clearInterval(this.interval);
-    }
+  warnings = Object.create(null);
 
-    handleError(e) {
-      console.error(e.stack);
-    }
+  var type = compile(node, []);
 
+  for (var key in warnings) {
+    console.warn(key + (warnings[key] > 1 ? ' (repeated ' + warnings[key] + ' times)' : ''));
   }
 
-  /***************************************************************************/
-
-  class Thread {
-    constructor(evaluator, sprite, base) {
-      this.evaluator = evaluator;
-      this.sprite = sprite,
-      this.base = base;
-      this.fn = base;
-      this.calls = [{args: [], stack: [{}]}];
-      this.isRunning = true;
-    }
-
-    stop() {
-      this.evaluator.stopThread(this);
-      this.isRunning = false;
-    }
-
-  }
-
-  /***************************************************************************/
-
-  return {
-    scopedEval: function(source) {
-      return eval(source);
-    }
-  };
-
-
-}());
-
+  return type;
+};
 
